@@ -36,3 +36,4 @@ npm run dev
 ```sh
 npm run build
 ```
+## Figma: (https://www.figma.com/design/cmB3bJgVKbfQPrTNwucrsg/En-Flow?node-id=0-1&p=f&t=HNAuzwRlZKBX5FVt-0)
