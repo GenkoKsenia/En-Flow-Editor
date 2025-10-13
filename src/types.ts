@@ -10,6 +10,7 @@ export interface Node {
   width: number;
   height: number;
 }
+//список нод, родитель, дети
 
 export interface Edge {
   id: string;

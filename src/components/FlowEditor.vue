@@ -1,42 +1,38 @@
 <template>
   <div class="flow-editor">
-    <div class="toolbar">
-      <button @click="addNode">+ Добавить узел</button>
-      <div class="stats">
-        Узлов: {{ nodes.length }}
-        <!-- Отображение узлов и связей -->
-        <span v-if="edges.length">, Связей: {{ edges.length }}</span>
+    <div class="editor-layout">
+      <!-- Левая панель - редактор кода -->
+      <div class="left-panel">
+        <CodeEditor />
       </div>
-    </div>
-    
-    <!-- снять выделение при нажатии на холст-->
-    <div 
-      class="canvas" 
-      ref="canvas" 
-      @click="deselectAll" 
-    > 
-      <!-- Невидимое определение стрелки -->
-      <ArrowDefinitions />
 
-      <!-- Связи -->
-      <GraphEdge
-        v-for="edge in edges"
-        :key="edge.id"
-        :edge="edge"
-        :nodes="nodes"
-      />
+      <!-- Правая панель - холст -->
+      <div class="right-panel">
+        <div class="toolbar">       
+          <button @click="addNode">+ Добавить узел</button>
+          <div class="stats">
+            Узлов: {{ nodes.length }}
+            <span v-if="edges.length">, Связей: {{ edges.length }}</span>
+          </div>
+        </div>
 
-      <!-- Узлы -->
-      <GraphNode
-        v-for="node in nodes"
-        :key="node.id"
-        :node="node"
-        :class="{ 
-          selected: selectedNodeId === node.id, 
-          dragging: isDragging && selectedNodeId === node.id 
-        }"
-        @node-mousedown="startDrag"
-      />
+
+        <!-- снять выделение при нажатии на холст-->
+        <div class="canvas" ref="canvas" @click="deselectAll">
+
+          <!-- Невидимое определение стрелки -->
+          <ArrowDefinitions />
+
+          <!-- Связи -->
+          <GraphEdge v-for="edge in edges" :key="edge.id" :edge="edge" :nodes="nodes" />
+
+          <!-- Узлы -->
+          <GraphNode v-for="node in nodes" :key="node.id" :node="node" :class="{
+            selected: selectedNodeId === node.id,
+            dragging: isDragging && selectedNodeId === node.id
+          }" @node-mousedown="startDrag" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -46,6 +42,7 @@ import { ref, onMounted } from 'vue'
 import GraphNode from './GraphNode.vue' //узлы
 import GraphEdge from './GraphEdge.vue' //стрелки
 import ArrowDefinitions from './ArrowDefinitions.vue' //определния стрелок
+import CodeEditor from './CodeEditor.vue' //окно для кода
 import type { Node } from '../types'
 import type { Edge } from '../types'
 
@@ -108,38 +105,38 @@ function deselectAll(): void {
 function startDrag(nodeId: string, event: MouseEvent): void {
   const node = nodes.value.find(n => n.id === nodeId)
   if (!node || !canvas.value) return
-  
+
   isDragging.value = true
   selectedNodeId.value = nodeId
-  
+
   // Обновляем позицию холста
   canvasRect.value = canvas.value.getBoundingClientRect() //получаем позицию и размеры холста относительно viewport
-  
+
   // Вычисляем смещение относительно холста
   const offsetX = event.clientX - canvasRect.value.left - node.position.x
   const offsetY = event.clientY - canvasRect.value.top - node.position.y
-  
+
   const onMouseMove = (moveEvent: MouseEvent) => {
     if (!canvasRect.value) return
-    
+
     // Новая позиция относительно холста
     const newX = moveEvent.clientX - canvasRect.value.left - offsetX
     const newY = moveEvent.clientY - canvasRect.value.top - offsetY
-    
+
     // Обновляем позицию узла
     node.position.x = Math.max(0, newX)
     node.position.y = Math.max(0, newY)
   }
-  
+
   const onMouseUp = () => {
     isDragging.value = false
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
   }
-  
+
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
-  
+
   event.preventDefault()
   event.stopPropagation()
 }
@@ -148,29 +145,52 @@ function startDrag(nodeId: string, event: MouseEvent): void {
 
 <style scoped>
 .flow-editor {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-layout {
+  flex: 1;
+  display: flex;
+  height: 100%;
+}
+
+.left-panel {
+  width: 400px;
+  /* Ширина редактора кода */
+  min-width: 300px;
+  background: white;
+  border-right: 1px solid #dee2e6;
+}
+
+.right-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #f8f9fa;
+  min-width: 0;
+  /* Для правильного flexbox */
 }
 
 .toolbar {
-  padding: 15px;
+  padding: 12px 20px;
   background: white;
   border-bottom: 1px solid #dee2e6;
   display: flex;
-  gap: 10px;
+  justify-content: space-between; /* ← ключевое свойство */
   align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .toolbar button {
-  padding: 10px 20px;
+  padding: 8px 16px;
   background: #007bff;
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
+  transition: background 0.2s;
 }
 
 .toolbar button:hover {
@@ -180,13 +200,12 @@ function startDrag(nodeId: string, event: MouseEvent): void {
 .stats {
   color: #6c757d;
   font-size: 14px;
-  margin-left: auto;
 }
 
 .canvas {
   flex: 1;
   position: relative;
-  background: 
+  background:
     linear-gradient(90deg, #f0f0f0 1px, transparent 1px),
     linear-gradient(#f0f0f0 1px, transparent 1px);
   background-size: 20px 20px;
@@ -194,14 +213,15 @@ function startDrag(nodeId: string, event: MouseEvent): void {
   cursor: default;
 }
 
-:deep(.node.selected) {
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
-}
+/* Адаптивность */
+@media (max-width: 768px) {
+  .editor-layout {
+    flex-direction: column;
+  }
 
-:deep(.node.dragging) {
-  cursor: grabbing;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-  z-index: 1000;
+  .left-panel {
+    width: 100%;
+    height: 200px;
+  }
 }
 </style>
