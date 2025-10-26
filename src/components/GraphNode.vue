@@ -2,7 +2,14 @@
   <div
     class="node"
     :style="nodeStyle"
+    :class="{
+      selected: selected,
+      'connection-source': isConnectionSource,
+      'connection-target': isConnectionTarget,
+      dragging: isDragging
+    }"
     @mousedown="onMouseDown"
+    @click="onClick"
   >
     {{ node.text }}
   </div>
@@ -14,27 +21,38 @@ import type { Node } from '../types'
 
 interface Props {
   node: Node
+  selected?: boolean
+  isConnectionSource?: boolean
+  isConnectionTarget?: boolean
+  isDragging?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  selected: false,
+  isConnectionSource: false,
+  isConnectionTarget: false,
+  isDragging: false
+})
 
-// Определяем события которые компонент может emit'ить
 const emit = defineEmits<{
   'node-mousedown': [nodeId: string, event: MouseEvent]
+  'node-click': [nodeId: string, event: MouseEvent]
 }>()
 
-// Вычисляемые стили для узла
 const nodeStyle = computed(() => ({
   left: `${props.node.position.x}px`,
   top: `${props.node.position.y}px`,
   width: `${props.node.width}px`,
   height: `${props.node.height}px`,
+  transform: props.isDragging ? 'translate(var(--drag-dx), var(--drag-dy))' : 'none'
 }))
 
-// Обработчик нажатия мыши на узле
 function onMouseDown(event: MouseEvent) {
-  // "Выбрасываем" событие для родительского компонента
   emit('node-mousedown', props.node.id, event)
+}
+
+function onClick(event: MouseEvent) {
+  emit('node-click', props.node.id, event)
 }
 </script>
 
@@ -54,13 +72,32 @@ function onMouseDown(event: MouseEvent) {
   text-align: center;
   font-size: 14px;
   transition: box-shadow 0.2s ease;
+  /* Отключаем transition для transform чтобы не было лагов */
+  transition: box-shadow 0.2s ease, transform 0s;
 }
 
 .node:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-.node:active {
+.node.selected {
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+.node.connection-source {
+  border-color: #28a745;
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.25);
+}
+
+.node.connection-target {
+  border-color: #ffc107;
+  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.25);
+}
+
+.node.dragging {
   cursor: grabbing;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+  z-index: 1000;
 }
 </style>
