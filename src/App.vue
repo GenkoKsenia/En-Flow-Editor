@@ -1,6 +1,19 @@
 <template>
   <div id="app">
-    <h1>En+Flow Editor</h1>
+    <div class="head">
+      <div>
+        <img src="/public/image/logo.png" alt="logo" class="logo">
+      </div>
+      
+      <div class="account">
+        <div class="avatar">ГК</div>
+        <div class="info">
+          <div>Генько К.П.</div>
+          <div>genkoksenia@mail.ru</div>
+        </div>
+        <div class="exit"><img src="/public/icon/IconExit.png" alt="exit"></div>
+      </div>
+    </div>
     <FlowEditor />
   </div>
 </template>
@@ -31,5 +44,21 @@ h1 {
   background: #2c3e50;
   color: white;
   text-align: center;
+}
+
+.head {
+  height: 56px;
+  background-color: #fff;
+  padding-top: 8px;
+  padding-left: 162px;
+  padding-right: 162px;
+}
+
+.logo {
+  height: 40px;
+}
+
+.account {
+  justify-content: center;
 }
 </style>

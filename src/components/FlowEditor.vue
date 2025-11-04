@@ -27,16 +27,16 @@
 
           <!-- Постоянные связи -->
           <GraphEdge v-for="edge in edges" :key="edge.id" :edge="edge" :nodes="nodes"
-            :source-connections-count="outgoingConnectionsCount[edge.sourceNodeId] || 0"
-            :source-connection-index="outgoingConnectionIndex[edge.id] || 0"
-            :target-connections-count="incomingConnectionsCount[edge.targetNodeId] || 0"
-            :target-connection-index="incomingConnectionIndex[edge.id] || 0" />
+            :is-selected="selectedEdgeId === edge.id" :show-drag-handle="showDragHandles"
+            :get-connection-position="getConnectionPosition" @edge-click="onEdgeClick"
+            @breakpoint-drag-start="onBreakpointDragStart" />
 
           <!-- Узлы -->
           <GraphNode v-for="node in nodes" :key="node.id" :node="node" :data-node-id="node.id"
             :selected="selectedNodeId === node.id" :is-connection-source="isConnectionSource(node.id)"
             :is-connection-target="isConnectionTarget(node.id)" :is-dragging="isDragging && selectedNodeId === node.id"
-            @node-mousedown="onNodeMouseDown" @node-click="onNodeClick" />
+            :show-connection-hints="showConnectionHints" @node-mousedown="onNodeMouseDown" @node-click="onNodeClick"
+            @node-hover-side="onNodeHoverSide" />
         </div>
       </div>
     </div>
@@ -45,13 +45,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, computed } from 'vue'
-import GraphNode from './GraphNode.vue' //узлы
-import GraphEdge from './GraphEdge.vue' //стрелки
-import ArrowDefinitions from './ArrowDefinitions.vue' //определния стрелок
-import CodeEditor from './CodeEditor.vue' //окно для кода
-import type { Node } from '../types'
-import type { Edge } from '../types'
-
+import GraphNode from './GraphNode.vue'
+import GraphEdge from './GraphEdge.vue'
+import ArrowDefinitions from './ArrowDefinitions.vue'
+import CodeEditor from './CodeEditor.vue'
+import type { Node, Edge, ConnectionSide } from '../types'
 
 // Состояние
 const nodes = ref<Node[]>([
@@ -74,18 +72,26 @@ const nodes = ref<Node[]>([
 const edges = ref<Edge[]>([
   {
     id: 'e1',
-    sourceNodeId: '1',  // От узла с id '1'
-    targetNodeId: '2'   // К узлу с id '2'
+    sourceNodeId: '1',
+    targetNodeId: '2',
+    sourceSide: 'right',
+    targetSide: 'left'
   }
 ])
 
 const selectedNodeId = ref<string | null>(null)
 const isDragging = ref(false)
 const canvas = ref<HTMLElement | null>(null)
+const selectedEdgeId = ref<string | null>(null)
+const isDraggingBreakpoint = ref(false)
+const draggingEdgeId = ref<string | null>(null)
 
 // Состояние для режима соединения
 const isConnectionMode = ref(false)
 const connectionStartNode = ref<string | null>(null)
+const connectionStartSide = ref<ConnectionSide | null>(null)
+const hoveredNodeId = ref<string | null>(null)
+const hoveredNodeSide = ref<ConnectionSide | null>(null)
 
 // Computed свойства для состояний узлов
 const isConnectionSource = computed(() => (nodeId: string) => {
@@ -96,9 +102,13 @@ const isConnectionTarget = computed(() => (nodeId: string) => {
   return isConnectionMode.value && !!connectionStartNode.value && connectionStartNode.value !== nodeId
 })
 
-// Получаем позицию холста при загрузке
-onMounted(() => {
+const showDragHandles = computed((): boolean => {
+  return selectedEdgeId.value !== null
+})
 
+// Computed свойство для показа подсказок
+const showConnectionHints = computed((): boolean => {
+  return isConnectionMode.value
 })
 
 // Методы
@@ -117,27 +127,54 @@ function addNode(): void {
 function startConnectionMode(): void {
   isConnectionMode.value = true
   connectionStartNode.value = null
+  connectionStartSide.value = null
+}
+
+// Обработчик наведения на сторону узла
+function onNodeHoverSide(nodeId: string, side: ConnectionSide | null): void {
+  if (!isConnectionMode.value) return
+
+  hoveredNodeId.value = nodeId
+  hoveredNodeSide.value = side
 }
 
 // Обработчик клика по узлу в режиме соединения
 function handleNodeClickInConnectionMode(nodeId: string): void {
+  if (!isConnectionMode.value) return
+
+  // Если сторона не выбрана (наведена), не создаем связь
+  if (!hoveredNodeSide.value) return
+
   if (!connectionStartNode.value) {
-    // Первый клик - выбираем начальный узел
+    // Первый клик - выбираем начальный узел и сторону
     connectionStartNode.value = nodeId
-    console.log('Выбран начальный узел:', nodeId)
+    connectionStartSide.value = hoveredNodeSide.value
+    console.log('Выбран начальный узел:', nodeId, 'сторона:', connectionStartSide.value)
   } else {
     // Второй клик - создаем связь
-    if (connectionStartNode.value !== nodeId) {
-      createConnection(connectionStartNode.value, nodeId)
+    if (connectionStartNode.value !== nodeId && hoveredNodeSide.value) {
+      createConnection(
+        connectionStartNode.value,
+        connectionStartSide.value!,
+        nodeId,
+        hoveredNodeSide.value
+      )
     }
     resetConnectionMode()
   }
 }
+
 // Создание связи между узлами
-function createConnection(sourceId: string, targetId: string): void {
+function createConnection(
+  sourceId: string,
+  sourceSide: ConnectionSide,
+  targetId: string,
+  targetSide: ConnectionSide
+): void {
   // Проверяем, что связь не существует
   const existingEdge = edges.value.find(
-    edge => edge.sourceNodeId === sourceId && edge.targetNodeId === targetId
+    edge => edge.sourceNodeId === sourceId &&
+      edge.targetNodeId === targetId
   )
 
   if (existingEdge) {
@@ -149,19 +186,13 @@ function createConnection(sourceId: string, targetId: string): void {
   const newEdge: Edge = {
     id: `edge-${Date.now()}`,
     sourceNodeId: sourceId,
-    targetNodeId: targetId
+    targetNodeId: targetId,
+    sourceSide: sourceSide,
+    targetSide: targetSide
   }
 
   edges.value.push(newEdge)
-}
-
-// Сбрасываем режим при клике на холст
-function deselectAll(): void {
-  selectedNodeId.value = null
-  if (isConnectionMode.value) {
-    isConnectionMode.value = false
-    connectionStartNode.value = null
-  }
+  console.log('Создана связь:', sourceId, sourceSide, '→', targetId, targetSide)
 }
 
 // Обработчик клика по холсту
@@ -169,8 +200,13 @@ function onCanvasClick(event: MouseEvent): void {
   // Если клик по пустому месту в режиме соединения - сбрасываем режим
   if (isConnectionMode.value && !(event.target as Element).closest('.node')) {
     resetConnectionMode()
-  } else {
-    deselectAll() // Обычный режим
+  }
+
+  // Если клик по пустому месту - сбрасываем выделение
+  if (!(event.target as Element).closest('.node') &&
+    !(event.target as Element).closest('.edge')) {
+    selectedEdgeId.value = null
+    selectedNodeId.value = null
   }
 }
 
@@ -178,6 +214,9 @@ function onCanvasClick(event: MouseEvent): void {
 function resetConnectionMode(): void {
   isConnectionMode.value = false
   connectionStartNode.value = null
+  connectionStartSide.value = null
+  hoveredNodeId.value = null
+  hoveredNodeSide.value = null
 }
 
 function selectNode(nodeId: string): void {
@@ -195,21 +234,24 @@ function onNodeClick(nodeId: string, event: MouseEvent): void {
   }
 }
 
-// Перетаскивание
+// Перетаскивание 
 function startDrag(nodeId: string, event: MouseEvent): void {
+  if (isConnectionMode.value) {
+    event.preventDefault()
+    return
+  }
+
   const node = nodes.value.find(n => n.id === nodeId)
   if (!node) return
 
   isDragging.value = true
   selectedNodeId.value = nodeId
 
-  // Фиксируем начальные позиции
   const startMouseX = event.clientX
   const startMouseY = event.clientY
   const startNodeX = node.position.x
   const startNodeY = node.position.y
 
-  // Создаем временный элемент для отслеживания позиции
   const tempNode = {
     id: nodeId,
     dx: 0,
@@ -219,15 +261,12 @@ function startDrag(nodeId: string, event: MouseEvent): void {
   const onMouseMove = (moveEvent: MouseEvent) => {
     if (!isDragging.value) return
 
-    // Вычисляем смещение
     const deltaX = moveEvent.clientX - startMouseX
     const deltaY = moveEvent.clientY - startMouseY
 
-    // Обновляем CSS переменные для transform
     tempNode.dx = deltaX
     tempNode.dy = deltaY
 
-    // Находим DOM элемент и применяем transform
     const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement
     if (nodeElement) {
       nodeElement.style.setProperty('--drag-dx', `${deltaX}px`)
@@ -236,7 +275,6 @@ function startDrag(nodeId: string, event: MouseEvent): void {
   }
 
   const onMouseUp = () => {
-    // Применяем окончательную позицию
     if (node) {
       const deltaX = tempNode.dx
       const deltaY = tempNode.dy
@@ -245,7 +283,6 @@ function startDrag(nodeId: string, event: MouseEvent): void {
       node.position.y = Math.max(0, startNodeY + deltaY)
     }
 
-    // Сбрасываем transform
     const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement
     if (nodeElement) {
       nodeElement.style.removeProperty('--drag-dx')
@@ -264,71 +301,181 @@ function startDrag(nodeId: string, event: MouseEvent): void {
   event.stopPropagation()
 }
 
-// Обработчик начала перетаскивания - блокируем в режиме соединения
+// Обработчик начала перетаскивания
 function onNodeMouseDown(nodeId: string, event: MouseEvent): void {
   if (isConnectionMode.value) {
-    event.preventDefault() // Блокируем перетаскивание в режиме соединения
+    event.preventDefault()
     return
   }
 
-  startDrag(nodeId, event) // Обычное перетаскивание
+  startDrag(nodeId, event)
 }
 
-// Вычисляем количество исходящих соединений для каждого узла
-const outgoingConnectionsCount = computed(() => {
-  const count: Record<string, number> = {}
-  nodes.value.forEach(node => count[node.id] = 0)
+// Обработчик клика по стрелке
+function onEdgeClick(edgeId: string, event: MouseEvent): void {
+  selectedEdgeId.value = edgeId
+  selectedNodeId.value = null
+  event.stopPropagation()
+}
+
+// Начало перетаскивания точки излома
+function onBreakpointDragStart(edgeId: string, event: MouseEvent): void {
+  isDraggingBreakpoint.value = true
+  draggingEdgeId.value = edgeId
+
+  const edge = edges.value.find(e => e.id === edgeId)
+  if (!edge) return
+
+  const { sourceSide, targetSide } = edge
+  
+  // Определяем ось перетаскивания для всех типов 3-сегментных стрелок
+  let axis: 'x' | 'y' = 'x'
+  
+  if ((sourceSide === 'left' && targetSide === 'right') ||
+      (sourceSide === 'right' && targetSide === 'left') ||
+      (sourceSide === 'left' && targetSide === 'left') ||
+      (sourceSide === 'right' && targetSide === 'right')) {
+    axis = 'x' // Перетаскивание по X для всех горизонтальных соединений
+  } else {
+    axis = 'y' // Перетаскивание по Y для вертикальных соединений
+  }
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    if (!isDraggingBreakpoint.value || !draggingEdgeId.value || !canvas.value) return
+
+    const edge = edges.value.find(e => e.id === draggingEdgeId.value)
+    if (!edge) return
+
+    const canvasRect = canvas.value.getBoundingClientRect()
+
+    if (axis === 'x') {
+      const newX = moveEvent.clientX - canvasRect.left
+      edge.breakpointX = clampXValue(edge, newX)
+    } else {
+      const newY = moveEvent.clientY - canvasRect.top
+      edge.breakpointY = clampYValue(edge, newY)
+    }
+  }
+
+  const onMouseUp = () => {
+    isDraggingBreakpoint.value = false
+    draggingEdgeId.value = null
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+// Функции ограничения значений
+function clampXValue(edge: Edge, x: number): number {
+  const sourceNode = nodes.value.find(n => n.id === edge.sourceNodeId)
+  const targetNode = nodes.value.find(n => n.id === edge.targetNodeId)
+
+  if (!sourceNode || !targetNode) return x
+
+  // Для одинаковых левых сторон - точка излома должна быть слева от узлов
+  if (edge.sourceSide === 'left' && edge.targetSide === 'left') {
+    const minX = Math.min(sourceNode.position.x, targetNode.position.x) - 200
+    const maxX = Math.min(sourceNode.position.x, targetNode.position.x) - 20
+    return Math.max(minX, Math.min(maxX, x))
+  }
+
+  // Для одинаковых правых сторон - точка излома должна быть справа от узлов
+  if (edge.sourceSide === 'right' && edge.targetSide === 'right') {
+    const minX = Math.max(
+      sourceNode.position.x + sourceNode.width, 
+      targetNode.position.x + targetNode.width
+    ) + 20
+    const maxX = Math.max(
+      sourceNode.position.x + sourceNode.width, 
+      targetNode.position.x + targetNode.width
+    ) + 200
+    return Math.max(minX, Math.min(maxX, x))
+  }
+
+  // Для противоположных сторон (лево-право, право-лево) - точка излома между узлами
+  const minX = Math.min(sourceNode.position.x, targetNode.position.x) + 10
+  const maxX = Math.max(
+    sourceNode.position.x + sourceNode.width,
+    targetNode.position.x + targetNode.width
+  ) - 10
+
+  return Math.max(minX, Math.min(maxX, x))
+}
+
+function clampYValue(edge: Edge, y: number): number {
+  const sourceNode = nodes.value.find(n => n.id === edge.sourceNodeId)
+  const targetNode = nodes.value.find(n => n.id === edge.targetNodeId)
+
+  if (!sourceNode || !targetNode) return y
+
+  // Для одинаковых верхних сторон - точка излома должна быть сверху от узлов
+  if (edge.sourceSide === 'top' && edge.targetSide === 'top') {
+    const minY = Math.min(sourceNode.position.y, targetNode.position.y) - 200
+    const maxY = Math.min(sourceNode.position.y, targetNode.position.y) - 20
+    return Math.max(minY, Math.min(maxY, y))
+  }
+
+  // Для одинаковых нижних сторон - точка излома должна быть снизу от узлов
+  if (edge.sourceSide === 'bottom' && edge.targetSide === 'bottom') {
+    const minY = Math.max(
+      sourceNode.position.y + sourceNode.height, 
+      targetNode.position.y + targetNode.height
+    ) + 20
+    const maxY = Math.max(
+      sourceNode.position.y + sourceNode.height, 
+      targetNode.position.y + targetNode.height
+    ) + 200
+    return Math.max(minY, Math.min(maxY, y))
+  }
+
+  // Для противоположных сторон (верх-низ, низ-верх) - точка излома между узлами
+  const minY = Math.min(sourceNode.position.y, targetNode.position.y) + 10
+  const maxY = Math.max(
+    sourceNode.position.y + sourceNode.height,
+    targetNode.position.y + targetNode.height
+  ) - 10
+
+  return Math.max(minY, Math.min(maxY, y))
+}
+
+// Вычисляем позиции для соединений на каждой стороне каждого узла
+const connectionPositions = computed(() => {
+  const positions: Record<string, Record<ConnectionSide, string[]>> = {}
+
+  // Инициализируем структуру для всех узлов
+  nodes.value.forEach(node => {
+    positions[node.id] = {
+      top: [],
+      right: [],
+      bottom: [],
+      left: []
+    }
+  })
+
+  // Собираем все соединения по узлам и сторонам
   edges.value.forEach(edge => {
-    count[edge.sourceNodeId] = (count[edge.sourceNodeId] || 0) + 1
-  })
-  return count
-})
-
-// Вычисляем количество входящих соединений для каждого узла
-const incomingConnectionsCount = computed(() => {
-  const count: Record<string, number> = {}
-  nodes.value.forEach(node => count[node.id] = 0)
-  edges.value.forEach(edge => {
-    count[edge.targetNodeId] = (count[edge.targetNodeId] || 0) + 1
-  })
-  return count
-})
-
-// Вычисляем индекс каждого соединения среди исходящих
-const outgoingConnectionIndex = computed(() => {
-  const index: Record<string, number> = {}
-  const seen: Record<string, number> = {}
-
-  nodes.value.forEach(node => seen[node.id] = 0)
-
-  // Сортируем edges для consistent порядка
-  const sortedEdges = [...edges.value].sort((a, b) => a.id.localeCompare(b.id))
-
-  sortedEdges.forEach(edge => {
-    index[edge.id] = seen[edge.sourceNodeId]
-    seen[edge.sourceNodeId]++
+    positions[edge.sourceNodeId][edge.sourceSide].push(edge.id)
+    positions[edge.targetNodeId][edge.targetSide].push(edge.id)
   })
 
-  return index
+  return positions
 })
 
-// Вычисляем индекс каждого соединения среди входящих
-const incomingConnectionIndex = computed(() => {
-  const index: Record<string, number> = {}
-  const seen: Record<string, number> = {}
+// Функция для получения позиции соединения на стороне
+function getConnectionPosition(nodeId: string, side: ConnectionSide, connectionId: string): number {
+  const connections = connectionPositions.value[nodeId]?.[side] || []
+  const index = connections.indexOf(connectionId)
 
-  nodes.value.forEach(node => seen[node.id] = 0)
+  if (index === -1) return 0.5 // По умолчанию середина
 
-  // Сортируем edges для consistent порядка
-  const sortedEdges = [...edges.value].sort((a, b) => a.id.localeCompare(b.id))
-
-  sortedEdges.forEach(edge => {
-    index[edge.id] = seen[edge.targetNodeId]
-    seen[edge.targetNodeId]++
-  })
-
-  return index
-})
+  return (index + 1) / (connections.length + 1)
+}
 </script>
 
 <style scoped>
