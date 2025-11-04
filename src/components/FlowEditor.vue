@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, computed } from 'vue'
 import GraphNode from './GraphNode.vue'
 import GraphEdge from './GraphEdge.vue'
 import ArrowDefinitions from './ArrowDefinitions.vue'

@@ -36,7 +36,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Edge, Node, ConnectionSide, Position } from '../types'
+import type { Edge, Node, ConnectionSide, Position, Segment, EdgeGeometry } from '../types'
 
 interface Props {
   edge: Edge
@@ -118,13 +118,23 @@ function getConnectionPoint(nodeId: string, side: ConnectionSide): Position {
   }
 }
 
-// Определяем тип стрелки и создаем путь
-const pathData = computed(() => {
-  if (!startPoint.value || !endPoint.value) return ''
-  
+const edgeGeometry = computed((): EdgeGeometry => {
+  if (!startPoint.value || !endPoint.value) {
+    return {
+      segments: [],
+      totalLength: 0,
+      boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 }
+    }
+  }
+
   const { sourceSide, targetSide } = props.edge
+  const start = startPoint.value
+  const end = endPoint.value
   
-  // Определяем, нужна ли стрелка из трех отрезков 
+  const segments: Segment[] = []
+  let currentPoint = start
+  
+  // Определяем тип стрелки
   const needsThreeSegments = 
     (sourceSide === 'left' && targetSide === 'right') ||
     (sourceSide === 'right' && targetSide === 'left') ||
@@ -134,59 +144,117 @@ const pathData = computed(() => {
     (sourceSide === 'right' && targetSide === 'right')
   
   if (needsThreeSegments) {
-    // 3 отрезка для противоположных сторон
-    return createThreeSegmentPath()
+    // 3-сегментная стрелка
+    const breakpointX = props.edge.breakpointX ?? getDefaultBreakpointX()
+    const breakpointY = props.edge.breakpointY ?? (start.y + end.y) / 2
+    
+    if (sourceSide === 'left' || sourceSide === 'right') {
+      // Горизонтальные соединения
+      const point1 = { x: breakpointX, y: start.y }
+      const point2 = { x: breakpointX, y: end.y }
+      
+      segments.push(createSegment('segment-1', currentPoint, point1))
+      currentPoint = point1
+      segments.push(createSegment('segment-2', currentPoint, point2))
+      currentPoint = point2
+      segments.push(createSegment('segment-3', currentPoint, end))
+    } else {
+      // Вертикальные соединения
+      const point1 = { x: start.x, y: breakpointY }
+      const point2 = { x: end.x, y: breakpointY }
+      
+      segments.push(createSegment('segment-1', currentPoint, point1))
+      currentPoint = point1
+      segments.push(createSegment('segment-2', currentPoint, point2))
+      currentPoint = point2
+      segments.push(createSegment('segment-3', currentPoint, end))
+    }
   } else {
-    // 2 отрезка для всех остальных комбинаций сторон
-    return createTwoSegmentPath()
+    // 2-сегментная стрелка
+    let bendPoint: Position
+    
+    if (sourceSide === 'left' || sourceSide === 'right') {
+      bendPoint = { x: end.x, y: start.y }
+    } else {
+      bendPoint = { x: start.x, y: end.y }
+    }
+    
+    segments.push(createSegment('segment-1', start, bendPoint))
+    segments.push(createSegment('segment-2', bendPoint, end))
   }
+  
+  // Вычисляем bounding box и общую длину
+  return calculateEdgeGeometry(segments)
 })
 
-function createTwoSegmentPath(): string {
-  const { sourceSide } = props.edge
-  const start = startPoint.value!
-  const end = endPoint.value!
-  
-  // Для стрелок из двух отрезков точка изгиба должна быть на пересечении:
-  // - горизонтальной линии от начальной точки и вертикальной линии от конечной точки, ИЛИ
-  // - вертикальной линии от начальной точки и горизонтальной линии от конечной точки
-  
-  let bendPoint: Position
-  
-  if (sourceSide === 'left' || sourceSide === 'right') {
-    // Для горизонтальных исходных сторон (left/right) - сначала горизонтальное движение, затем вертикальное
-    bendPoint = { x: end.x, y: start.y }
-  } else {
-    // Для вертикальных исходных сторон (top/bottom) - сначала вертикальное движение, затем горизонтальное
-    bendPoint = { x: start.x, y: end.y }
+// Вспомогательная функция для создания отрезка
+function createSegment(id: string, start: Position, end: Position): Segment {
+  return {
+    id: `${props.edge.id}-${id}`,
+    type: 'line',
+    start,
+    end
   }
-  
-  return `M ${start.x} ${start.y} L ${bendPoint.x} ${bendPoint.y} L ${end.x} ${end.y}`
 }
 
-function createThreeSegmentPath(): string {
-  const { sourceSide, targetSide } = props.edge
-  const start = startPoint.value!
-  const end = endPoint.value!
+// Функция для вычисления геометрии стрелки
+function calculateEdgeGeometry(segments: Segment[]): EdgeGeometry {
+  if (segments.length === 0) {
+    return {
+      segments: [],
+      totalLength: 0,
+      boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 }
+    }
+  }
   
-  // Используем сохраненную точку излома или вычисляем по умолчанию
-  const breakpointX = props.edge.breakpointX ?? getDefaultBreakpointX()
-  const breakpointY = props.edge.breakpointY ?? (start.y + end.y) / 2
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  let totalLength = 0
   
-  if (sourceSide === 'left' && targetSide === 'right' || sourceSide === 'right' && targetSide === 'left') {
-    // Лево-право или право-лево: сначала горизонтально, потом вертикально, потом горизонтально
-    return `M ${start.x} ${start.y} L ${breakpointX} ${start.y} L ${breakpointX} ${end.y} L ${end.x} ${end.y}`
-  } else if (sourceSide === 'right' && targetSide === 'right') {
-    // Право-право: сначала вправо, потом вертикально, потом влево
-    return `M ${start.x} ${start.y} L ${breakpointX} ${start.y} L ${breakpointX} ${end.y} L ${end.x} ${end.y}`
-  } else if (sourceSide === 'left' && targetSide === 'left') {
-    // Лево-лево: сначала влево, потом вертикально, потом вправо
-    return `M ${start.x} ${start.y} L ${breakpointX} ${start.y} L ${breakpointX} ${end.y} L ${end.x} ${end.y}`
-  } else {
-    // Вертикальные соединения: сначала вертикально, потом горизонтально, потом вертикально
-    return `M ${start.x} ${start.y} L ${start.x} ${breakpointY} L ${end.x} ${breakpointY} L ${end.x} ${end.y}`
+  segments.forEach(segment => {
+    // Обновляем bounding box
+    minX = Math.min(minX, segment.start.x, segment.end.x)
+    minY = Math.min(minY, segment.start.y, segment.end.y)
+    maxX = Math.max(maxX, segment.start.x, segment.end.x)
+    maxY = Math.max(maxY, segment.start.y, segment.end.y)
+    
+    // Вычисляем длину отрезка
+    const dx = segment.end.x - segment.start.x
+    const dy = segment.end.y - segment.start.y
+    totalLength += Math.sqrt(dx * dx + dy * dy)
+  })
+  
+  return {
+    segments,
+    totalLength,
+    boundingBox: {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: maxX - minX,
+      height: maxY - minY
+    }
   }
 }
+
+// Определяем тип стрелки и создаем путь
+const pathData = computed(() => {
+  const geometry = edgeGeometry.value
+  
+  if (geometry.segments.length === 0) return ''
+  
+  // Собираем SVG path из сегментов
+  let path = `M ${geometry.segments[0].start.x} ${geometry.segments[0].start.y}`
+  
+  geometry.segments.forEach(segment => {
+    path += ` L ${segment.end.x} ${segment.end.y}`
+  })
+  
+  return path
+})
 
 // Функция для вычисления точки излома по умолчанию
 function getDefaultBreakpointX(): number {
@@ -250,7 +318,7 @@ const breakpoint = computed(() => {
 const dragHandlePath = computed(() => {
   if (edgeType.value !== 'threeSegment' || !breakpoint.value) return ''
   
-  const { sourceSide, targetSide } = props.edge
+  const { sourceSide} = props.edge
   const start = startPoint.value!
   const end = endPoint.value!
   
