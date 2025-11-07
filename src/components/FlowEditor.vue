@@ -18,6 +18,9 @@
           </div>
         </div>
 
+        <!-- Окно свойств -->
+        <PropertiesPanel :selected-object="selectedObject" @update:node="updateNode" @update:edge="updateEdge"
+          @delete:node="deleteNode" @delete:edge="deleteEdge" @clear-selection="clearSelection" />
 
         <!-- снять выделение при нажатии на холст-->
         <div class="canvas" ref="canvas" @click="onCanvasClick">
@@ -49,7 +52,8 @@ import GraphNode from './GraphNode.vue'
 import GraphEdge from './GraphEdge.vue'
 import ArrowDefinitions from './ArrowDefinitions.vue'
 import CodeEditor from './CodeEditor.vue'
-import type { Node, Edge, ConnectionSide } from '../types'
+import PropertiesPanel from './PropertiesPanel.vue'
+import type { Node, Edge, ConnectionSide, EdgeGeometry } from '../types'
 
 // Состояние
 const nodes = ref<Node[]>([
@@ -78,6 +82,53 @@ const edges = ref<Edge[]>([
     targetSide: 'left'
   }
 ])
+
+const selectedObject = ref<{
+  type: 'node' | 'edge'
+  data: Node | Edge
+  geometry?: EdgeGeometry
+} | null>(null)
+
+const edgeGeometries = computed(() => {
+  const geometries: Record<string, EdgeGeometry> = {}
+  return geometries
+})
+
+function updateNode(nodeId: string, updates: Partial<Node>): void {
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (node) {
+    Object.assign(node, updates)
+  }
+}
+
+function updateEdge(edgeId: string, updates: Partial<Edge>): void {
+  const edge = edges.value.find(e => e.id === edgeId)
+  if (edge) {
+    Object.assign(edge, updates)
+  }
+}
+
+function deleteNode(nodeId: string): void {
+  nodes.value = nodes.value.filter(n => n.id !== nodeId)
+  // Также удаляем связанные стрелки
+  edges.value = edges.value.filter(e =>
+    e.sourceNodeId !== nodeId && e.targetNodeId !== nodeId
+  )
+  clearSelection()
+}
+
+function deleteEdge(edgeId: string): void {
+  edges.value = edges.value.filter(e => e.id !== edgeId)
+  clearSelection()
+}
+
+function clearSelection(): void {
+  selectedObject.value = null
+  selectedNodeId.value = null
+  selectedEdgeId.value = null
+}
+
+
 
 const selectedNodeId = ref<string | null>(null)
 const isDragging = ref(false)
@@ -205,8 +256,7 @@ function onCanvasClick(event: MouseEvent): void {
   // Если клик по пустому месту - сбрасываем выделение
   if (!(event.target as Element).closest('.node') &&
     !(event.target as Element).closest('.edge')) {
-    selectedEdgeId.value = null
-    selectedNodeId.value = null
+    clearSelection()
   }
 }
 
@@ -220,7 +270,15 @@ function resetConnectionMode(): void {
 }
 
 function selectNode(nodeId: string): void {
-  selectedNodeId.value = nodeId
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (node) {
+    selectedNodeId.value = nodeId
+    selectedEdgeId.value = null
+    selectedObject.value = {
+      type: 'node',
+      data: { ...node }
+    }
+  }
 }
 
 // Обработчик клика по узлу 
@@ -313,8 +371,16 @@ function onNodeMouseDown(nodeId: string, event: MouseEvent): void {
 
 // Обработчик клика по стрелке
 function onEdgeClick(edgeId: string, event: MouseEvent): void {
-  selectedEdgeId.value = edgeId
-  selectedNodeId.value = null
+  const edge = edges.value.find(e => e.id === edgeId)
+  if (edge) {
+    selectedEdgeId.value = edgeId
+    selectedNodeId.value = null
+    selectedObject.value = {
+      type: 'edge',
+      data: { ...edge },
+      geometry: edgeGeometries.value[edgeId]
+    }
+  }
   event.stopPropagation()
 }
 
@@ -327,14 +393,14 @@ function onBreakpointDragStart(edgeId: string, event: MouseEvent): void {
   if (!edge) return
 
   const { sourceSide, targetSide } = edge
-  
+
   // Определяем ось перетаскивания для всех типов 3-сегментных стрелок
   let axis: 'x' | 'y' = 'x'
-  
+
   if ((sourceSide === 'left' && targetSide === 'right') ||
-      (sourceSide === 'right' && targetSide === 'left') ||
-      (sourceSide === 'left' && targetSide === 'left') ||
-      (sourceSide === 'right' && targetSide === 'right')) {
+    (sourceSide === 'right' && targetSide === 'left') ||
+    (sourceSide === 'left' && targetSide === 'left') ||
+    (sourceSide === 'right' && targetSide === 'right')) {
     axis = 'x' // Перетаскивание по X для всех горизонтальных соединений
   } else {
     axis = 'y' // Перетаскивание по Y для вертикальных соединений
@@ -388,11 +454,11 @@ function clampXValue(edge: Edge, x: number): number {
   // Для одинаковых правых сторон - точка излома должна быть справа от узлов
   if (edge.sourceSide === 'right' && edge.targetSide === 'right') {
     const minX = Math.max(
-      sourceNode.position.x + sourceNode.width, 
+      sourceNode.position.x + sourceNode.width,
       targetNode.position.x + targetNode.width
     ) + 20
     const maxX = Math.max(
-      sourceNode.position.x + sourceNode.width, 
+      sourceNode.position.x + sourceNode.width,
       targetNode.position.x + targetNode.width
     ) + 200
     return Math.max(minX, Math.min(maxX, x))
@@ -424,11 +490,11 @@ function clampYValue(edge: Edge, y: number): number {
   // Для одинаковых нижних сторон - точка излома должна быть снизу от узлов
   if (edge.sourceSide === 'bottom' && edge.targetSide === 'bottom') {
     const minY = Math.max(
-      sourceNode.position.y + sourceNode.height, 
+      sourceNode.position.y + sourceNode.height,
       targetNode.position.y + targetNode.height
     ) + 20
     const maxY = Math.max(
-      sourceNode.position.y + sourceNode.height, 
+      sourceNode.position.y + sourceNode.height,
       targetNode.position.y + targetNode.height
     ) + 200
     return Math.max(minY, Math.min(maxY, y))
@@ -556,6 +622,7 @@ function getConnectionPosition(nodeId: string, side: ConnectionSide, connectionI
   background-size: 20px 20px;
   overflow: auto;
   cursor: default;
+  z-index: 1;
 }
 
 /* Адаптивность */
