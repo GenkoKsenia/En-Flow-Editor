@@ -362,10 +362,6 @@ function onDragHandleMouseDown(event: MouseEvent): void {
   pointer-events: all;
 }
 
-.edge path.selected {
-  stroke-width: 3;
-}
-
 .drag-handle {
   pointer-events: all;
   cursor: col-resize;
