@@ -2,11 +2,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection.Emit;
+using System.Security.Principal;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Diplom.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class Access_RightController : Controller
     {
         private ApplicationContext context;
@@ -18,85 +21,47 @@ namespace Diplom.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Access_Right>>> GetAll()
         {
-            var rights = await context.Access_Rights.ToListAsync();
-            return Ok(rights);
+            return Ok(await context.Access_Rights.ToListAsync());
         }
 
         [HttpGet("{id}")]
-        public ActionResult<Access_Right> GetById(int id)
+        public async Task<ActionResult<Access_Right>> GetById(int id)
         {
-            var right = context.Access_Rights.FirstOrDefault(r => r.ID == id);
-
-            if (right == null)
-                return NotFound();
-
-            return Ok(right);
+            return Ok(await context.Access_Rights.FirstOrDefaultAsync(r => r.ID == id));
         }
 
         [HttpPost("post/{level}-{title}")]
-        public async Task<IActionResult> Post(int level, string title)
+        public async Task<Access_Right> Post(int level, string title)
         {
-            var right = new Access_Right { Level = level, Title = title };
+            Access_Right right = new Access_Right { Level = level, Title = title };
 
             context.Access_Rights.Add(right);
             await context.SaveChangesAsync();
 
-            return StatusCode(201, new
-            {
-                message = "Запись успешно создана",
-                id = right.ID,
-                data = right
-            });
+            return right;
         }
 
         [HttpPut("put/{id}-{level}-{title}")]
-        public async Task<IActionResult> Put(int id, int level, string title)
+        public async Task<Access_Right> Put(int id, int level, string title)
         {
-            try
-            {
-                var right = context.Access_Rights.FirstOrDefault(r => r.ID == id);
+            Access_Right right = await context.Access_Rights.FirstOrDefaultAsync(r => r.ID == id);
 
-                if (right == null)
-                    return NotFound($"Запись с ID {id} не найдена");
+            right.Level = level;
+            right.Title = title;
 
-                right.Level = level;
-                right.Title = title;
+            await context.SaveChangesAsync();
 
-                await context.SaveChangesAsync();
-
-                return StatusCode(201, new
-                {
-                    message = "Запись успешно обновлена",
-                    id = right.ID,
-                    data = right
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при обновлении: {ex.Message}");
-            }
+            return right;
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            try
-            {
-                var right = context.Access_Rights.FirstOrDefault(r => r.ID == id);
+            await context.Access_Rights
+                .Where(a => a.ID == id)
+                .ExecuteDeleteAsync();
 
-                if (right == null)
-                    return NotFound();
-
-                context.Access_Rights.Remove(right);
-
-                await context.SaveChangesAsync();
-
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при удалении: {ex.Message}");
-            }
+            return Ok();
         }
     }
 }

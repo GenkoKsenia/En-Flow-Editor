@@ -1,11 +1,14 @@
 ﻿using Diplom.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Principal;
 
 namespace Diplom.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class AccessUserSchemaRightsController : Controller
     {
         private ApplicationContext context;
@@ -15,103 +18,83 @@ namespace Diplom.Controllers
         }
 
         [HttpGet("{schemeId}")]
-        public ActionResult<IEnumerable<Access_User_Schema_Right>> GetRightsByScheme(int schemeId)
+        public async Task<ActionResult<IEnumerable<Access_User_Schema_Right>>> GetRightsByScheme(int schemeId)
         {
-            var scheme = context.Schemes.FirstOrDefault(s => s.ID == schemeId);
-
-            if (scheme == null)
-            {
-                return NotFound();
-            }
-
-            var userRights = context.Access_User_Schema_Rights.Where(a => a.Scheme == scheme);
-            
-            return Ok(userRights.ToListAsync());
+            return Ok(await context.Access_User_Schema_Rights
+                .Include(a => a.Access_Right)
+                .Where(a => a.SchemeID == schemeId)
+                .ToListAsync()
+                );
         }
 
         [HttpGet("{id}")]
-        public ActionResult<Access_User_Schema_Right> GetById(int id)
+        public async Task<Access_User_Schema_Right> GetById(int id)
         {
-            var userRight = context.Access_User_Schema_Rights.FirstOrDefault(r => r.ID == id);
-
-            if (userRight == null)
-                return NotFound();
-
-            return Ok(userRight);
+            return await context.Access_User_Schema_Rights
+                .Include(a => a.Access_Right)
+                .FirstOrDefaultAsync(r => r.ID == id);
         }
 
-        [HttpPost("post/{schemeId}-{userId}-{rightId}")]
-        public async Task<IActionResult> Post(int schemeId, string userId, int rightId)
+        [HttpPost("post/{schemeId}-{rightId}")]
+        public async Task<ActionResult<Access_User_Schema_Right>> Post(int schemeId, [FromBody] string userId, int rightId)
         {
-            try
-            {
-                var userRight = new Access_User_Schema_Right { SchemeID = schemeId, UserID = userId, RightID = rightId };
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
 
-                context.Access_User_Schema_Rights.Add(userRight);
-                await context.SaveChangesAsync();
+            String Sid = windowsIdentity.User.Value;
 
-                return StatusCode(201, new
-                {
-                    message = "Запись успешно создана",
-                    id = userRight.ID,
-                    data = userRight
-                });
-            }
-            catch(Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при создании записи: {ex.Message}");
-            }
+            Scheme scheme = await context.Schemes.FirstOrDefaultAsync(s => s.ID == schemeId);
+
+            if (scheme.UserID != Sid)
+                return Unauthorized();
+
+            Access_User_Schema_Right userRight = new Access_User_Schema_Right { SchemeID = schemeId, UserID = userId, RightID = rightId };
+
+            context.Access_User_Schema_Rights.Add(userRight);
+            await context.SaveChangesAsync();
+
+            return userRight;
         }
 
-        [HttpPut("put/{id}-{schemeId}-{userId}-{rightId}")]
-        public async Task<IActionResult> Put(int id, int schemeId, string userId, int rightId)
+        [HttpPut("put/{id}-{schemeId}-{rightId}")]
+        public async Task<ActionResult<Access_User_Schema_Right>> Put(int id, int schemeId, [FromBody] string userId, int rightId)
         {
-            try
-            {
-                var userRight = context.Access_User_Schema_Rights.FirstOrDefault(r => r.ID == id);
+            Access_User_Schema_Right userRight = await context.Access_User_Schema_Rights
+                .Include(r => r.Scheme)
+                .FirstOrDefaultAsync(r => r.ID == id);
 
-                if (userRight == null)
-                    return NotFound();
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
+            String Sid = windowsIdentity.User.Value;
 
-                userRight.SchemeID = schemeId;
-                userRight.UserID = userId;
-                userRight.RightID = rightId;
+            if (userRight.Scheme.UserID != Sid)
+                return Unauthorized();
 
-                await context.SaveChangesAsync();
+            userRight.SchemeID = schemeId;
+            userRight.UserID = userId;
+            userRight.RightID = rightId;
 
-                return StatusCode(201, new
-                {
-                    message = "Запись успешно обновлена",
-                    id = userRight.ID,
-                    data = userRight
-                });
-            }
-            catch(Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при обновлении записи: {ex.Message}");
-            }
+            await context.SaveChangesAsync();
+
+            return userRight;
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            try
-            {
-                var userRight = context.Access_User_Schema_Rights.FirstOrDefault(r => r.ID == id);
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
+            String Sid = windowsIdentity.User.Value;
 
-                if (userRight == null)
-                    return NotFound();
+            Access_User_Schema_Right userRight = await context.Access_User_Schema_Rights
+                .Include(r => r.Scheme)
+                .FirstOrDefaultAsync(r => r.ID == id);
 
-                context.Access_User_Schema_Rights.Remove(userRight);
+            if (userRight.Scheme.UserID != Sid)
+                return Unauthorized();
 
-                await context.SaveChangesAsync();
+            context.Access_User_Schema_Rights.Remove(userRight);
 
-                return StatusCode(201, new { message = "Запись успешно удалена" });
-            }
-            catch(Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при удалении записи: {ex.Message}");
-            }
+            await context.SaveChangesAsync();
+
+            return Ok();
         }
     }
 }

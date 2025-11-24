@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Diplom.Models
 {
@@ -7,6 +8,7 @@ namespace Diplom.Models
         public int ID { get; set; }
         [ForeignKey("Scheme")]
         public int SchemeID { get; set; }
+        [JsonIgnore]
         public Scheme Scheme { get; set; }
         public string UserID { get; set; }
         [ForeignKey("Right")]

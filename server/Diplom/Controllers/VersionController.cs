@@ -1,11 +1,16 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Diplom.Models;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Principal;
+using System.DirectoryServices;
 
 namespace Diplom.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class VersionController : Controller
     {
         private ApplicationContext context;
@@ -16,96 +21,148 @@ namespace Diplom.Controllers
         }
 
         [HttpGet]
-        public ActionResult<IEnumerable<Models.Version>> Get()
+        public async Task<ActionResult<IEnumerable<Models.Version>>> Get()
         {
-            return Ok(context.Versions.ToListAsync());
+            return Ok(await context.Versions.ToListAsync());
         }
 
         [HttpGet("{schemeId}")]
-        public ActionResult<IEnumerable<Models.Version>> GetAllVersionsByScheme(int schemeId)
+        public async Task<ActionResult<IEnumerable<Models.Version>>> GetAllVersionsByScheme(int schemeId)
         {
-            var scheme = context.Schemes.FirstOrDefault(s => s.ID == schemeId);
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
 
-            if (scheme == null)
-            {
-                return NotFound();
-            }
+            String Sid = windowsIdentity.User.Value;
+            var groups = windowsIdentity.Groups
+                .Cast<IdentityReference>()
+                .Select(g => g.Value)
+                .ToList();
 
-            var versions = context.Versions.Where(v => v.Scheme ==  scheme);
-
-            return Ok(versions.ToListAsync());
+            return Ok(await context.Versions
+                .Include(v => v.Scheme)
+                .Include(v => v.Scheme.Access_User_Schema_Rights)
+                .Include(v => v.Scheme.Access_Group_Schema_Rights)
+                .Where(v => v.Scheme.ID == schemeId)
+                .Where(v => v.Scheme.UserID == Sid || 
+                    v.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
+                    v.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                .ToListAsync()
+            );
         }
 
         [HttpPost("post/{schemeId}")]
-        public async Task<IActionResult> Post(int schemeId, [FromBody] string code)
+        public async Task<ActionResult<Models.Version>> Post(int schemeId, [FromBody] string code)
         {
-            try
-            {
-                var version = new Models.Version { Code = code, SchemeID = schemeId };
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
 
-                context.Versions.Add(version);
-                await context.SaveChangesAsync();
+            String Sid = windowsIdentity.User.Value;
+            var groups = windowsIdentity.Groups
+                .Cast<IdentityReference>()
+                .Select(g => g.Value)
+                .ToList();
 
-                return StatusCode(201, new
-                {
-                    message = "Запись успешно создана",
-                    id = version.Id,
-                    data = version
-                });
-            }
-            catch(Exception ex)
-            {
-                return StatusCode(500, $"Ошибка: {ex.Message}");
-            }
+            int editingRightLevel = 2;
+
+            /*
+            bool hasEditingRights = await context.Schemes
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.ID == schemeId)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .AnyAsync();
+            */
+
+            Scheme availableScheme = await context.Schemes
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.ID == schemeId)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .FirstOrDefaultAsync();
+
+            if (availableScheme == null)
+                return Forbid();
+
+            Models.Version version = new Models.Version { Code = code, SchemeID = schemeId };
+
+            context.Versions.Add(version);
+            await context.SaveChangesAsync();
+
+            return version;
         }
 
         [HttpPut("put/{id}-{code}")]
-        public async Task<IActionResult> Put(int id, string code)
+        public async Task<ActionResult<Models.Version>> Put(int id, string code)
         {
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
 
-            try
-            {
-                var version = context.Versions.FirstOrDefault(v => v.Id == id);
+            String Sid = windowsIdentity.User.Value;
+            var groups = windowsIdentity.Groups
+                .Cast<IdentityReference>()
+                .Select(g => g.Value)
+                .ToList();
 
-                if (version == null)
-                    return NotFound();
+            int editingRightLevel = 2;
 
-                version.Code = code;
+            Models.Version version = await context.Versions
+                .Include(v => v.Scheme)
+                .Include(v => v.Scheme.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(v => v.Scheme.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(v => v.Id == id)
+                .Where(v => v.Scheme.UserID == Sid ||
+                    v.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    v.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .FirstOrDefaultAsync();
 
-                await context.SaveChangesAsync();
+            if (version == null)
+                return Forbid();
 
-                return StatusCode(201, new
-                {
-                    message = "Запись успешно обновлена",
-                    id = version.Id,
-                    data = version
-                });
-            }
-            catch(Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при обновлении: {ex.Message}");
-            }
+            version.Code = code;
+            await context.SaveChangesAsync();
+
+            return version;
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            try
-            {
-                var version = context.Versions.FirstOrDefault(v => v.Id == id);
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
 
-                if (version == null)
-                    return NotFound();
+            String Sid = windowsIdentity.User.Value;
+            var groups = windowsIdentity.Groups
+                .Cast<IdentityReference>()
+                .Select(g => g.Value)
+                .ToList();
 
-                context.Versions.Remove(version);
-                await context.SaveChangesAsync();
+            Models.Version version = await context.Versions
+                .Include(v => v.Scheme)
+                .Include(v => v.Scheme.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(v => v.Scheme.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .FirstOrDefaultAsync(v => v.Id == id);
 
-                return StatusCode(201, new { message = "Запись успешно удалена" });
-            }
-            catch(Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при удалении: {ex.Message}");
-            }
+            int editingRightLevel = 2;
+
+            bool hasEditingRights = version.Scheme.UserID != Sid ||
+                version.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                version.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel);
+
+            if (!hasEditingRights)
+                return Forbid();
+
+            context.Versions.Remove(version);
+            await context.SaveChangesAsync();
+
+            return Ok();
         }
     }
 }

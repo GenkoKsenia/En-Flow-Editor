@@ -1,12 +1,16 @@
 ﻿using Diplom.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System;
+using System.Security.Principal;
 using System.Text.RegularExpressions;
 
 namespace Diplom.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class SchemeController : Controller
     {
         private ApplicationContext context;
@@ -15,80 +19,90 @@ namespace Diplom.Controllers
             context = _context;
         }
 
+        /*
         [HttpGet]
-        public ActionResult<IEnumerable<Scheme>> GetAll()
+        public async Task<ActionResult<IEnumerable<Scheme>>> GetAll()
         {
-            return Ok(context.Schemes.ToList());
+            return Ok(await context.Schemes
+                .Include(s => s.Versions)
+                .Include(s => s.Access_User_Schema_Rights)
+                .Include(s => s.Access_Group_Schema_Rights)
+                .ToListAsync());
         }
+        */
 
         [HttpGet("{id}")]
-        public ActionResult<Scheme> GetById(int id)
+        public async Task<Scheme> GetById(int id) => await context.Schemes.FirstOrDefaultAsync(s => s.ID == id);
+
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<Scheme>>> GetSchemesByUser()
         {
-            var scheme = context.Schemes.FirstOrDefault(s => s.ID == id);
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
 
-            if (scheme == null)
-                return NotFound();
-
-            return Ok(scheme);
-        }
-
-        [HttpGet("{userId}-{groupId}")]
-        public ActionResult<IEnumerable<Scheme>> GetSchemesByUser(string userId, string groupId)
-        {
-            var schemes = context.Schemes
-                .Where(s => s.UserID == userId || 
-                s.Access_User_Schema_Rights.Any(r => r.UserID == userId) || 
-                s.Access_Group_Schema_Rights.Any(r => r.GroupID == groupId))
-                .Distinct()
+            String Sid = windowsIdentity.User.Value;
+            var groups = windowsIdentity.Groups
+                .Cast<IdentityReference>()
+                .Select(g => g.Value)
                 .ToList();
 
-            return  Ok(schemes.ToList());
+            return Ok(await context.Schemes
+                .Include(s => s.Versions)
+                .Include(s => s.Access_User_Schema_Rights)
+                .Include(s => s.Access_Group_Schema_Rights)
+                .Where(s => s.UserID == Sid ||
+                s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
+                s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                .Distinct()
+                .ToListAsync()
+            );
         }
 
-        [HttpPost("post/{userId}")]
-        public async Task<IActionResult> Post(string userId)
+        [HttpPost("post/{name}")]
+        public async Task<Scheme> Post(string name)
         {
-            try
-            {
-                var scheme = new Scheme { UserID = userId };
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
 
-                context.Schemes.Add(scheme);
+            String Sid = windowsIdentity.User.Value;
 
-                await context.SaveChangesAsync();
+            Scheme scheme = new Scheme { Name = name, UserID = Sid };
 
-                return StatusCode(201, new
-                {
-                    message = "Запись успешно создана",
-                    id = scheme.ID,
-                    data = scheme
-                });
-            }
-            catch(Exception ex)
-            {
-                return StatusCode(500, $"Ошибка: {ex.Message}"); 
-            }
+            context.Schemes.Add(scheme);
+            await context.SaveChangesAsync();
+
+            return scheme;
+        }
+
+        [HttpPatch("patch/{id}-{name}")]
+        public async Task<ActionResult<Scheme>> Patch(int id, string name)
+        {
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
+            String Sid = windowsIdentity.User.Value;
+
+            Scheme scheme = await context.Schemes.FirstOrDefaultAsync(s => s.ID == id);
+
+            if (scheme.UserID == Sid)
+                return Unauthorized();
+
+            scheme.Name = name;
+            await context.SaveChangesAsync();
+
+            return scheme;
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            try
-            {
-                var scheme = context.Schemes.FirstOrDefault(s => s.ID == id);
+            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
+            String Sid = windowsIdentity.User.Value;
 
-                if (scheme == null)
-                    return NotFound();
+            Scheme scheme = await context.Schemes.FirstOrDefaultAsync(s => s.ID == id);
 
-                context.Schemes.Remove(scheme);
+            if (scheme.UserID != Sid)
+                return Unauthorized();
 
-                await context.SaveChangesAsync();
+            context.Schemes.Remove(scheme);
 
-                return StatusCode(201, new{ message = "Запись успешно удалена" });
-            }
-            catch(Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при удалении: {ex.Message}");
-            }
+            return Ok();
         }
     }
 }

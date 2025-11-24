@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Diplom.Models
 {
@@ -12,6 +13,7 @@ namespace Diplom.Models
         public DateTime Date { get; set; } = DateTime.Now;
         [ForeignKey("Scheme")]
         public int SchemeID {  get; set; }
+        [JsonIgnore]
         public virtual Scheme Scheme {  get; set; }
     }
 }
