@@ -6,14 +6,20 @@
       selected: selected,
       'connection-source': isConnectionSource,
       'connection-target': isConnectionTarget,
-      dragging: isDragging
+      dragging: isDragging,
+      'child-node': !!node.parentId, 
+      'potential-parent': isPotentialParent,
+      'has-children': hasChildren,
+      'pass-through-error': hasPassThroughError
     }"
     @mousedown="onMouseDown"
     @click="onClick"
     @mousemove="onMouseMove"
     @mouseleave="onMouseLeave"
   >
-    {{ node.text }}
+    <div class="node-title">
+      {{ node.text }}
+    </div>
 
     <!-- Индикаторы сторон для соединения -->
     <div v-if="showConnectionHints" class="connection-hints">
@@ -27,7 +33,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { Node, ConnectionSide } from '../types'
+import type { Node, ConnectionSide, Position } from '../types'
 
 interface Props {
   node: Node
@@ -36,6 +42,10 @@ interface Props {
   isConnectionTarget?: boolean
   isDragging?: boolean
   showConnectionHints?: boolean
+  childrenCount?: number
+  isPotentialParent?: boolean
+  allNodes?: Node[] // Все узлы для вычисления абсолютной позиции
+  hasPassThroughError?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -43,7 +53,11 @@ const props = withDefaults(defineProps<Props>(), {
   isConnectionSource: false,
   isConnectionTarget: false,
   isDragging: false,
-  showConnectionHints: false
+  showConnectionHints: false,
+  childrenCount: 0,
+  isPotentialParent: false,
+  allNodes: () => [],
+  hasPassThroughError: false
 })
 
 const emit = defineEmits<{
@@ -54,13 +68,53 @@ const emit = defineEmits<{
 
 const hoveredSide = ref<ConnectionSide | null>(null)
 
-const nodeStyle = computed(() => ({
-  left: `${props.node.position.x}px`,
-  top: `${props.node.position.y}px`,
-  width: `${props.node.width}px`,
-  height: `${props.node.height}px`,
-  transform: props.isDragging ? 'translate(var(--drag-dx), var(--drag-dy))' : 'none'
-}))
+// Вычисляем абсолютную позицию узла с учетом родителя
+function getAbsolutePosition(node: Node, nodes: Node[]): Position {
+  if (!node.parentId) {
+    return node.position
+  }
+  
+  const parent = nodes.find(n => n.id === node.parentId)
+  if (!parent) {
+    return node.position
+  }
+  
+  const parentAbsolute = getAbsolutePosition(parent, nodes)
+  return {
+    x: parentAbsolute.x + node.position.x,
+    y: parentAbsolute.y + node.position.y
+  }
+}
+
+const nodeDepth = computed(() => calculateNodeDepth(props.node, props.allNodes))
+const hasChildren = computed(() => props.childrenCount > 0)
+
+const nodeStyle = computed(() => {
+  // Вычисляем абсолютную позицию для отображения
+  const absolutePos = getAbsolutePosition(props.node, props.allNodes)
+  const baseZIndex = nodeDepth.value * 100 + 50
+  const zIndex = props.isDragging ? baseZIndex + 1000 : baseZIndex
+  
+  return {
+    left: `${absolutePos.x}px`,
+    top: `${absolutePos.y}px`,
+    width: `${props.node.width}px`,
+    height: `${props.node.height}px`,
+    transform: props.isDragging ? 'translate(var(--drag-dx), var(--drag-dy))' : 'none',
+    zIndex
+  }
+})
+
+function calculateNodeDepth(node: Node, nodes: Node[], depth = 0): number {
+  if (!node.parentId) {
+    return depth
+  }
+  const parent = nodes.find(n => n.id === node.parentId)
+  if (!parent) {
+    return depth
+  }
+  return calculateNodeDepth(parent, nodes, depth + 1)
+}
 
 function onMouseDown(event: MouseEvent) {
   emit('node-mousedown', props.node.id, event)
@@ -113,6 +167,7 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   if (minDist === bottomDist) return 'bottom'
   return 'left'
 }
+
 </script>
 
 <style scoped>
@@ -132,6 +187,10 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   text-align: center;
   font-size: 14px;
   transition: box-shadow 0.2s ease, transform 0s;
+}
+
+.node-title {
+  width: 100%;
 }
 
 .node:hover {
@@ -204,5 +263,21 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   left: -2px;
   bottom: 10px;
   width: 2px;
+}
+
+.node.potential-parent {
+  box-shadow: 0 0 0 3px #28a745;
+}
+
+.node.has-children {
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: center;
+  padding-top: 2px;
+}
+
+.node.pass-through-error {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
 }
 </style>

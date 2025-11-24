@@ -9,6 +9,8 @@ export interface Node {
   text: string;
   width: number;
   height: number;
+  parentId?: string;
+  passThroughEdges?: string[];
 }
 
 export type ConnectionSide = 'top' | 'right' | 'bottom' | 'left'

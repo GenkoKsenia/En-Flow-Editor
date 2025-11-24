@@ -56,6 +56,27 @@
               />
             </div>
           </div>
+          <div class="property-group">
+            <h5>Стрелки, проходящие через блок</h5>
+            <details class="edge-selector">
+              <summary>Выбрать стрелки</summary>
+              <div class="edge-checkboxes">
+                <label 
+                  v-for="edge in availableEdges" 
+                  :key="edge.id" 
+                  class="edge-option"
+                >
+                  <input 
+                    type="checkbox" 
+                    :value="edge.id" 
+                    :checked="isEdgeRequired(edge.id)"
+                    @change="onPassThroughEdgeInput(edge.id, $event)"
+                  />
+                  {{ edge.id }}
+                </label>
+              </div>
+            </details>
+          </div>
         </div>
       </div>
       
@@ -116,6 +137,7 @@ interface SelectedObject {
 
 interface Props {
   selectedObject?: SelectedObject | null
+  edges?: Edge[]
 }
 
 interface Emits {
@@ -137,6 +159,8 @@ const selectedNode = computed(() => {
 const selectedEdge = computed(() => {
   return props.selectedObject?.type === 'edge' ? props.selectedObject.data as Edge : null
 })
+
+const availableEdges = computed(() => props.edges ?? [])
 
 // Определяем тип стрелки
 function getEdgeType(edge: Edge): string {
@@ -185,6 +209,32 @@ function onNodeSizeChange(): void {
       height: selectedNode.value.height
     })
   }
+}
+
+function onPassThroughEdgeInput(edgeId: string, event: Event): void {
+  const target = event.target as HTMLInputElement
+  onPassThroughEdgeToggle(edgeId, target.checked)
+}
+
+function isEdgeRequired(edgeId: string): boolean {
+  return selectedNode.value?.passThroughEdges?.includes(edgeId) ?? false
+}
+
+function onPassThroughEdgeToggle(edgeId: string, checked: boolean): void {
+  if (!selectedNode.value) return
+  const current = [...(selectedNode.value.passThroughEdges || [])]
+  const index = current.indexOf(edgeId)
+  
+  if (checked && index === -1) {
+    current.push(edgeId)
+  } else if (!checked && index !== -1) {
+    current.splice(index, 1)
+  }
+  
+  selectedNode.value.passThroughEdges = current
+  emit('update:node', selectedNode.value.id, {
+    passThroughEdges: current
+  })
 }
 
 function onEdgeBreakpointChange(): void {
@@ -341,5 +391,33 @@ function clearSelection(): void {
   background: #c82333;
   border-color: #c82333;
   color: #ffffff;
+}
+
+.edge-selector {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.edge-selector summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.edge-checkboxes {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edge-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #495057;
 }
 </style>
