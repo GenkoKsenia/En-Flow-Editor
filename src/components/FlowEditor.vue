@@ -92,7 +92,8 @@ const nodes = ref<Node[]>([
     text: 'Начальный узел',
     width: 150,
     height: 60,
-    passThroughEdges: []
+    passThroughEdges: [],
+    borderStyle: 'solid'
   },
   {
     id: '2',
@@ -100,7 +101,8 @@ const nodes = ref<Node[]>([
     text: 'Процесс',
     width: 120,
     height: 60,
-    passThroughEdges: []
+    passThroughEdges: [],
+    borderStyle: 'solid'
   }
 ])
 
@@ -110,7 +112,9 @@ const edges = ref<Edge[]>([
     sourceNodeId: '1',
     targetNodeId: '2',
     sourceSide: 'right',
-    targetSide: 'left'
+    targetSide: 'left',
+    lineStyle: 'solid',
+    markerType: 'triangle'
   }
 ])
 
@@ -223,7 +227,8 @@ function addNode(): void {
     text: `Узел ${nodes.value.length + 1}`,
     width: 120,
     height: 60,
-    passThroughEdges: []
+    passThroughEdges: [],
+    borderStyle: 'solid'
   }
   nodes.value.push(newNode)
 }
@@ -293,7 +298,10 @@ function createConnection(
     sourceNodeId: sourceId,
     targetNodeId: targetId,
     sourceSide: sourceSide,
-    targetSide: targetSide
+    targetSide: targetSide,
+    label: '',
+    lineStyle: 'solid',
+    markerType: 'triangle'
   }
 
   edges.value.push(newEdge)

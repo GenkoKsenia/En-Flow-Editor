@@ -10,7 +10,8 @@
       'child-node': !!node.parentId, 
       'potential-parent': isPotentialParent,
       'has-children': hasChildren,
-      'pass-through-error': hasPassThroughError
+      'pass-through-error': hasPassThroughError,
+      [nodeBorderClass]: true
     }"
     @mousedown="onMouseDown"
     @click="onClick"
@@ -88,6 +89,7 @@ function getAbsolutePosition(node: Node, nodes: Node[]): Position {
 
 const nodeDepth = computed(() => calculateNodeDepth(props.node, props.allNodes))
 const hasChildren = computed(() => props.childrenCount > 0)
+const nodeBorderClass = computed(() => `border-style-${props.node.borderStyle ?? 'solid'}`)
 
 const nodeStyle = computed(() => {
   // Вычисляем абсолютную позицию для отображения
@@ -101,9 +103,26 @@ const nodeStyle = computed(() => {
     width: `${props.node.width}px`,
     height: `${props.node.height}px`,
     transform: props.isDragging ? 'translate(var(--drag-dx), var(--drag-dy))' : 'none',
-    zIndex
+    zIndex,
+    '--border-color': getBorderColor()
   }
 })
+
+function getBorderColor(): string {
+  if (props.hasPassThroughError) {
+    return '#dc3545'
+  }
+  if (props.isConnectionSource) {
+    return '#28a745'
+  }
+  if (props.isConnectionTarget) {
+    return '#ffc107'
+  }
+  if (props.selected) {
+    return '#007bff'
+  }
+  return '#4CAF50'
+}
 
 function calculateNodeDepth(node: Node, nodes: Node[], depth = 0): number {
   if (!node.parentId) {
@@ -175,7 +194,9 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 .node {
   position: absolute;
   background: white;
-  border: 2px solid #4CAF50;
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--border-color, #4CAF50);
   border-radius: 8px;
   padding: 10px;
   cursor: pointer;
@@ -189,6 +210,15 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   transition: box-shadow 0.2s ease, transform 0s;
 }
 
+.node.border-style-solid {
+  border-style: solid;
+}
+
+.node.border-style-dashed {
+  border-style: dashed;
+}
+
+
 .node-title {
   width: 100%;
 }
@@ -198,17 +228,17 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 .node.selected {
-  border-color: #007bff;
+  --border-color: #007bff;
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
 
 .node.connection-source {
-  border-color: #28a745;
+  --border-color: #28a745;
   box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.25);
 }
 
 .node.connection-target {
-  border-color: #ffc107;
+  --border-color: #ffc107;
   box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.25);
 }
 
@@ -277,7 +307,7 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 .node.pass-through-error {
-  border-color: #dc3545;
+  --border-color: #dc3545;
   box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
 }
 </style>

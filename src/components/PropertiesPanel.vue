@@ -11,10 +11,6 @@
         <div class="property-group">
           <h4>Узел</h4>
           <div class="property">
-            <label>ID:</label>
-            <span class="property-value">{{ selectedNode.id }}</span>
-          </div>
-          <div class="property">
             <label>Текст:</label>
             <input 
               v-model="selectedNode.text" 
@@ -56,6 +52,22 @@
               />
             </div>
           </div>
+          <div class="property">
+            <label>Стиль рамки:</label>
+            <select 
+              class="property-input"
+              :value="selectedNode.borderStyle || 'solid'"
+              @change="onNodeBorderStyleChange"
+            >
+              <option 
+                v-for="option in nodeLineStyleOptions" 
+                :key="option.value" 
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
           <div class="property-group">
             <h5>Стрелки, проходящие через блок</h5>
             <details class="edge-selector">
@@ -72,7 +84,7 @@
                     :checked="isEdgeRequired(edge.id)"
                     @change="onPassThroughEdgeInput(edge.id, $event)"
                   />
-                  {{ edge.id }}
+                  {{ formatEdgeLabel(edge) }}
                 </label>
               </div>
             </details>
@@ -85,8 +97,45 @@
         <div class="property-group">
           <h4>Связь</h4>
           <div class="property">
-            <label>ID:</label>
-            <span class="property-value">{{ selectedEdge.id }}</span>
+            <label>Название:</label>
+            <input 
+              v-model="selectedEdge.label"
+              @input="onEdgeLabelChange"
+              class="property-input"
+              placeholder="Название связи"
+            />
+          </div>
+          <div class="property">
+            <label>Стиль линии:</label>
+            <select 
+              class="property-input"
+              :value="selectedEdge.lineStyle || 'solid'"
+              @change="onEdgeLineStyleChange"
+            >
+              <option 
+                v-for="option in edgeLineStyleOptions" 
+                :key="option.value" 
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          <div class="property">
+            <label>Наконечник:</label>
+            <select 
+              class="property-input"
+              :value="selectedEdge.markerType || 'triangle'"
+              @change="onEdgeMarkerTypeChange"
+            >
+              <option 
+                v-for="option in markerOptions" 
+                :key="option.value" 
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
           </div>
 
           
@@ -127,7 +176,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Node, Edge, EdgeGeometry } from '../types'
+import type { Node, Edge, EdgeGeometry, LineStyle, EdgeMarkerType } from '../types'
 
 interface SelectedObject {
   type: 'node' | 'edge'
@@ -161,23 +210,23 @@ const selectedEdge = computed(() => {
 })
 
 const availableEdges = computed(() => props.edges ?? [])
+const nodeLineStyleOptions: { value: LineStyle, label: string }[] = [
+  { value: 'solid', label: 'Сплошная' },
+  { value: 'dashed', label: 'Пунктирная' }
+]
+const edgeLineStyleOptions: { value: LineStyle, label: string }[] = [
+  { value: 'solid', label: 'Сплошная' },
+  { value: 'dashed', label: 'Пунктирная' },
+  { value: 'dotted', label: 'Пунктир с точкой' }
+]
 
-// Определяем тип стрелки
-function getEdgeType(edge: Edge): string {
-  const { sourceSide, targetSide } = edge
-  
-  if (sourceSide === targetSide) {
-    return `Одинаковые стороны (${sourceSide}-${targetSide})`
-  } else if (
-    (sourceSide === 'left' && targetSide === 'right') ||
-    (sourceSide === 'right' && targetSide === 'left') ||
-    (sourceSide === 'top' && targetSide === 'bottom') ||
-    (sourceSide === 'bottom' && targetSide === 'top')
-  ) {
-    return `Противоположные стороны (${sourceSide}-${targetSide})`
-  } else {
-    return `Смежные стороны (${sourceSide}-${targetSide})`
-  }
+const markerOptions: { value: EdgeMarkerType, label: string }[] = [
+  { value: 'triangle', label: 'Треугольник' },
+  { value: 'none', label: 'Без наконечника' }
+]
+
+function formatEdgeLabel(edge: Edge): string {
+  return edge.label?.trim() || edge.id
 }
 
 // Проверяем, есть ли у стрелки точки излома
@@ -211,6 +260,16 @@ function onNodeSizeChange(): void {
   }
 }
 
+function onNodeBorderStyleChange(event: Event): void {
+  if (!selectedNode.value) return
+  const value = (event.target as HTMLSelectElement).value as LineStyle
+  const safeValue: LineStyle = value === 'dotted' ? 'dashed' : value
+  selectedNode.value.borderStyle = safeValue
+  emit('update:node', selectedNode.value.id, {
+    borderStyle: safeValue
+  })
+}
+
 function onPassThroughEdgeInput(edgeId: string, event: Event): void {
   const target = event.target as HTMLInputElement
   onPassThroughEdgeToggle(edgeId, target.checked)
@@ -234,6 +293,31 @@ function onPassThroughEdgeToggle(edgeId: string, checked: boolean): void {
   selectedNode.value.passThroughEdges = current
   emit('update:node', selectedNode.value.id, {
     passThroughEdges: current
+  })
+}
+
+function onEdgeLabelChange(): void {
+  if (!selectedEdge.value) return
+  emit('update:edge', selectedEdge.value.id, {
+    label: selectedEdge.value.label
+  })
+}
+
+function onEdgeLineStyleChange(event: Event): void {
+  if (!selectedEdge.value) return
+  const value = (event.target as HTMLSelectElement).value as LineStyle
+  selectedEdge.value.lineStyle = value
+  emit('update:edge', selectedEdge.value.id, {
+    lineStyle: value
+  })
+}
+
+function onEdgeMarkerTypeChange(event: Event): void {
+  if (!selectedEdge.value) return
+  const value = (event.target as HTMLSelectElement).value as EdgeMarkerType
+  selectedEdge.value.markerType = value
+  emit('update:edge', selectedEdge.value.id, {
+    markerType: value
   })
 }
 

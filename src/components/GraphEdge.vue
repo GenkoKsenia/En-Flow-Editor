@@ -6,10 +6,14 @@
       :stroke="strokeColor"
       stroke-width="2"
       fill="none"
-      :marker-end="markerUrl"
+      :stroke-dasharray="dashPattern || undefined"
+      :stroke-linecap="strokeLinecap"
+      :marker-end="markerUrl || undefined"
       @mousedown="onPathMouseDown"
       :class="{ selected: isSelected, 'pass-through-error': hasPassThroughError }"
-    />
+    >
+      <title v-if="edgeTitle">{{ edgeTitle }}</title>
+    </path>
     
     <!-- Области для перетаскивания средних отрезков (только для 3-сегментных) -->
     <path
@@ -63,14 +67,21 @@ const emit = defineEmits<{
   'breakpoint-drag-start': [edgeId: string, event: MouseEvent] 
 }>()
 
+const edgeTitle = computed(() => props.edge.label?.trim() ?? '')
+
 // Выбираем маркер и цвет
 const markerUrl = computed(() => {
-  const markers = {
-    default: 'url(#arrowhead)',
-    selected: 'url(#arrowhead-selected)',
-    error: 'url(#arrowhead-error)',
+  const markerType = props.edge.markerType ?? 'triangle'
+  if (markerType === 'none') return ''
+  const markers: Record<'triangle', Record<'default' | 'selected' | 'error', string>> = {
+    triangle: {
+      default: 'arrowhead',
+      selected: 'arrowhead-selected',
+      error: 'arrowhead-error'
+    }
   }
-  return markers[props.type]
+  const markerId = markers[markerType]?.[props.type] ?? 'arrowhead'
+  return `url(#${markerId})`
 })
 
 const strokeColor = computed(() => {
@@ -81,6 +92,18 @@ const strokeColor = computed(() => {
   }
   return colors[props.type]
 })
+
+const dashPattern = computed(() => {
+  const styles: Record<string, string> = {
+    solid: '',
+    dashed: '8 4',
+    dotted: '8 4 2 4' // чередуем длинный штрих и точку
+  }
+  const lineStyle = props.edge.lineStyle ?? 'solid'
+  return styles[lineStyle]
+})
+
+const strokeLinecap = computed(() => props.edge.lineStyle === 'dotted' ? 'round' : 'butt')
 
 // Получаем точки соединения
 const startPoint = computed(() => {

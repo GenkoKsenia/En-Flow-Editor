@@ -36,6 +36,7 @@
       >
         <polygon points="0 0, 10 3.5, 0 7" fill="#dc3545" />
       </marker>
+      
     </defs>
   </svg>
 </template>
