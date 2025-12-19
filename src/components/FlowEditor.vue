@@ -9,12 +9,44 @@
       <!-- Правая панель - холст -->
       <div class="right-panel">
         <div class="toolbar">
-          <button @click="addNode">Процесс</button>
-          <button @click="startConnectionMode" :class="{ active: isConnectionMode }"
-            title="Создать связь между узлами">Связь</button>
-          <div class="stats">
-            Узлов: {{ nodes.length }}
-            <span v-if="edges.length">, Связей: {{ edges.length }}</span>
+          <div class="toolbar-group icon-group">
+            <button class="icon-btn" type="button" @click="addNode" title="Процесс" aria-label="Процесс">
+              <img src="/icon/process.png" alt="Процесс">
+            </button>
+            <button class="icon-btn" type="button" @click="startConnectionMode" :class="{ active: isConnectionMode }"
+              title="Поток данных" aria-label="Связь">
+              <img src="/icon/connection.png" alt="Связь">
+            </button>
+            <button class="icon-btn" type="button" title="Внешняя система" aria-label="Внешняя система">
+              <img src="/icon/external-system.png" alt="Внешняя система">
+            </button>
+            <button class="icon-btn" type="button" title="Пользователь" aria-label="Пользователь">
+              <img src="/icon/user.png" alt="Пользователь">
+            </button>
+            <button class="icon-btn" type="button" title="Хранилище данных" aria-label="Хранилище данных">
+              <img src="/icon/data-store.png" alt="Хранилище данных">
+            </button>
+            <button class="icon-btn" type="button" title="Комментарий" aria-label="Комментарий">
+              <img src="/icon/comment.png" alt="Комментарий">
+            </button>
+            <button class="icon-btn" type="button" title="Граница системы" aria-label="Граница системы">
+              <img src="/icon/boundary.png" alt="Граница системы">
+            </button>
+          </div>
+          <div class="toolbar-right">
+            <div class="stats">
+              Узлов: {{ nodes.length }}
+              <span v-if="edges.length">, Связей: {{ edges.length }}</span>
+            </div>
+            <button class="team-button" @click="showTeamModal = true" aria-label="Команда">
+              <span class="team-avatars">
+                <span class="avatar-circle">OP</span>
+                <span class="avatar-circle">OP</span>
+                <span class="avatar-circle">OP</span>
+              </span>
+              <span class="team-label">Команда</span>
+            </button>
+            <button class="save-btn" @click="exportAsPng">Сохранить PNG</button>
           </div>
         </div>
 
@@ -30,45 +62,103 @@
         />
 
         <!-- снять выделение при нажатии на холст-->
-        <div class="canvas" ref="canvas" @click="onCanvasClick">
+        <div
+          class="canvas"
+          ref="canvas"
+          @click="onCanvasClick"
+          @wheel.prevent="onCanvasWheel"
+        >
+          <div class="canvas-content" :style="canvasTransformStyle" ref="canvasContent">
 
-          <!-- Невидимое определение стрелки -->
-          <ArrowDefinitions />
+            <!-- Невидимое определение стрелки -->
+            <ArrowDefinitions />
 
-          <!-- Постоянные связи -->
-          <GraphEdge 
-            v-for="edge in edges" 
-            :key="edge.id" 
-            :edge="edge" 
-            :nodes="nodes"
-            :is-selected="selectedEdgeId === edge.id" 
-            :show-drag-handle="showDragHandles"
-            :get-connection-position="getConnectionPosition"
-            :force-three-segments="edgeRequiresPassThrough[edge.id]"
-            :has-pass-through-error="edgePassThroughErrors[edge.id]"
-            @edge-click="onEdgeClick"
-            @breakpoint-drag-start="onBreakpointDragStart" 
-          />
+            <!-- Постоянные связи -->
+            <GraphEdge 
+              v-for="edge in edges" 
+              :key="edge.id" 
+              :edge="edge" 
+              :nodes="nodes"
+              :is-selected="selectedEdgeId === edge.id" 
+              :show-drag-handle="showDragHandles"
+              :get-connection-position="getConnectionPosition"
+              :force-three-segments="edgeRequiresPassThrough[edge.id]"
+              :has-pass-through-error="edgePassThroughErrors[edge.id]"
+              @edge-click="onEdgeClick"
+              @breakpoint-drag-start="onBreakpointDragStart" 
+            />
 
-          <!-- Узлы -->
-          <GraphNode 
-  v-for="node in nodes" 
-  :key="node.id" 
-  :node="node" 
-  :data-node-id="node.id"
-  :selected="selectedNodeId === node.id" 
-  :is-connection-source="isConnectionSource(node.id)"
-  :is-connection-target="isConnectionTarget(node.id)" 
-  :is-dragging="isDragging && selectedNodeId === node.id"
-  :show-connection-hints="showConnectionHints" 
-  :children-count="getChildrenCount(node.id)"
-  :is-potential-parent="potentialParentId === node.id"
-  :all-nodes="nodes"
-  :has-pass-through-error="nodePassThroughErrors[node.id]"
-  @node-mousedown="onNodeMouseDown" 
-  @node-click="onNodeClick" 
-  @node-hover-side="onNodeHoverSide" 
-/>
+            <!-- Узлы -->
+            <GraphNode 
+              v-for="node in nodes" 
+              :key="node.id" 
+              :node="node" 
+              :data-node-id="node.id"
+              :selected="selectedNodeId === node.id" 
+              :is-connection-source="isConnectionSource(node.id)"
+              :is-connection-target="isConnectionTarget(node.id)" 
+              :is-dragging="isDragging && selectedNodeId === node.id"
+              :show-connection-hints="showConnectionHints" 
+              :children-count="getChildrenCount(node.id)"
+              :is-potential-parent="potentialParentId === node.id"
+              :all-nodes="nodes"
+              :has-pass-through-error="nodePassThroughErrors[node.id]"
+              @node-mousedown="onNodeMouseDown" 
+              @node-click="onNodeClick" 
+              @node-hover-side="onNodeHoverSide" 
+            />
+          </div>
+          <div class="canvas-zoom-controls">
+            <button @click="zoomOut" aria-label="Уменьшить масштаб">-</button>
+            <div class="zoom-indicator">{{ zoomPercent }}%</div>
+            <button @click="zoomIn" aria-label="Увеличить масштаб">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showTeamModal" class="modal-backdrop" @click.self="showTeamModal = false">
+      <div class="modal-window">
+        <div class="modal-header">
+          <span>Команда</span>
+          <button class="close-btn" @click="showTeamModal = false" aria-label="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="team-section">
+            <div class="section-title">Участники</div>
+            <ul class="team-list">
+              <li class="team-row" v-for="member in teamMembers" :key="member.email">
+                <div class="member-info">
+                  <div class="avatar-circle small">{{ member.initials }}</div>
+                  <div class="member-text">
+                    <div class="member-name">{{ member.name }}</div>
+                    <div class="member-email">{{ member.email }}</div>
+                  </div>
+                </div>
+                <span class="member-role">{{ member.role }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="team-section">
+            <div class="section-title">Ссылка на схему</div>
+            <div class="link-box">
+              <span>{{ shareLink }}</span>
+              <button class="copy-btn" type="button">Копировать</button>
+            </div>
+          </div>
+
+          <div class="team-section">
+            <div class="section-title">Добавить участника</div>
+            <div class="invite-row">
+              <input type="text" placeholder="email или имя пользователя" disabled>
+              <select disabled>
+                <option>Редактор</option>
+                <option>Чтение</option>
+              </select>
+              <button type="button" disabled>Пригласить</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -169,6 +259,7 @@ function clearSelection(): void {
 const selectedNodeId = ref<string | null>(null)
 const isDragging = ref(false)
 const canvas = ref<HTMLElement | null>(null)
+const canvasContent = ref<HTMLElement | null>(null)
 const selectedEdgeId = ref<string | null>(null)
 const isDraggingBreakpoint = ref(false)
 const draggingEdgeId = ref<string | null>(null)
@@ -218,6 +309,164 @@ const passThroughOffsets = computed(() => calculatePassThroughOffsets())
 const passThroughStatus = computed(() => evaluatePassThroughStatus())
 const nodePassThroughErrors = computed(() => passThroughStatus.value.nodeErrors)
 const edgePassThroughErrors = computed(() => passThroughStatus.value.edgeErrors)
+
+const showTeamModal = ref(false)
+const teamMembers = ref([
+  { initials: 'OP', name: 'Иванов И.И.', email: 'ivanov@mail.ru', role: 'Редактор' },
+  { initials: 'OP', name: 'Петров П.П.', email: 'petrov@mail.ru', role: 'Чтение' },
+  { initials: 'OP', name: 'Сидоров С.С.', email: 'sidorov@mail.ru', role: 'Админ' }
+])
+const shareLink = ref('https://example.com/share/en-flow')
+
+// Масштаб
+const zoom = ref(1)
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 2
+const ZOOM_STEP = 0.1
+
+const zoomPercent = computed(() => Math.round(zoom.value * 100))
+const canvasTransformStyle = computed(() => ({
+  transform: `scale(${zoom.value})`,
+  transformOrigin: '0 0'
+}))
+
+// Округление координат для хранения без длинных дробей
+function roundCoord(value: number, precision = 2): number {
+  const factor = 10 ** precision
+  return Math.round(value * factor) / factor
+}
+
+function zoomIn(): void {
+  zoom.value = Math.min(MAX_ZOOM, +(zoom.value + ZOOM_STEP).toFixed(2))
+}
+
+function zoomOut(): void {
+  zoom.value = Math.max(MIN_ZOOM, +(zoom.value - ZOOM_STEP).toFixed(2))
+}
+
+function onCanvasWheel(event: WheelEvent): void {
+  const delta = Math.sign(event.deltaY)
+  if (delta > 0) {
+    zoomOut()
+  } else if (delta < 0) {
+    zoomIn()
+  }
+}
+
+// Клонирование DOM-дерева с инлайном вычисленных стилей (чтобы foreignObject отрисовал так же)
+function cloneWithInlineStyles(element: HTMLElement): HTMLElement {
+  const clone = element.cloneNode(true) as HTMLElement
+
+  const copyStyles = (source: Element, target: Element) => {
+    const computed = getComputedStyle(source)
+    const cssText = Array.from(computed)
+      .map(prop => `${prop}: ${computed.getPropertyValue(prop)};`)
+      .join(' ')
+    ;(target as HTMLElement).setAttribute('style', cssText)
+
+    const sourceChildren = Array.from(source.children)
+    const targetChildren = Array.from(target.children)
+    sourceChildren.forEach((child, index) => {
+      const targetChild = targetChildren[index]
+      if (child instanceof Element && targetChild instanceof Element) {
+        copyStyles(child, targetChild)
+      }
+    })
+  }
+
+  copyStyles(element, clone)
+  return clone
+}
+
+function getContentBounds() {
+  let minX = 0
+  let minY = 0
+  let maxX = 0
+  let maxY = 0
+
+  nodes.value.forEach(node => {
+    const absolute = getAbsoluteNodePosition(node)
+    minX = Math.min(minX, absolute.x)
+    minY = Math.min(minY, absolute.y)
+    maxX = Math.max(maxX, absolute.x + node.width)
+    maxY = Math.max(maxY, absolute.y + node.height)
+  })
+
+  // Минимальные размеры, чтобы не получить 0
+  if (maxX === 0) maxX = 1
+  if (maxY === 0) maxY = 1
+
+  return { minX, minY, maxX, maxY }
+}
+
+async function exportAsPng(): Promise<void> {
+  if (!canvasContent.value) return
+
+  const node = canvasContent.value
+  const bounds = getContentBounds()
+  const padding = 32
+  const width = Math.ceil(bounds.maxX - bounds.minX + padding * 2)
+  const height = Math.ceil(bounds.maxY - bounds.minY + padding * 2)
+
+  if (!width || !height) return
+
+  // Клонируем содержимое, чтобы убрать transform: scale
+  const cloned = cloneWithInlineStyles(node)
+  cloned.style.transform = `translate(${padding - bounds.minX}px, ${padding - bounds.minY}px)`
+  cloned.style.transformOrigin = '0 0'
+  cloned.style.width = `${width}px`
+  cloned.style.height = `${height}px`
+  cloned.style.padding = '0'
+  cloned.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml')
+
+  // Обертка с белой подложкой и нужными размерами
+  const wrapper = document.createElement('div')
+  wrapper.style.width = `${width}px`
+  wrapper.style.height = `${height}px`
+  wrapper.style.background = '#fff'
+  wrapper.style.position = 'relative'
+  wrapper.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml')
+  wrapper.appendChild(cloned)
+
+  const serializer = new XMLSerializer()
+  const serialized = serializer.serializeToString(wrapper)
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+      <foreignObject width="100%" height="100%">
+        ${serialized}
+      </foreignObject>
+    </svg>
+  `
+
+  const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+
+  await new Promise<void>((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvasEl = document.createElement('canvas')
+      canvasEl.width = width
+      canvasEl.height = height
+      const ctx = canvasEl.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(img, 0, 0)
+        const pngUrl = canvasEl.toDataURL('image/png')
+        const link = document.createElement('a')
+        link.href = pngUrl
+        link.download = 'diagram.png'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
+      resolve()
+    }
+    img.onerror = (err) => {
+      reject(err)
+    }
+    img.src = svgDataUrl
+  })
+}
 
 // Методы
 function addNode(): void {
@@ -424,8 +673,9 @@ function startDrag(nodeId: string, event: MouseEvent): void {
   const onMouseMove = (moveEvent: MouseEvent) => {
     if (!isDragging.value) return
 
-    const deltaX = moveEvent.clientX - startMouseX
-    const deltaY = moveEvent.clientY - startMouseY
+    const scale = zoom.value || 1
+    const deltaX = (moveEvent.clientX - startMouseX) / scale
+    const deltaY = (moveEvent.clientY - startMouseY) / scale
 
     tempNode.dx = deltaX
     tempNode.dy = deltaY
@@ -460,8 +710,8 @@ function startDrag(nodeId: string, event: MouseEvent): void {
     const deltaY = tempNode.dy
 
     // Вычисляем новую абсолютную позицию
-    const newAbsoluteX = Math.max(0, startNodeX + deltaX)
-    const newAbsoluteY = Math.max(0, startNodeY + deltaY)
+    const newAbsoluteX = roundCoord(Math.max(0, startNodeX + deltaX))
+    const newAbsoluteY = roundCoord(Math.max(0, startNodeY + deltaY))
 
     // Убираем CSS трансформации
     const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement
@@ -496,7 +746,7 @@ function startDrag(nodeId: string, event: MouseEvent): void {
       // Позиции дочерних узлов нужно пересчитать в абсолютные
       children.forEach(child => {
         const childAbsolutePos = getAbsoluteNodePosition(child)
-        moveNodeToParent(child.id, null, childAbsolutePos.x, childAbsolutePos.y)
+        moveNodeToParent(child.id, null, roundCoord(childAbsolutePos.x), roundCoord(childAbsolutePos.y))
       })
     } else {
       // Обычное перемещение (обновляем позицию с учетом родителя)
@@ -508,8 +758,8 @@ function startDrag(nodeId: string, event: MouseEvent): void {
           let relativeX = newAbsoluteX - parentAbsolute.x
           let relativeY = newAbsoluteY - parentAbsolute.y
           
-          relativeX = Math.max(CONTAINER_PADDING, relativeX)
-          relativeY = Math.max(CONTAINER_PADDING, relativeY)
+          relativeX = roundCoord(Math.max(CONTAINER_PADDING, relativeX))
+          relativeY = roundCoord(Math.max(CONTAINER_PADDING, relativeY))
           
           node.position.x = relativeX
           node.position.y = relativeY
@@ -593,10 +843,10 @@ function onBreakpointDragStart(edgeId: string, event: MouseEvent): void {
 
     if (axis === 'x') {
       const newX = moveEvent.clientX - canvasRect.left
-      edge.breakpointX = clampXValue(edge, newX)
+      edge.breakpointX = roundCoord(clampXValue(edge, newX))
     } else {
       const newY = moveEvent.clientY - canvasRect.top
-      edge.breakpointY = clampYValue(edge, newY)
+      edge.breakpointY = roundCoord(clampYValue(edge, newY))
     }
   }
 
@@ -778,6 +1028,7 @@ function clearParentHighlights(): void {
 function moveNodeToParent(nodeId: string, parentId: string | null, absoluteX?: number, absoluteY?: number): void {
   const node = nodes.value.find(n => n.id === nodeId)
   if (!node) return
+  const previousParentId = node.parentId
   
   // Получаем текущую абсолютную позицию, если не передана
   const currentAbsolutePos = absoluteX !== undefined && absoluteY !== undefined 
@@ -791,12 +1042,12 @@ function moveNodeToParent(nodeId: string, parentId: string | null, absoluteX?: n
       const parentAbsolutePos = getAbsoluteNodePosition(parent)
       
       // Вычисляем позицию относительно родителя
-      const relativeX = currentAbsolutePos.x - parentAbsolutePos.x
-      const relativeY = currentAbsolutePos.y - parentAbsolutePos.y
+      const relativeX = roundCoord(currentAbsolutePos.x - parentAbsolutePos.x)
+      const relativeY = roundCoord(currentAbsolutePos.y - parentAbsolutePos.y)
       
       // Устанавливаем относительную позицию с отступом от краев
-      node.position.x = Math.max(CONTAINER_PADDING, relativeX)
-      node.position.y = Math.max(CONTAINER_PADDING, relativeY)
+      node.position.x = roundCoord(Math.max(CONTAINER_PADDING, relativeX))
+      node.position.y = roundCoord(Math.max(CONTAINER_PADDING, relativeY))
       node.parentId = parentId
       ensureParentPadding(parentId)
       
@@ -804,14 +1055,16 @@ function moveNodeToParent(nodeId: string, parentId: string | null, absoluteX?: n
     }
   } else {
     // Если перетащили на пустое место - делаем корневым узлом
-    node.position.x = currentAbsolutePos.x
-    node.position.y = currentAbsolutePos.y
+    node.position.x = roundCoord(currentAbsolutePos.x)
+    node.position.y = roundCoord(currentAbsolutePos.y)
     node.parentId = undefined
     
     console.log(`Узел ${nodeId} стал корневым`)
   }
   
   maintainPassThroughEdges(nodeId)
+  updateParentBorder(parentId)
+  updateParentBorder(previousParentId)
 }
 
 function ensureParentPadding(parentId: string | null | undefined): void {
@@ -836,6 +1089,14 @@ function ensureParentPadding(parentId: string | null | undefined): void {
   ensureParentPadding(parent.parentId)
 }
 
+function updateParentBorder(parentId: string | null | undefined): void {
+  if (!parentId) return
+  const parent = nodes.value.find(n => n.id === parentId)
+  if (!parent) return
+  const childrenCount = nodes.value.filter(n => n.parentId === parentId).length
+  parent.borderStyle = childrenCount > 0 ? 'dashed' : 'solid'
+}
+
 function maintainPassThroughEdges(nodeId: string | null | undefined): void {
   if (!nodeId) return
   const node = nodes.value.find(n => n.id === nodeId)
@@ -854,10 +1115,10 @@ function alignEdgeToNode(edge: Edge, node: Node): void {
   
   if (isHorizontalEdge) {
     const fraction = getPassThroughFraction(node.id, edge.id, 'horizontal')
-    edge.breakpointX = rect.left + rect.width * fraction
+    edge.breakpointX = roundCoord(rect.left + rect.width * fraction)
   } else if (isVerticalEdge) {
     const fraction = getPassThroughFraction(node.id, edge.id, 'vertical')
-    edge.breakpointY = rect.top + rect.height * fraction
+    edge.breakpointY = roundCoord(rect.top + rect.height * fraction)
   }
 }
 
@@ -1123,7 +1384,7 @@ function getChildrenCount(nodeId: string): number {
 
 .toolbar {
   padding: 12px 20px;
-  background: white;
+  background: #ebebeb;
   border-bottom: 1px solid #dee2e6;
   display: flex;
   justify-content: space-between;
@@ -1133,22 +1394,338 @@ function getChildrenCount(nodeId: string): number {
 
 .toolbar button {
   padding: 8px 16px;
-  background: #007bff;
-  color: white;
-  border: none;
+  background: #ffffff;
+  color: #066664;
+  border: 1px solid #066664;
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
   transition: background 0.2s;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-group {
+  gap: 6px;
+}
+
+.icon-btn {
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  font-size: 18px;
+  background: #ffffff;
+  border: 1px solid #066664;
+  height: 40px;
+  justify-content: center;
+}
+
+.icon-btn img {
+  width: 16px;
+  height: 16px;
+  filter: invert(19%) sepia(59%) saturate(808%) hue-rotate(130deg) brightness(94%) contrast(96%);
+}
+
+.team-button {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #e1e5ea;
+  box-shadow: none;
+  border-radius: 100px !important;
+}
+
+.team-button:hover {
+  background: #f5f5f5 !important;
+  color: #111 !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.save-btn {
+  background: #066664 !important;
+  color: #ffffff !important;
+  border: 1px solid #066664 !important;
+}
+
+.save-btn:hover {
+  background: #044746 !important;
+  color: #ffffff !important;
 }
 
 .toolbar button:hover {
-  background: #0056b3;
+  background: #e6f4f1;
 }
 
 .toolbar button.active {
-  background: #28a745;
-  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.5);
+  background: #94bea9;
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(6, 102, 100, 0.25);
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoom-indicator {
+  min-width: 52px;
+  text-align: center;
+  font-weight: 600;
+  color: #343a40;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.team-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #e1e5ea;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.1s;
+  height: 40px;
+}
+
+.team-button:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.team-button:active {
+  transform: translateY(1px);
+}
+
+.team-button {
+  color: #111 !important;
+}
+
+.team-label {
+  color: #111 !important;
+}
+
+.team-avatars {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.avatar-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #c0c2c5;
+  color: #fff;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.team-label {
+  color: #ffffff;
+}
+
+.canvas-zoom-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 4px 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 5;
+}
+
+.canvas-zoom-controls button {
+  padding: 8px 12px;
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  transition: background 0.2s;
+}
+
+.canvas-zoom-controls button:hover {
+  background: #08a180;
+}
+
+.canvas-zoom-controls .zoom-indicator {
+  font-weight: 700;
+  color: #343a40;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.modal-window {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  width: 460px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.modal-body {
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+}
+
+.team-section {
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.team-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.member-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-circle.small {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #c0c2c5;
+  color: #fff;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.member-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.member-name {
+  font-weight: 700;
+}
+
+.member-email {
+  font-size: 12px;
+  color: #555;
+}
+
+.member-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: #066664;
+}
+
+.link-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #f8f9fa;
+  font-size: 12px;
+}
+
+.copy-btn {
+  padding: 6px 10px;
+  border: 1px solid #e1e5ea;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.invite-row {
+  display: grid;
+  grid-template-columns: 1fr 140px 110px;
+  gap: 8px;
+}
+
+.invite-row input,
+.invite-row select,
+.invite-row button {
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #e1e5ea;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.invite-row button {
+  background: #066664;
+  color: #fff;
+  cursor: not-allowed;
+}
+
+.hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #777;
 }
 
 .connection-hint {
@@ -1171,6 +1748,14 @@ function getChildrenCount(nodeId: string): number {
   overflow: auto;
   cursor: default;
   z-index: 1;
+}
+
+.canvas-content {
+  position: relative;
+  width: max-content;
+  height: max-content;
+  transform-origin: 0 0;
+  padding: 24px;
 }
 
 :deep(.node.potential-parent) {

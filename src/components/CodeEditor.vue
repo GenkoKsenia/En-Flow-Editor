@@ -104,8 +104,8 @@ onUnmounted(() => {
 }
 
 .editor-header {
-  padding: 15px;
-  background: #f8f9fa;
+  padding: 16px;
+  background: #ebebeb;
   border-bottom: 1px solid #e1e5e9;
   display: flex;
   justify-content: space-between;
