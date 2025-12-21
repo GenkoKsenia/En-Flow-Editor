@@ -3,12 +3,22 @@ export interface Position {
   y: number;
 }
 
+export type LineStyle = 'solid' | 'dashed' | 'dotted'
+export type NodeLineStyle = 'solid' | 'dashed'
+
+export type EdgeMarkerType = 'triangle' | 'none'
+
 export interface Node {
   id: string;
+  type?: string | null;
   position: Position;
   text: string;
   width: number;
   height: number;
+  parentId?: string;
+  passThroughEdges?: string[];
+  borderStyle?: NodeLineStyle;
+  meta?: Record<string, unknown> | null;
 }
 
 export type ConnectionSide = 'top' | 'right' | 'bottom' | 'left'
@@ -19,6 +29,9 @@ export interface Edge {
   targetNodeId: string;
   sourceSide: ConnectionSide;  // Сторона исходного узла
   targetSide: ConnectionSide;  // Сторона целевого узла
+  label?: string;
+  lineStyle?: LineStyle;
+  markerType?: EdgeMarkerType;
   // Точки излома для стрелок из 3 отрезков
   breakpointX?: number;  // Для вертикального среднего отрезка
   breakpointY?: number;  // Для горизонтального среднего отрезка

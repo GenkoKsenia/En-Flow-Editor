@@ -1,0 +1,147 @@
+{
+  "BLOCKS":[
+    {
+      "BLOCK_KEY": "A"
+    }, 
+    {
+      "BLOCK_KEY": "B"
+    }, 
+    {
+      "BLOCK_KEY": "C", 
+      "CHILDREN": [
+        "B"
+      ]
+    }, 
+    {
+      "BLOCK_KEY": "D"
+    }
+  ], 
+  "BLOCK_PROPERTIES": [
+    {
+      "BLOCK_KEY": "A", 
+      "NAME": "Сервер 1", 
+      "INFORMATION": [
+        "info1", 
+        "info2", 
+        "info3"
+      ]
+    }, 
+    {
+      "BLOCK_KEY": "B", 
+      "NAME": "Сервер 2", 
+      "INFORMATION": [
+        "info1"
+      ]
+    }, 
+    {
+      "BLOCK_KEY": "C", 
+      "NAME": "Сервер 3", 
+      "INFORMATION": [
+        "info1"
+      ]
+    }, 
+    {
+      "BLOCK_KEY": "D", 
+      "NAME": "Межсетевой экран" 
+    }
+  ], 
+  "BLOCK_LAYOUTS": [
+    {
+      "BLOCK_KEY": "A", 
+      "X": 10, 
+      "Y": 50, 
+      "HEIGHT": 10, 
+      "WIDTH": 20
+    }, 
+    {
+      "BLOCK_KEY": "B", 
+      "X": 50, 
+      "Y": 50, 
+      "HEIGHT": 10, 
+      "WIDTH": 20
+    }, 
+    {
+      "BLOCK_KEY": "C", 
+      "X": 100, 
+      "Y": 50, 
+      "HEIGHT": 20, 
+      "WIDTH": 30
+    }, 
+    {
+      "BLOCK_KEY": "D", 
+      "X": 30, 
+      "Y": 50, 
+      "HEIGHT": 20, 
+      "WIDTH": 10
+    }
+  ], 
+"DATA_FLOWS": [
+    {
+      "DATA_KEY": "info", 
+      "DATA_NAME": "User info", 
+      "START_BLOCK": "A", 
+      "FINISH_BLOCKS": ["B"]
+    }
+  ], 
+"CONNECTIONS": [
+    {
+      "CONNECTION_KEY": "CONN1", 
+      "START_BLOCK": "A", 
+      "END_BLOCK": "B", 
+      "THROUGH": "D", 
+      "DATA_KEYS": ["info"], 
+      "BEND_POINTS": [
+        {
+          "X": 20, 
+          "Y": 50
+        }, 
+        {
+          "X": 20, 
+          "Y": 45
+        }
+      ]
+    }
+  ], 
+  "STYLES": [
+    {
+      "ELEMENT_ID": "A", 
+      "COLOR": "#e3f2fd", 
+      "BORDER_COLOR": "#1976d2", 
+      "BORDER_WIDTH": 2, 
+      "BORDER_RADIUS": 5, 
+      "BORDER_STYLE": "solid"
+    }, 
+    {
+      "ELEMENT_ID": "B", 
+      "COLOR": "#e3f2fd", 
+      "BORDER_COLOR": "#1976d2", 
+      "BORDER_WIDTH": 1, 
+      "BORDER_RADIUS": 5, 
+      "BORDER_STYLE": "solid"
+    }, 
+    {
+      "ELEMENT_ID": "C", 
+      "COLOR": "#e3f2fd", 
+      "BORDER_COLOR": "#1976d2", 
+      "BORDER_WIDTH": 2, 
+      "BORDER_RADIUS": 5, 
+      "BORDER_TYPE": "dashed"
+    }, 
+    {
+      "ELEMENT_ID": "D", 
+      "COLOR": "#e3f2fd", 
+      "BORDER_COLOR": "#1976d2", 
+      "BORDER_WIDTH": 2, 
+      "BORDER_RADIUS": 5, 
+      "BORDER_STYLE": "solid"
+    }, 
+    {
+      "ELEMENT_ID": "CONN1", 
+      "COLOR": "#e3f2fd", 
+      "WIDTH": 2, 
+      "TYPE": "solid"
+    }
+  ]
+}
+
+	

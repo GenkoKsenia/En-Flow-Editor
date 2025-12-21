@@ -1,0 +1,221 @@
+{
+    "blocks": [
+        {
+            "id": "A",
+            "name": "Блок 1",
+            "information": [
+                "Доп информация 1",
+                "Доп информация 2"
+            ],
+            "position": {
+                "x": 10,
+                "y": 50
+            },
+            "width": 180,
+            "height": 140,
+            "parentId": null
+        },
+        {
+            "id": "B",
+            "name": "Блок 2",
+            "information": [
+                "Доп информация"
+            ],
+            "position": {
+                "x": 10,
+                "y": 50
+            },
+            "width": 120,
+            "height": 60,
+            "parentId": "A"
+        },
+        {
+            "id": "C",
+            "name": "Межсетевой экран",
+            "information": [],
+            "position": {
+                "x": 10,
+                "y": 50
+            },
+            "width": 120,
+            "height": 60,
+            "parentId": null
+        },
+        {
+            "id": "D",
+            "name": "Блок 3",
+            "information": [
+                "Доп информация"
+            ],
+            "position": {
+                "x": 10,
+                "y": 50
+            },
+            "width": 120,
+            "height": 60,
+            "parentId": null
+        },
+        {
+            "id": "E",
+            "name": "Блок 4",
+            "information": [
+                "Доп информация"
+            ],
+            "position": {
+                "x": 10,
+                "y": 50
+            },
+            "width": 120,
+            "height": 60,
+            "parentId": null
+        },
+        {
+            "id": "F",
+            "name": "Блок 5",
+            "information": [
+                "Доп информация"
+            ],
+            "position": {
+                "x": 10,
+                "y": 50
+            },
+            "width": 120,
+            "height": 60,
+            "parentId": null
+        }
+    ],
+    "dataFlows": [
+        {
+            "dataKey": "mainInfo",
+            "dataName": "info",
+            "startBlock": "B",
+            "finishBlocks": [
+                "F"
+            ]
+        }
+    ],
+    "connections": [
+        {
+            "id": "connA",
+            "startBlock": "B",
+            "endBlock": "D",
+            "startSide": "bottom",
+            "endSide": "top",
+            "label": "Стрелка 1",
+            "dataKeys": [
+                "mainInfo"
+            ],
+            "through": [
+                "C"
+            ],
+            "breakpoints": []
+        },
+        {
+            "id": "connB",
+            "startBlock": "D",
+            "endBlock": "E",
+            "startSide": "bottom",
+            "endSide": "top",
+            "label": "Стрелка 2",
+            "through": [],
+            "breakpoints": [
+                {
+                    "x": 20,
+                    "y": 50
+                },
+                {
+                    "x": 20,
+                    "y": 45
+                }
+            ]
+        },
+        {
+            "id": "connC",
+            "startBlock": "D",
+            "endBlock": "F",
+            "startSide": "bottom",
+            "endSide": "top",
+            "label": "Стрелка 3",
+            "dataKeys": [
+                "mainInfo"
+            ],
+            "through": [],
+            "breakpoints": [
+                {
+                    "x": 20,
+                    "y": 50
+                },
+                {
+                    "x": 20,
+                    "y": 45
+                }
+            ]
+        }
+    ],
+    "styles": {
+        "blocks": [
+            {
+                "element_id": "A",
+                "color": "#ffffff",
+                "border_color": "#000000",
+                "border_width": 1,
+                "border_style": "solid"
+            },
+            {
+                "element_id": "B",
+                "color": "#ffffff",
+                "border_color": "#000000",
+                "border_width": 1,
+                "border_style": "solid"
+            },
+            {
+                "element_id": "C",
+                "color": "#ffffff",
+                "border_color": "#000000",
+                "border_width": 1,
+                "border_style": "solid"
+            },
+            {
+                "element_id": "D",
+                "color": "#ffffff",
+                "border_color": "#000000",
+                "border_width": 1,
+                "border_style": "solid"
+            },
+            {
+                "element_id": "E",
+                "color": "#ffffff",
+                "border_color": "#000000",
+                "border_width": 1,
+                "border_style": "solid"
+            },
+            {
+                "element_id": "F",
+                "color": "#ffffff",
+                "border_color": "#000000",
+                "border_width": 1,
+                "border_style": "solid"
+            }
+        ],
+        "connections": [
+            {
+                "element_id": "connA",
+                "color": "#000000",
+                "width": 1,
+                "type": "solid"
+            },
+            {
+                "element_id": "connB",
+                "color": "#000000",
+                "width": 1,
+                "type": "solid"
+            },
+            {
+                "element_id": "connC",
+                "color": "#000000",
+                "width": 1,
+                "type": "solid"
+            }
+        ]
+    }
+}

@@ -6,14 +6,21 @@
       selected: selected,
       'connection-source': isConnectionSource,
       'connection-target': isConnectionTarget,
-      dragging: isDragging
+      dragging: isDragging,
+      'child-node': !!node.parentId, 
+      'potential-parent': isPotentialParent,
+      'has-children': hasChildren,
+      'pass-through-error': hasPassThroughError,
+      [nodeBorderClass]: true
     }"
     @mousedown="onMouseDown"
     @click="onClick"
     @mousemove="onMouseMove"
     @mouseleave="onMouseLeave"
   >
-    {{ node.text }}
+    <div class="node-title">
+      {{ node.text }}
+    </div>
 
     <!-- Индикаторы сторон для соединения -->
     <div v-if="showConnectionHints" class="connection-hints">
@@ -27,7 +34,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { Node, ConnectionSide } from '../types'
+import type { Node, ConnectionSide, Position } from '../types'
 
 interface Props {
   node: Node
@@ -36,6 +43,10 @@ interface Props {
   isConnectionTarget?: boolean
   isDragging?: boolean
   showConnectionHints?: boolean
+  childrenCount?: number
+  isPotentialParent?: boolean
+  allNodes?: Node[] // Все узлы для вычисления абсолютной позиции
+  hasPassThroughError?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -43,7 +54,11 @@ const props = withDefaults(defineProps<Props>(), {
   isConnectionSource: false,
   isConnectionTarget: false,
   isDragging: false,
-  showConnectionHints: false
+  showConnectionHints: false,
+  childrenCount: 0,
+  isPotentialParent: false,
+  allNodes: () => [],
+  hasPassThroughError: false
 })
 
 const emit = defineEmits<{
@@ -54,13 +69,71 @@ const emit = defineEmits<{
 
 const hoveredSide = ref<ConnectionSide | null>(null)
 
-const nodeStyle = computed(() => ({
-  left: `${props.node.position.x}px`,
-  top: `${props.node.position.y}px`,
-  width: `${props.node.width}px`,
-  height: `${props.node.height}px`,
-  transform: props.isDragging ? 'translate(var(--drag-dx), var(--drag-dy))' : 'none'
-}))
+// Вычисляем абсолютную позицию узла с учетом родителя
+function getAbsolutePosition(node: Node, nodes: Node[]): Position {
+  if (!node.parentId) {
+    return node.position
+  }
+  
+  const parent = nodes.find(n => n.id === node.parentId)
+  if (!parent) {
+    return node.position
+  }
+  
+  const parentAbsolute = getAbsolutePosition(parent, nodes)
+  return {
+    x: parentAbsolute.x + node.position.x,
+    y: parentAbsolute.y + node.position.y
+  }
+}
+
+const nodeDepth = computed(() => calculateNodeDepth(props.node, props.allNodes))
+const hasChildren = computed(() => props.childrenCount > 0)
+const nodeBorderClass = computed(() => `border-style-${props.node.borderStyle ?? 'solid'}`)
+
+const nodeStyle = computed(() => {
+  // Вычисляем абсолютную позицию для отображения
+  const absolutePos = getAbsolutePosition(props.node, props.allNodes)
+  const baseZIndex = nodeDepth.value * 100 + 50
+  const zIndex = props.isDragging ? baseZIndex + 1000 : baseZIndex
+  
+  return {
+    left: `${absolutePos.x}px`,
+    top: `${absolutePos.y}px`,
+    width: `${props.node.width}px`,
+    height: `${props.node.height}px`,
+    transform: props.isDragging ? 'translate(var(--drag-dx), var(--drag-dy))' : 'none',
+    zIndex,
+    '--border-color': getBorderColor()
+  }
+})
+
+function getBorderColor(): string {
+  if (props.hasPassThroughError) {
+    return '#dc3545'
+  }
+  if (props.isConnectionSource) {
+    return '#28a745'
+  }
+  if (props.isConnectionTarget) {
+    return '#ffc107'
+  }
+  if (props.selected) {
+    return '#007bff'
+  }
+  return '#4CAF50'
+}
+
+function calculateNodeDepth(node: Node, nodes: Node[], depth = 0): number {
+  if (!node.parentId) {
+    return depth
+  }
+  const parent = nodes.find(n => n.id === node.parentId)
+  if (!parent) {
+    return depth
+  }
+  return calculateNodeDepth(parent, nodes, depth + 1)
+}
 
 function onMouseDown(event: MouseEvent) {
   emit('node-mousedown', props.node.id, event)
@@ -113,6 +186,7 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   if (minDist === bottomDist) return 'bottom'
   return 'left'
 }
+
 </script>
 
 <style scoped>
@@ -120,7 +194,9 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 .node {
   position: absolute;
   background: white;
-  border: 2px solid #4CAF50;
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--border-color, #4CAF50);
   border-radius: 8px;
   padding: 10px;
   cursor: pointer;
@@ -134,22 +210,35 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   transition: box-shadow 0.2s ease, transform 0s;
 }
 
+.node.border-style-solid {
+  border-style: solid;
+}
+
+.node.border-style-dashed {
+  border-style: dashed;
+}
+
+
+.node-title {
+  width: 100%;
+}
+
 .node:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .node.selected {
-  border-color: #007bff;
+  --border-color: #007bff;
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
 
 .node.connection-source {
-  border-color: #28a745;
+  --border-color: #28a745;
   box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.25);
 }
 
 .node.connection-target {
-  border-color: #ffc107;
+  --border-color: #ffc107;
   box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.25);
 }
 
@@ -204,5 +293,21 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   left: -2px;
   bottom: 10px;
   width: 2px;
+}
+
+.node.potential-parent {
+  box-shadow: 0 0 0 3px #28a745;
+}
+
+.node.has-children {
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: center;
+  padding-top: 2px;
+}
+
+.node.pass-through-error {
+  --border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
 }
 </style>

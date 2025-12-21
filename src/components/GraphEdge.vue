@@ -1,15 +1,19 @@
 <template>
-  <svg class="edge">
+  <svg class="edge" :style="{ zIndex: edgeZIndex }">
     <!-- Основной путь стрелки -->
     <path
       :d="pathData"
       :stroke="strokeColor"
       stroke-width="2"
       fill="none"
-      :marker-end="markerUrl"
+      :stroke-dasharray="dashPattern || undefined"
+      :stroke-linecap="strokeLinecap"
+      :marker-end="markerUrl || undefined"
       @mousedown="onPathMouseDown"
-      :class="{ selected: isSelected }"
-    />
+      :class="{ selected: isSelected, 'pass-through-error': hasPassThroughError }"
+    >
+      <title v-if="edgeTitle">{{ edgeTitle }}</title>
+    </path>
     
     <!-- Области для перетаскивания средних отрезков (только для 3-сегментных) -->
     <path
@@ -45,13 +49,17 @@ interface Props {
   isSelected?: boolean
   showDragHandle?: boolean
   getConnectionPosition?: (nodeId: string, side: ConnectionSide, connectionId: string) => number
+  forceThreeSegments?: boolean
+  hasPassThroughError?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   type: 'default',
   isSelected: false,
   showDragHandle: false,
-  getConnectionPosition: () => 0.5
+  getConnectionPosition: () => 0.5,
+  forceThreeSegments: false,
+  hasPassThroughError: false
 })
 
 const emit = defineEmits<{
@@ -59,14 +67,21 @@ const emit = defineEmits<{
   'breakpoint-drag-start': [edgeId: string, event: MouseEvent] 
 }>()
 
+const edgeTitle = computed(() => props.edge.label?.trim() ?? '')
+
 // Выбираем маркер и цвет
 const markerUrl = computed(() => {
-  const markers = {
-    default: 'url(#arrowhead)',
-    selected: 'url(#arrowhead-selected)',
-    error: 'url(#arrowhead-error)',
+  const markerType = props.edge.markerType ?? 'triangle'
+  if (markerType === 'none') return ''
+  const markers: Record<'triangle', Record<'default' | 'selected' | 'error', string>> = {
+    triangle: {
+      default: 'arrowhead',
+      selected: 'arrowhead-selected',
+      error: 'arrowhead-error'
+    }
   }
-  return markers[props.type]
+  const markerId = markers[markerType]?.[props.type] ?? 'arrowhead'
+  return `url(#${markerId})`
 })
 
 const strokeColor = computed(() => {
@@ -77,6 +92,18 @@ const strokeColor = computed(() => {
   }
   return colors[props.type]
 })
+
+const dashPattern = computed(() => {
+  const styles: Record<string, string> = {
+    solid: '',
+    dashed: '8 4',
+    dotted: '8 4 2 4' // чередуем длинный штрих и точку
+  }
+  const lineStyle = props.edge.lineStyle ?? 'solid'
+  return styles[lineStyle]
+})
+
+const strokeLinecap = computed(() => props.edge.lineStyle === 'dotted' ? 'round' : 'butt')
 
 // Получаем точки соединения
 const startPoint = computed(() => {
@@ -91,32 +118,40 @@ function getConnectionPoint(nodeId: string, side: ConnectionSide): Position {
   const node = props.nodes.find(n => n.id === nodeId)
   if (!node) return { x: 0, y: 0 }
   
+  //ВЫЧИСЛЯЕМ АБСОЛЮТНУЮ ПОЗИЦИЮ С УЧЕТОМ ВЛОЖЕННОСТИ
+  const absolutePosition = getAbsolutePosition(node, props.nodes)
+  
   // Получаем позицию соединения (от 0 до 1)
   const position = props.getConnectionPosition(nodeId, side, props.edge.id)
   
   switch (side) {
     case 'top':
       return { 
-        x: node.position.x + node.width * position, 
-        y: node.position.y 
+        x: absolutePosition.x + node.width * position, 
+        y: absolutePosition.y 
       }
     case 'right':
       return { 
-        x: node.position.x + node.width, 
-        y: node.position.y + node.height * position 
+        x: absolutePosition.x + node.width, 
+        y: absolutePosition.y + node.height * position 
       }
     case 'bottom':
       return { 
-        x: node.position.x + node.width * position, 
-        y: node.position.y + node.height 
+        x: absolutePosition.x + node.width * position, 
+        y: absolutePosition.y + node.height 
       }
     case 'left':
       return { 
-        x: node.position.x, 
-        y: node.position.y + node.height * position 
+        x: absolutePosition.x, 
+        y: absolutePosition.y + node.height * position 
       }
   }
 }
+
+const sourceDepth = computed(() => getNodeDepth(props.edge.sourceNodeId))
+const targetDepth = computed(() => getNodeDepth(props.edge.targetNodeId))
+const edgeLayer = computed(() => Math.max(sourceDepth.value, targetDepth.value))
+const edgeZIndex = computed(() => edgeLayer.value * 100 + 40)
 
 const edgeGeometry = computed((): EdgeGeometry => {
   if (!startPoint.value || !endPoint.value) {
@@ -135,7 +170,7 @@ const edgeGeometry = computed((): EdgeGeometry => {
   let currentPoint = start
   
   // Определяем тип стрелки
-  const needsThreeSegments = 
+  const needsThreeSegments = props.forceThreeSegments ||
     (sourceSide === 'left' && targetSide === 'right') ||
     (sourceSide === 'right' && targetSide === 'left') ||
     (sourceSide === 'top' && targetSide === 'bottom') ||
@@ -285,7 +320,7 @@ const edgeType = computed(() => {
     (sourceSide === 'left' && targetSide === 'left')  ||
     (sourceSide === 'right' && targetSide === 'right')
   
-  return isOppositeSides ? 'threeSegment' : 'twoSegment'
+  return props.forceThreeSegments || isOppositeSides ? 'threeSegment' : 'twoSegment'
 })
 
 // Точка перетаскивания для 3-сегментных стрелок
@@ -345,6 +380,27 @@ function onDragHandleMouseDown(event: MouseEvent): void {
   emit('breakpoint-drag-start', props.edge.id, event) 
   event.stopPropagation()
 }
+
+function getAbsolutePosition(node: Node, nodes: Node[]): Position {
+  if (!node.parentId) return node.position
+  
+  const parent = nodes.find(n => n.id === node.parentId)
+  if (!parent) return node.position
+  
+  const parentAbsolute = getAbsolutePosition(parent, nodes)
+  return {
+    x: parentAbsolute.x + node.position.x,
+    y: parentAbsolute.y + node.position.y
+  }
+}
+
+function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): number {
+  const node = nodes.find(n => n.id === nodeId)
+  if (!node || !node.parentId) {
+    return depth
+  }
+  return getNodeDepth(node.parentId, nodes, depth + 1)
+}
 </script>
 
 <style scoped>
@@ -362,8 +418,8 @@ function onDragHandleMouseDown(event: MouseEvent): void {
   pointer-events: all;
 }
 
-.edge path.selected {
-  stroke-width: 3;
+.edge path.pass-through-error {
+  stroke: #dc3545;
 }
 
 .drag-handle {
