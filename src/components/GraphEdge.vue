@@ -51,6 +51,7 @@ interface Props {
   getConnectionPosition?: (nodeId: string, side: ConnectionSide, connectionId: string) => number
   forceThreeSegments?: boolean
   hasPassThroughError?: boolean
+  isPassThrough?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -59,7 +60,8 @@ const props = withDefaults(defineProps<Props>(), {
   showDragHandle: false,
   getConnectionPosition: () => 0.5,
   forceThreeSegments: false,
-  hasPassThroughError: false
+  hasPassThroughError: false,
+  isPassThrough: false
 })
 
 const emit = defineEmits<{
@@ -151,7 +153,10 @@ function getConnectionPoint(nodeId: string, side: ConnectionSide): Position {
 const sourceDepth = computed(() => getNodeDepth(props.edge.sourceNodeId))
 const targetDepth = computed(() => getNodeDepth(props.edge.targetNodeId))
 const edgeLayer = computed(() => Math.max(sourceDepth.value, targetDepth.value))
-const edgeZIndex = computed(() => edgeLayer.value * 100 + 40)
+const edgeZIndex = computed(() => {
+  const base = edgeLayer.value * 100 + 40
+  return props.isPassThrough ? base + 1000 : base
+})
 
 const edgeGeometry = computed((): EdgeGeometry => {
   if (!startPoint.value || !endPoint.value) {

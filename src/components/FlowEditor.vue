@@ -94,6 +94,7 @@
               :get-connection-position="getConnectionPosition"
               :force-three-segments="edgeRequiresPassThrough[edge.id]"
               :has-pass-through-error="edgePassThroughErrors[edge.id]"
+              :is-pass-through="edgeRequiresPassThrough[edge.id]"
               @edge-click="onEdgeClick"
               @breakpoint-drag-start="onBreakpointDragStart" 
             />
@@ -410,6 +411,7 @@ function applyDiagramJson(raw: string): void {
           markerType: 'triangle',
           breakpointX: breakpoint?.x,
           breakpointY: breakpoint?.y,
+          breakpointLocked: false,
           geometry: undefined
         } as Edge
       })
@@ -522,6 +524,31 @@ const passThroughOffsets = computed(() => calculatePassThroughOffsets())
 const passThroughStatus = computed(() => evaluatePassThroughStatus())
 const nodePassThroughErrors = computed(() => passThroughStatus.value.nodeErrors)
 const edgePassThroughErrors = computed(() => passThroughStatus.value.edgeErrors)
+
+function alignAllPassThroughEdges(): void {
+  if (isDraggingBreakpoint.value) return
+  nodes.value.forEach(node => maintainPassThroughEdges(node.id))
+}
+
+watch(
+  () => ({
+    offsets: passThroughOffsets.value,
+    nodes: nodes.value.map(n => ({
+      id: n.id,
+      pass: n.passThroughEdges,
+      pos: n.position,
+      size: { w: n.width, h: n.height }
+    })),
+    edges: edges.value.map(e => ({
+      id: e.id,
+      src: e.sourceNodeId,
+      tgt: e.targetNodeId,
+      sides: [e.sourceSide, e.targetSide]
+    }))
+  }),
+  () => alignAllPassThroughEdges(),
+  { deep: true, immediate: true }
+)
 
 const showTeamModal = ref(false)
 const teamMembers = ref([
@@ -1031,6 +1058,7 @@ function onBreakpointDragStart(edgeId: string, event: MouseEvent): void {
 
   const edge = edges.value.find(e => e.id === edgeId)
   if (!edge) return
+  edge.breakpointLocked = true
 
   const { sourceSide, targetSide } = edge
 
@@ -1316,7 +1344,7 @@ function maintainPassThroughEdges(nodeId: string | null | undefined): void {
   if (!node || !node.passThroughEdges?.length) return
   node.passThroughEdges.forEach(edgeId => {
     const edge = edges.value.find(e => e.id === edgeId)
-    if (!edge) return
+    if (!edge || edge.breakpointLocked) return
     alignEdgeToNode(edge, node)
   })
 }
@@ -1401,9 +1429,11 @@ function calculatePassThroughOffsets(): Record<string, { horizontal: Record<stri
     const horizontalEdges = required
       .map(edgeId => edges.value.find(e => e.id === edgeId))
       .filter((edge): edge is Edge => !!edge && isHorizontalPassThroughEdge(edge))
+      .sort((a, b) => a.id.localeCompare(b.id))
     const verticalEdges = required
       .map(edgeId => edges.value.find(e => e.id === edgeId))
       .filter((edge): edge is Edge => !!edge && isVerticalPassThroughEdge(edge))
+      .sort((a, b) => a.id.localeCompare(b.id))
     
     horizontalEdges.forEach((edge, index) => {
       const fraction = (index + 1) / (horizontalEdges.length + 1)

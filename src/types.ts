@@ -35,6 +35,7 @@ export interface Edge {
   // Точки излома для стрелок из 3 отрезков
   breakpointX?: number;  // Для вертикального среднего отрезка
   breakpointY?: number;  // Для горизонтального среднего отрезка
+  breakpointLocked?: boolean; // Пользователь зафиксировал точку излома
   geometry?: EdgeGeometry //Геометрия стрелки
 }
 
