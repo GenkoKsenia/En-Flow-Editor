@@ -3,7 +3,12 @@
     <div class="editor-layout">
       <!-- Левая панель - редактор кода -->
       <div class="left-panel">
-        <CodeEditor />
+        <CodeEditor 
+          v-model:content="diagramJson" 
+          :error="jsonError"
+          @focused="isEditorFocused = true"
+          @blurred="isEditorFocused = false"
+        />
       </div>
 
       <!-- Правая панель - холст -->
@@ -46,6 +51,11 @@
               </span>
               <span class="team-label">Команда</span>
             </button>
+            <JsonExportButton
+              class="save-btn"
+              :nodes="nodes"
+              :edges="edges"
+            />
             <button class="save-btn" @click="exportAsPng">Сохранить PNG</button>
           </div>
         </div>
@@ -166,12 +176,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import GraphNode from './GraphNode.vue'
 import GraphEdge from './GraphEdge.vue'
 import ArrowDefinitions from './ArrowDefinitions.vue'
 import CodeEditor from './CodeEditor.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
+import JsonExportButton from './JsonExportButton.vue'
 import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment } from '../types'
 
 // Состояние
@@ -214,10 +225,212 @@ const selectedObject = ref<{
   geometry?: EdgeGeometry
 } | null>(null)
 
+const jsonError = ref<string | null>(null)
+const diagramJson = ref('')
+const isUpdatingFromState = ref(false)
+let applyTimeout: number | null = null
+const isEditorFocused = ref(false)
+const lastSerializedJson = ref('')
+
 const edgeGeometries = computed(() => {
   const geometries: Record<string, EdgeGeometry> = {}
   return geometries
 })
+
+type SchemaPosition = { x: number; y: number }
+type SchemaBlock = {
+  id: string
+  name: string
+  information?: unknown
+  position?: SchemaPosition
+  width?: number
+  height?: number
+  parentId?: string | null
+}
+type SchemaConnection = {
+  id: string
+  startBlock?: string | null
+  endBlock?: string | null
+  startSide?: ConnectionSide | null
+  endSide?: ConnectionSide | null
+  label?: string | null
+  dataKeys?: unknown
+  through?: unknown
+  breakpoints?: unknown
+}
+
+function extractInformation(meta?: Record<string, unknown> | null): string[] {
+  if (!meta || typeof meta !== 'object') return []
+  const info = (meta as Record<string, unknown>).information
+  if (Array.isArray(info)) return info.filter((item): item is string => typeof item === 'string')
+  if (typeof info === 'string') return [info]
+  return []
+}
+
+function buildThroughMap(): Record<string, string[]> {
+  return nodes.value.reduce<Record<string, string[]>>((acc, node) => {
+    (node.passThroughEdges ?? []).forEach(edgeId => {
+      if (!acc[edgeId]) acc[edgeId] = []
+      acc[edgeId].push(node.id)
+    })
+    return acc
+  }, {})
+}
+
+function extractBreakpoints(edge: Edge): SchemaPosition[] {
+  if (edge.geometry?.segments?.length) {
+    return edge.geometry.segments.slice(0, -1).map(segment => ({
+      x: segment.end.x,
+      y: segment.end.y
+    }))
+  }
+  if (typeof edge.breakpointX === 'number' && typeof edge.breakpointY === 'number') {
+    return [{ x: edge.breakpointX, y: edge.breakpointY }]
+  }
+  return []
+}
+
+function serializeDiagram() {
+  const throughByEdgeId = buildThroughMap()
+
+  return {
+    blocks: nodes.value.map(node => ({
+      id: node.id,
+      name: node.text,
+      information: extractInformation(node.meta),
+      position: { x: node.position.x, y: node.position.y },
+      width: node.width,
+      height: node.height,
+      parentId: node.parentId ?? null
+    })),
+    dataFlows: [],
+    connections: edges.value.map(edge => ({
+      id: edge.id,
+      startBlock: edge.sourceNodeId ?? null,
+      endBlock: edge.targetNodeId ?? null,
+      startSide: edge.sourceSide ?? null,
+      endSide: edge.targetSide ?? null,
+      label: edge.label ?? null,
+      dataKeys: [],
+      through: throughByEdgeId[edge.id] ?? [],
+      breakpoints: extractBreakpoints(edge)
+    })),
+    styles: { blocks: [], connections: [] }
+  }
+}
+
+function updateDiagramJson(): void {
+  const serialized = JSON.stringify(serializeDiagram(), null, 2)
+  lastSerializedJson.value = serialized
+  if (isEditorFocused.value && diagramJson.value !== serialized) {
+    // Не перетираем пользовательский ввод, пока фокус в редакторе
+    return
+  }
+  isUpdatingFromState.value = true
+  diagramJson.value = serialized
+  isUpdatingFromState.value = false
+}
+
+watch([nodes, edges], updateDiagramJson, { deep: true, immediate: true })
+
+function debounceApplyFromEditor(): void {
+  if (applyTimeout) {
+    clearTimeout(applyTimeout)
+  }
+  applyTimeout = window.setTimeout(() => {
+    applyTimeout = null
+    applyDiagramJson(diagramJson.value)
+  }, 400)
+}
+
+function normalizeConnectionSide(side: unknown): ConnectionSide {
+  return side === 'top' || side === 'right' || side === 'bottom' || side === 'left' ? side : 'right'
+}
+
+function normalizeInformation(info: unknown): string[] {
+  if (Array.isArray(info)) return info.filter((item): item is string => typeof item === 'string')
+  if (typeof info === 'string') return [info]
+  return []
+}
+
+function applyDiagramJson(raw: string): void {
+  jsonError.value = null
+  try {
+    const parsed = JSON.parse(raw)
+    const parsedBlocks: SchemaBlock[] = Array.isArray(parsed?.blocks) ? parsed.blocks : []
+    const parsedConnections: SchemaConnection[] = Array.isArray(parsed?.connections) ? parsed.connections : []
+
+    const passThroughByNode: Record<string, string[]> = {}
+    parsedConnections.forEach(conn => {
+      const through = Array.isArray(conn?.through) ? conn.through : []
+      through.forEach(blockId => {
+        const nodeId = String(blockId)
+        if (!passThroughByNode[nodeId]) passThroughByNode[nodeId] = []
+        if (conn?.id) passThroughByNode[nodeId].push(String(conn.id))
+      })
+    })
+
+    const normalizedNodes: Node[] = parsedBlocks
+      .map((b: SchemaBlock) => {
+        if (!b?.id) return null
+        const information = normalizeInformation((b as any).information)
+        const meta = information.length ? { information } : null
+        return {
+          id: String(b.id),
+          text: b.name ?? '',
+          position: {
+            x: typeof b.position?.x === 'number' ? b.position.x : 0,
+            y: typeof b.position?.y === 'number' ? b.position.y : 0
+          },
+          width: typeof b.width === 'number' ? b.width : 120,
+          height: typeof b.height === 'number' ? b.height : 60,
+          parentId: b.parentId ?? null,
+          passThroughEdges: passThroughByNode[String(b.id)] ?? [],
+          borderStyle: 'solid',
+          meta
+        } as Node
+      })
+      .filter(Boolean) as Node[]
+
+    const normalizedEdges: Edge[] = parsedConnections
+      .map((c: SchemaConnection) => {
+        if (!c?.id || !c?.startBlock || !c?.endBlock) return null
+        const breakpoint = Array.isArray(c.breakpoints)
+          ? (c.breakpoints as SchemaPosition[]).find(bp => typeof bp?.x === 'number' && typeof bp?.y === 'number')
+          : null
+
+        return {
+          id: String(c.id),
+          sourceNodeId: String(c.startBlock),
+          targetNodeId: String(c.endBlock),
+          sourceSide: normalizeConnectionSide(c.startSide),
+          targetSide: normalizeConnectionSide(c.endSide),
+          label: c.label ?? '',
+          lineStyle: 'solid',
+          markerType: 'triangle',
+          breakpointX: breakpoint?.x,
+          breakpointY: breakpoint?.y,
+          geometry: undefined
+        } as Edge
+      })
+      .filter(Boolean) as Edge[]
+
+    nodes.value = normalizedNodes
+    edges.value = normalizedEdges
+    lastSerializedJson.value = JSON.stringify(serializeDiagram(), null, 2)
+  } catch (err) {
+    jsonError.value = err instanceof Error ? err.message : 'Не удалось разобрать JSON'
+  }
+}
+
+watch(
+  () => diagramJson.value,
+  (val, prev) => {
+    if (isUpdatingFromState.value) return
+    if (val === prev) return
+    debounceApplyFromEditor()
+  }
+)
 
 function updateNode(nodeId: string, updates: Partial<Node>): void {
   const node = nodes.value.find(n => n.id === nodeId)

@@ -10,6 +10,7 @@ export type EdgeMarkerType = 'triangle' | 'none'
 
 export interface Node {
   id: string;
+  type?: string | null;
   position: Position;
   text: string;
   width: number;
@@ -17,6 +18,7 @@ export interface Node {
   parentId?: string;
   passThroughEdges?: string[];
   borderStyle?: NodeLineStyle;
+  meta?: Record<string, unknown> | null;
 }
 
 export type ConnectionSide = 'top' | 'right' | 'bottom' | 'left'

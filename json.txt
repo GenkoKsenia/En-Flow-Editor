@@ -1,0 +1,89 @@
+{
+  "nodes": [
+    {
+      "id": "123",
+      "name": "server",
+      "text": "Сервер 1",
+      "position": {
+        "x": 10,
+        "y": 50
+      },
+      "width": 180,
+      "height": 60,
+      "parentId": null,
+      "passThroughEdges": ["conn-fw"]
+    },
+    {
+      "id": "321",
+      "name": "server",
+      "text": "Сервер 1",
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "width": 180,
+      "height": 60,
+      "parentId": null,
+      "passThroughEdges": ["conn-fw"]
+    }
+  ],
+  "edges": [
+    {
+      "id": "conn-fw",
+      "sourceNodeId": "123",
+      "targetNodeId": "321",
+      "sourceSide": "right",
+      "targetSide": "left",
+      "label": "User info",
+      "breakpoints": [
+        {
+          "x": 20,
+          "y": 50
+        },
+        {
+          "x": 20,
+          "y": 45
+        }
+      ]
+    }
+  ],
+  "data_flows": [
+    {
+      "data_key": "info",
+      "data_name": "User info",
+      "start_block": "123",
+      "finish_blocks": ["321"]
+    }
+  ],
+  "styles": {
+    "blocks": [
+      {
+        "element_id": "A",
+        "element_type": "block",
+        "color": "#e3f2fd",
+        "border_color": "#1976d2",
+        "border_width": 2,
+        "border_radius": 5,
+        "border_style": "solid"
+      },
+      {
+        "element_id": "B",
+        "element_type": "block",
+        "color": "#e3f2fd",
+        "border_color": "#1976d2",
+        "border_width": 1,
+        "border_radius": 5,
+        "border_style": "solid"
+      }
+    ],
+    "connections": [
+      {
+        "element_id": "CONN1",
+        "element_type": "connection",
+        "color": "#e3f2fd",
+        "width": 2,
+        "type": "solid"
+      }
+    ]
+  }
+}

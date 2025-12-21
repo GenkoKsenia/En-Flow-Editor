@@ -2,29 +2,29 @@
   <div class="code-editor-container">
     <div class="editor-header">
       <h3>Редактор кода</h3>
-      <button 
-        class="run-btn"
-        @click="runCode"
-        :disabled="!code.trim()"
-      >
-        Построить
-      </button>
+    </div>
+    <div v-if="error" class="error-banner">
+      {{ error }}
     </div>
     
-    <!-- Текстовое поле для кода -->
-    <textarea
-      ref="textareaRef"
-      v-model="code"
-      class="code-textarea"
-      :class="{ active: isActive }"
-      placeholder="Введите код здесь...
-Например: 
-node1 -> node2
-node2 -> node3"
-      @focus="isActive = true"
-      @blur="handleBlur"
-      @keydown.tab="handleTab"
-    ></textarea>
+    <div class="editor-body">
+      <div class="line-numbers" ref="lineNumbersRef">
+        <div v-for="n in lineCount" :key="n" class="line-number">{{ n }}</div>
+      </div>
+      <textarea
+        ref="textareaRef"
+        v-model="code"
+        class="code-textarea"
+        :class="{ active: isActive }"
+        placeholder="Редактируйте JSON схемы здесь"
+        @focus="isActive = true"
+        @blur="handleBlur"
+        @keydown.tab="handleTab"
+        @keydown.enter.prevent="handleEnter"
+        @input="onInput"
+        @scroll="syncScroll"
+      ></textarea>
+    </div>
     
     <!-- Подсказка -->
     <div class="editor-hint" v-if="!isActive && !code">
@@ -34,17 +34,43 @@ node2 -> node3"
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
+
+const props = defineProps<{
+  content: string
+  error?: string | null
+}>()
+
+const emit = defineEmits<{
+  (e: 'update:content', value: string): void
+  (e: 'focused'): void
+  (e: 'blurred'): void
+}>()
 
 // Состояние редактора
-const code = ref('')
+const code = ref(props.content ?? '')
 const isActive = ref(false)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const lineNumbersRef = ref<HTMLElement | null>(null)
+const lineCount = computed(() => Math.max(1, code.value.split('\n').length))
 
-// Запуск кода (пока просто логируем)
-function runCode(): void {
-  console.log('Запускаем код:', code.value)
-  // Здесь будет логика парсинга и создания узлов
+watch(
+  () => props.content,
+  (val) => {
+    if (val !== code.value) {
+      code.value = val ?? ''
+    }
+  }
+)
+
+function onInput(): void {
+  emit('update:content', code.value)
+}
+
+function syncScroll(): void {
+  if (lineNumbersRef.value && textareaRef.value) {
+    lineNumbersRef.value.scrollTop = textareaRef.value.scrollTop
+  }
 }
 
 // Обработчик потери фокуса
@@ -54,6 +80,7 @@ function handleBlur(event: FocusEvent): void {
     const relatedTarget = event.relatedTarget as HTMLElement
     if (!textareaRef.value?.contains(relatedTarget)) {
       isActive.value = false
+      emit('blurred')
     }
   }, 10)
 }
@@ -69,9 +96,46 @@ function handleTab(event: KeyboardEvent): void {
   
   // Вставляем 2 пробела вместо Tab
   code.value = code.value.substring(0, start) + '  ' + code.value.substring(end)
-  
+  const newPos = start + 2
+
   // Устанавливаем курсор после отступа
-  textarea.selectionStart = textarea.selectionEnd = start + 2
+  nextTick(() => {
+    textarea.selectionStart = textarea.selectionEnd = newPos
+  })
+
+  emit('update:content', code.value)
+}
+
+function handleEnter(event: KeyboardEvent): void {
+  event.preventDefault()
+  const textarea = textareaRef.value
+  if (!textarea) return
+
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const value = code.value
+
+  const lineStart = value.lastIndexOf('\n', start - 1) + 1
+  const currentLine = value.slice(lineStart, start)
+  const baseIndentMatch = currentLine.match(/^\s*/)
+  const baseIndent = baseIndentMatch ? baseIndentMatch[0] : ''
+
+  let indent = baseIndent
+  const trimmedBefore = currentLine.trimEnd()
+  if (trimmedBefore.endsWith('{') || trimmedBefore.endsWith('[')) {
+    indent = baseIndent + '  '
+  }
+
+  const insert = '\n' + indent
+  const newValue = value.slice(0, start) + insert + value.slice(end)
+  code.value = newValue
+  const newPos = start + insert.length
+
+  nextTick(() => {
+    textarea.selectionStart = textarea.selectionEnd = newPos
+  })
+
+  emit('update:content', code.value)
 }
 
 // Закрытие редактора при клике вне его
@@ -84,11 +148,21 @@ function handleClickOutside(event: MouseEvent): void {
 // Навешиваем обработчик клика вне компонента
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  if (textareaRef.value === document.activeElement) {
+    isActive.value = true
+    emit('focused')
+  }
 })
 
 // Убираем обработчик при размонтировании
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+})
+
+watch(isActive, (active) => {
+  if (active) {
+    emit('focused')
+  }
 })
 </script>
 
@@ -108,7 +182,7 @@ onUnmounted(() => {
   background: #ebebeb;
   border-bottom: 1px solid #e1e5e9;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
 }
 
@@ -118,30 +192,41 @@ onUnmounted(() => {
   font-size: 16px;
 }
 
-.run-btn {
-  padding: 8px 16px;
-  background: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
+.error-banner {
+  background: #ffe3e3;
+  color: #c0392b;
+  padding: 8px 12px;
+  border: 1px solid #ffb3b3;
+  border-left: 4px solid #c0392b;
+  font-size: 12px;
 }
 
-.run-btn:hover:not(:disabled) {
-  background: #218838;
+.editor-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
-.run-btn:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
+.line-numbers {
+  background: #f3f4f6;
+  border-right: 1px solid #e1e5e9;
+  padding: 12px 8px 12px 12px;
+  color: #8c98a4;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  text-align: right;
+  user-select: none;
+  overflow: hidden;
+}
+
+.line-number {
+  height: 21px;
 }
 
 .code-textarea {
   flex: 1;
   border: none;
-  padding: 15px;
+  padding: 12px;
   font-family: 'Courier New', monospace;
   font-size: 14px;
   line-height: 1.5;
@@ -149,6 +234,8 @@ onUnmounted(() => {
   outline: none;
   background: #fafafa;
   transition: all 0.2s ease;
+  overflow: auto;
+  white-space: pre;
 }
 
 .code-textarea.active {
