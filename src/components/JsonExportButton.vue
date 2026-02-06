@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Edge, Node, Position } from '../types'
+import type { ConnectionSide, Edge, Node, Position, Segment, NodeLineStyle } from '../types'
 
 type ExportBlock = {
   id: string
@@ -16,6 +16,7 @@ type ExportBlock = {
   width: number
   height: number
   parentId: string | null
+  borderStyle: Node['borderStyle']
 }
 
 type ExportConnection = {
@@ -28,6 +29,7 @@ type ExportConnection = {
   dataKeys: string[]
   through: string[]
   breakpoints: Position[]
+  lineStyle: Edge['lineStyle']
 }
 
 type ExportDataFlow = {
@@ -38,9 +40,23 @@ type ExportDataFlow = {
 }
 
 type ExportStyles = {
-  blocks?: unknown
-  connections?: unknown
-} | null
+  blocks: Array<{
+    element_id: string
+    element_type: 'block'
+    color: string
+    border_color: string
+    border_width: number
+    border_radius: number
+    border_style: NodeLineStyle
+  }>
+  connections: Array<{
+    element_id: string
+    element_type: 'connection'
+    color: string
+    width: number
+    type: Edge['lineStyle']
+  }>
+}
 
 type ExportPayload = {
   blocks: ExportBlock[]
@@ -57,6 +73,13 @@ const props = defineProps<{
 }>()
 
 const fileName = computed(() => props.fileName ?? 'diagram.json')
+
+const DEFAULT_NODE_COLOR = '#ffffff'
+const DEFAULT_BORDER_COLOR = '#666'
+const DEFAULT_BORDER_WIDTH = 1
+const DEFAULT_BORDER_RADIUS = 5
+const DEFAULT_EDGE_COLOR = '#666'
+const DEFAULT_EDGE_WIDTH = 2
 
 function extractInformation(meta?: Record<string, unknown> | null): string[] {
   if (!meta || typeof meta !== 'object') return []
@@ -78,7 +101,8 @@ function toExportBlock(node: Node): ExportBlock {
     position: { x: node.position.x, y: node.position.y },
     width: node.width,
     height: node.height,
-    parentId: node.parentId ?? null
+    parentId: node.parentId ?? null,
+    borderStyle: node.borderStyle ?? 'solid'
   }
 }
 
@@ -92,24 +116,146 @@ function buildThroughMap(nodes: Node[]): Record<string, string[]> {
   }, {})
 }
 
-function extractBreakpoints(edge: Edge): Position[] {
-  if (edge.geometry?.segments?.length) {
-    return edge.geometry.segments.slice(0, -1).map((segment) => ({
-      x: segment.end.x,
-      y: segment.end.y
-    }))
+function buildConnectionPositions(nodes: Node[], edges: Edge[]): Record<string, Record<ConnectionSide, string[]>> {
+  const positions: Record<string, Record<ConnectionSide, string[]>> = {}
+
+  nodes.forEach((node) => {
+    positions[node.id] = { top: [], right: [], bottom: [], left: [] }
+  })
+
+  edges.forEach((edge) => {
+    positions[edge.sourceNodeId]?.[edge.sourceSide]?.push(edge.id)
+    positions[edge.targetNodeId]?.[edge.targetSide]?.push(edge.id)
+  })
+
+  return positions
+}
+
+function getConnectionPosition(
+  positions: Record<string, Record<ConnectionSide, string[]>>,
+  nodeId: string,
+  side: ConnectionSide,
+  connectionId: string
+): number {
+  const sideConnections = positions[nodeId]?.[side] || []
+  const index = sideConnections.indexOf(connectionId)
+  if (index === -1) return 0.5
+  return (index + 1) / (sideConnections.length + 1)
+}
+
+function getAbsoluteNodePosition(node: Node, nodes: Node[]): Position {
+  if (!node.parentId) return node.position
+  const parent = nodes.find((n) => n.id === node.parentId)
+  if (!parent) return node.position
+  const parentAbsolute = getAbsoluteNodePosition(parent, nodes)
+  return {
+    x: parentAbsolute.x + node.position.x,
+    y: parentAbsolute.y + node.position.y
+  }
+}
+
+function getConnectionPoint(
+  positions: Record<string, Record<ConnectionSide, string[]>>,
+  nodes: Node[],
+  nodeId: string,
+  side: ConnectionSide,
+  connectionId: string
+): Position | null {
+  const node = nodes.find((n) => n.id === nodeId)
+  if (!node) return null
+  const absolute = getAbsoluteNodePosition(node, nodes)
+  const fraction = getConnectionPosition(positions, nodeId, side, connectionId)
+
+  switch (side) {
+    case 'top':
+      return { x: absolute.x + node.width * fraction, y: absolute.y }
+    case 'right':
+      return { x: absolute.x + node.width, y: absolute.y + node.height * fraction }
+    case 'bottom':
+      return { x: absolute.x + node.width * fraction, y: absolute.y + node.height }
+    case 'left':
+      return { x: absolute.x, y: absolute.y + node.height * fraction }
+    default:
+      return null
+  }
+}
+
+function needsThreeSegments(edge: Edge): boolean {
+  const { sourceSide, targetSide } = edge
+  return (
+    (sourceSide === 'left' && targetSide === 'right') ||
+    (sourceSide === 'right' && targetSide === 'left') ||
+    (sourceSide === 'top' && targetSide === 'bottom') ||
+    (sourceSide === 'bottom' && targetSide === 'top') ||
+    (sourceSide === 'left' && targetSide === 'left') ||
+    (sourceSide === 'right' && targetSide === 'right')
+  )
+}
+
+function getEdgeSegments(
+  edge: Edge,
+  positions: Record<string, Record<ConnectionSide, string[]>>,
+  nodes: Node[]
+): Segment[] {
+  const start = getConnectionPoint(positions, nodes, edge.sourceNodeId, edge.sourceSide, edge.id)
+  const end = getConnectionPoint(positions, nodes, edge.targetNodeId, edge.targetSide, edge.id)
+
+  if (!start || !end) return []
+
+  const segments: Segment[] = []
+  let current = start
+  const useThreeSegments = needsThreeSegments(edge) || edge.breakpointX !== undefined || edge.breakpointY !== undefined
+  const breakpointX = edge.breakpointX ?? (start.x + end.x) / 2
+  const breakpointY = edge.breakpointY ?? (start.y + end.y) / 2
+
+  if (useThreeSegments) {
+    if (edge.sourceSide === 'left' || edge.sourceSide === 'right') {
+      const point1 = { x: breakpointX, y: start.y }
+      const point2 = { x: breakpointX, y: end.y }
+      segments.push({ id: `${edge.id}-segment-1`, type: 'line', start: current, end: point1 })
+      current = point1
+      segments.push({ id: `${edge.id}-segment-2`, type: 'line', start: current, end: point2 })
+      current = point2
+      segments.push({ id: `${edge.id}-segment-3`, type: 'line', start: current, end })
+    } else {
+      const point1 = { x: start.x, y: breakpointY }
+      const point2 = { x: end.x, y: breakpointY }
+      segments.push({ id: `${edge.id}-segment-1`, type: 'line', start: current, end: point1 })
+      current = point1
+      segments.push({ id: `${edge.id}-segment-2`, type: 'line', start: current, end: point2 })
+      current = point2
+      segments.push({ id: `${edge.id}-segment-3`, type: 'line', start: current, end })
+    }
+  } else {
+    const bendPoint =
+      edge.sourceSide === 'left' || edge.sourceSide === 'right'
+        ? { x: end.x, y: start.y }
+        : { x: start.x, y: end.y }
+    segments.push({ id: `${edge.id}-segment-1`, type: 'line', start, end: bendPoint })
+    segments.push({ id: `${edge.id}-segment-2`, type: 'line', start: bendPoint, end })
   }
 
-  if (typeof edge.breakpointX === 'number' && typeof edge.breakpointY === 'number') {
-    return [{ x: edge.breakpointX, y: edge.breakpointY }]
-  }
+  return segments
+}
 
-  return []
+function extractBreakpoints(
+  edge: Edge,
+  positions: Record<string, Record<ConnectionSide, string[]>>,
+  nodes: Node[]
+): Position[] {
+  const segments = getEdgeSegments(edge, positions, nodes)
+  if (segments.length < 2) return []
+  return segments.slice(0, segments.length - 1).map((segment) => ({
+    x: segment.end.x,
+    y: segment.end.y
+  }))
 }
 
 function toExportConnection(
   edge: Edge,
-  throughByEdgeId: Record<string, string[]>
+  throughByEdgeId: Record<string, string[]>,
+  positions: Record<string, Record<ConnectionSide, string[]>>,
+  nodes: Node[]
 ): ExportConnection {
   return {
     id: edge.id,
@@ -120,18 +266,43 @@ function toExportConnection(
     label: edge.label ?? null,
     dataKeys: [],
     through: throughByEdgeId[edge.id] ?? [],
-    breakpoints: extractBreakpoints(edge)
+    breakpoints: extractBreakpoints(edge, positions, nodes),
+    lineStyle: edge.lineStyle ?? 'solid'
   }
+}
+
+function buildStyles(nodes: Node[], edges: Edge[]): ExportStyles {
+  const blockStyles: ExportStyles['blocks'] = nodes.map((node) => ({
+    element_id: node.id,
+    element_type: 'block',
+    color: DEFAULT_NODE_COLOR,
+    border_color: DEFAULT_BORDER_COLOR,
+    border_width: DEFAULT_BORDER_WIDTH,
+    border_radius: DEFAULT_BORDER_RADIUS,
+    border_style: node.borderStyle ?? 'solid'
+  }))
+
+  const connectionStyles: ExportStyles['connections'] = edges.map((edge) => ({
+    element_id: edge.id,
+    element_type: 'connection',
+    color: DEFAULT_EDGE_COLOR,
+    width: DEFAULT_EDGE_WIDTH,
+    type: edge.lineStyle ?? 'solid'
+  }))
+
+  return { blocks: blockStyles, connections: connectionStyles }
 }
 
 function buildPayload(): ExportPayload {
   const throughByEdgeId = buildThroughMap(props.nodes)
+  const connectionPositions = buildConnectionPositions(props.nodes, props.edges)
+  const styles = buildStyles(props.nodes, props.edges)
 
   return {
     blocks: props.nodes.map(toExportBlock),
     dataFlows: [],
-    connections: props.edges.map((edge) => toExportConnection(edge, throughByEdgeId)),
-    styles: props.styles ?? { blocks: [], connections: [] }
+    connections: props.edges.map((edge) => toExportConnection(edge, throughByEdgeId, connectionPositions, props.nodes)),
+    styles
   }
 }
 

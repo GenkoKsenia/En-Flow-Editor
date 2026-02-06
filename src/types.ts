@@ -17,6 +17,10 @@ export interface Node {
   height: number;
   parentId?: string;
   passThroughEdges?: string[];
+  color?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  borderRadius?: number;
   borderStyle?: NodeLineStyle;
   meta?: Record<string, unknown> | null;
 }
@@ -30,6 +34,8 @@ export interface Edge {
   sourceSide: ConnectionSide;  // Сторона исходного узла
   targetSide: ConnectionSide;  // Сторона целевого узла
   label?: string;
+  color?: string;
+  width?: number;
   lineStyle?: LineStyle;
   markerType?: EdgeMarkerType;
   // Точки излома для стрелок из 3 отрезков

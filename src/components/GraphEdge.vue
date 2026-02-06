@@ -4,7 +4,7 @@
     <path
       :d="pathData"
       :stroke="strokeColor"
-      stroke-width="2"
+      :stroke-width="strokeWidth"
       fill="none"
       :stroke-dasharray="dashPattern || undefined"
       :stroke-linecap="strokeLinecap"
@@ -35,6 +35,19 @@
       fill="#007bff"
       class="drag-handle-marker"
     />
+
+    <!-- Подпись стрелки -->
+    <text
+      v-if="edgeLabel"
+      :x="labelPosition?.x"
+      :y="labelPosition?.y"
+      class="edge-label"
+      text-anchor="middle"
+      dominant-baseline="middle"
+      pointer-events="none"
+    >
+      {{ edgeLabel }}
+    </text>
   </svg>
 </template>
 
@@ -70,6 +83,10 @@ const emit = defineEmits<{
 }>()
 
 const edgeTitle = computed(() => props.edge.label?.trim() ?? '')
+const edgeLabel = computed(() => {
+  const label = props.edge.label?.trim()
+  return label ? label : ''
+})
 
 // Выбираем маркер и цвет
 const markerUrl = computed(() => {
@@ -87,13 +104,17 @@ const markerUrl = computed(() => {
 })
 
 const strokeColor = computed(() => {
+  const base = props.edge.color ?? '#666'
+  const selectedColor = '#007bff'
   const colors = {
-    default: props.isSelected ? '#007bff' : '#666',
-    selected: '#007bff', 
+    default: props.isSelected ? selectedColor : base,
+    selected: selectedColor, 
     error: '#dc3545',
   }
   return colors[props.type]
 })
+
+const strokeWidth = computed(() => props.edge.width ?? 2)
 
 const dashPattern = computed(() => {
   const styles: Record<string, string> = {
@@ -296,6 +317,34 @@ const pathData = computed(() => {
   return path
 })
 
+const labelPosition = computed<Position | null>(() => {
+  const geometry = edgeGeometry.value
+  if (!geometry.totalLength || geometry.segments.length === 0 || !edgeLabel.value) return null
+
+  const target = geometry.totalLength / 2
+  let traversed = 0
+
+  for (const segment of geometry.segments) {
+    const dx = segment.end.x - segment.start.x
+    const dy = segment.end.y - segment.start.y
+    const length = Math.sqrt(dx * dx + dy * dy)
+    const next = traversed + length
+
+    if (target <= next) {
+      const ratio = (target - traversed) / length || 0
+      return {
+        x: segment.start.x + dx * ratio,
+        y: segment.start.y + dy * ratio
+      }
+    }
+
+    traversed = next
+  }
+
+  const last = geometry.segments[geometry.segments.length - 1]
+  return last ? { ...last.end } : null
+})
+
 // Функция для вычисления точки излома по умолчанию
 function getDefaultBreakpointX(): number {
   const start = startPoint.value!
@@ -427,6 +476,11 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   stroke: #dc3545;
 }
 
+.edge path.selected {
+  stroke: #007bff;
+  stroke-width: 3;
+}
+
 .drag-handle {
   pointer-events: all;
   cursor: col-resize;
@@ -434,5 +488,14 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
 
 .drag-handle-marker {
   pointer-events: none;
+}
+
+.edge-label {
+  fill: #333;
+  font-size: 12px;
+  font-family: Arial, sans-serif;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 2px;
 }
 </style>

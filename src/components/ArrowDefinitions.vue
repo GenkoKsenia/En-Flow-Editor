@@ -4,37 +4,40 @@
       <!-- Основная стрелка -->
       <marker
         id="arrowhead"
-        markerWidth="10"
-        markerHeight="7"
-        refX="9"
-        refY="3.5"
+        markerWidth="14"
+        markerHeight="10"
+        refX="12"
+        refY="5"
         orient="auto"
+        markerUnits="userSpaceOnUse"
       >
-        <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+        <polygon points="0 0, 14 5, 0 10" fill="context-stroke" />
       </marker>
       
       <!-- Выделенная стрелка -->
       <marker
         id="arrowhead-selected"
-        markerWidth="10"
-        markerHeight="7"
-        refX="9"
-        refY="3.5"
+        markerWidth="14"
+        markerHeight="10"
+        refX="12"
+        refY="5"
         orient="auto"
+        markerUnits="userSpaceOnUse"
       >
-        <polygon points="0 0, 10 3.5, 0 7" fill="#007bff" />
+        <polygon points="0 0, 14 5, 0 10" fill="context-stroke" />
       </marker>
 
       <!-- Ошибка стрелка -->
       <marker
         id="arrowhead-error"
-        markerWidth="10"
-        markerHeight="7"
-        refX="9"
-        refY="3.5"
+        markerWidth="14"
+        markerHeight="10"
+        refX="12"
+        refY="5"
         orient="auto"
+        markerUnits="userSpaceOnUse"
       >
-        <polygon points="0 0, 10 3.5, 0 7" fill="#dc3545" />
+        <polygon points="0 0, 14 5, 0 10" fill="context-stroke" />
       </marker>
       
     </defs>
