@@ -10,7 +10,7 @@
         </div>
         <div class="user-info">
           <div class="user-name">Фамилия И.О.</div>
-          <div class="user-email">username@mail.ru</div>
+          <div class="user-email">username@gmail.ru</div>
         </div>
         <div class="user-divider"></div>
         <div class="user-actions">
