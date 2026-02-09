@@ -34,7 +34,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick, onBeforeMount } from 'vue'
+
+import axios from "axios"
+import Cookies from 'js-cookie';
+
+onBeforeMount(() => {
+  axios.defaults.headers.common['X-CSRFToken'] = Cookies.get("csrftoken");
+})
 
 const props = defineProps<{
   content: string

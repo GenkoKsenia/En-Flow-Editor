@@ -3,6 +3,14 @@
     <div class="editor-layout">
       <!-- Левая панель - редактор кода -->
       <div class="left-panel">
+        <button class="save-btn" @click="onSetCode" style="margin: 20px; padding: 10px;">
+          Отправить псевдокод
+        </button>
+
+        <button class="save-btn" @click="onGetCode" style="margin: 20px; padding: 10px;">
+          Получить псевдокод
+        </button>
+
         <CodeEditor 
           v-model:content="diagramJson" 
           :error="jsonError"
@@ -177,7 +185,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeMount } from 'vue'
 import GraphNode from './GraphNode.vue'
 import GraphEdge from './GraphEdge.vue'
 import ArrowDefinitions from './ArrowDefinitions.vue'
@@ -185,6 +193,55 @@ import CodeEditor from './CodeEditor.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
 import JsonExportButton from './JsonExportButton.vue'
 import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment } from '../types'
+
+//efwregtrhytjuy
+
+import axios from "axios"
+import Cookies from 'js-cookie';
+
+onBeforeMount(() => {
+  axios.defaults.headers.common['X-CSRFToken'] = Cookies.get("csrftoken");
+})
+
+async function onSetCode() {
+
+  let dataToSend;
+  if (typeof diagramJson.value === 'string') {
+    dataToSend = JSON.parse(diagramJson.value);
+  } else {
+    // Если это реактивный объект
+    dataToSend = JSON.parse(JSON.stringify(diagramJson.value));
+  }
+
+  console.log("dataToSend", dataToSend);
+
+  
+  await axios.put("https://localhost:7018/api/Version/put/18", 
+    dataToSend, 
+    {
+      withCredentials: true,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+  
+}
+
+async function onGetCode() {
+  const r = await axios.get(
+    "https://localhost:7018/api/Scheme/12", 
+    {
+      withCredentials: true
+    }
+  );
+  console.log("полученные данные", r.data);
+
+  //code.value = r.data.versions[0].code;
+  diagramJson.value = JSON.stringify(r.data.versions[0].code, null, 2);
+}
+
+//wfergetrhytjuykiulol
 
 // Состояние
 const nodes = ref<Node[]>([
