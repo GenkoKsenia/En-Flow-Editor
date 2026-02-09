@@ -11,6 +11,9 @@
       'potential-parent': isPotentialParent,
       'has-children': hasChildren,
       'pass-through-error': hasPassThroughError,
+      'data-flow-error': hasDataError,
+      'missing-target': hasMissingTarget,
+      'forbidden-outgoing': hasForbiddenOutgoing,
       [nodeBorderClass]: true
     }"
     @mousedown="onMouseDown"
@@ -47,6 +50,9 @@ interface Props {
   isPotentialParent?: boolean
   allNodes?: Node[] // Все узлы для вычисления абсолютной позиции
   hasPassThroughError?: boolean
+  hasDataError?: boolean
+  hasMissingTarget?: boolean
+  hasForbiddenOutgoing?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -58,7 +64,10 @@ const props = withDefaults(defineProps<Props>(), {
   childrenCount: 0,
   isPotentialParent: false,
   allNodes: () => [],
-  hasPassThroughError: false
+  hasPassThroughError: false,
+  hasDataError: false,
+  hasMissingTarget: false,
+  hasForbiddenOutgoing: false
 })
 
 const emit = defineEmits<{
@@ -114,6 +123,12 @@ const nodeStyle = computed(() => {
 })
 
 function getBorderColor(): string {
+  if (props.hasForbiddenOutgoing) {
+    return '#ff0000'
+  }
+  if (props.hasDataError) {
+    return '#e03131'
+  }
   if (props.hasPassThroughError) {
     return '#dc3545'
   }
@@ -313,6 +328,21 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 .node.pass-through-error {
+  --border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
+}
+
+.node.data-flow-error {
+  --border-color: #e03131;
+  box-shadow: 0 0 0 3px rgba(224, 49, 49, 0.25);
+}
+
+.node.missing-target {
+  --border-color: #ffb400;
+  box-shadow: 0 0 0 3px rgba(255, 196, 0, 0.45);
+}
+
+.node.forbidden-outgoing {
   --border-color: #dc3545;
   box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
 }

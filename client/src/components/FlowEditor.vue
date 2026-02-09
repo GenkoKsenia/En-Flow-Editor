@@ -72,6 +72,8 @@
         <PropertiesPanel 
           :selected-object="selectedObject" 
           :edges="edges"
+          :nodes="nodes"
+          :data-sets="nodeSendableData"
           @update:node="updateNode" 
           @update:edge="updateEdge"
           @delete:node="deleteNode" 
@@ -123,6 +125,9 @@
               :is-potential-parent="potentialParentId === node.id"
               :all-nodes="nodes"
               :has-pass-through-error="nodePassThroughErrors[node.id]"
+              :has-data-error="nodeDataErrors[node.id]"
+              :has-missing-target="nodeMissingTarget[node.id]"
+              :has-forbidden-outgoing="nodeForbiddenOutgoing[node.id]"
               @node-mousedown="onNodeMouseDown" 
               @node-click="onNodeClick" 
               @node-hover-side="onNodeHoverSide" 
@@ -257,7 +262,8 @@ const nodes = ref<Node[]>([
     borderColor: DEFAULT_BORDER_COLOR,
     borderWidth: DEFAULT_BORDER_WIDTH,
     borderRadius: DEFAULT_BORDER_RADIUS,
-    borderStyle: 'solid'
+    borderStyle: 'solid',
+    borderStyleLocked: false
   },
   {
     id: '2',
@@ -270,7 +276,8 @@ const nodes = ref<Node[]>([
     borderColor: DEFAULT_BORDER_COLOR,
     borderWidth: DEFAULT_BORDER_WIDTH,
     borderRadius: DEFAULT_BORDER_RADIUS,
-    borderStyle: 'solid'
+    borderStyle: 'solid',
+    borderStyleLocked: false
   }
 ])
 
@@ -338,6 +345,8 @@ type SchemaBlock = {
   width?: number
   height?: number
   parentId?: string | null
+  borderStyleLocked?: boolean
+  dataTargetId?: string | null
 }
 type SchemaConnection = {
   id: string
@@ -442,9 +451,16 @@ function serializeDiagram() {
       position: { x: node.position.x, y: node.position.y },
       width: node.width,
       height: node.height,
-      parentId: node.parentId ?? null
+      parentId: node.parentId ?? null,
+      borderStyleLocked: node.borderStyleLocked ?? false,
+      dataTargetId: node.dataTargetId ?? null
     })),
-    dataFlows: [],
+    dataFlows: nodes.value
+      .filter(node => !!node.dataTargetId)
+      .map(node => ({
+        sourceBlock: node.id,
+        targetBlock: node.dataTargetId
+      })),
     connections: edges.value.map(edge => ({
       id: edge.id,
       startBlock: edge.sourceNodeId ?? null,
@@ -452,10 +468,10 @@ function serializeDiagram() {
       startSide: edge.sourceSide ?? null,
       endSide: edge.targetSide ?? null,
       label: edge.label ?? null,
-      dataKeys: [],
-      through: throughByEdgeId[edge.id] ?? [],
-      breakpoints: extractBreakpoints(edge)
-    })),
+          dataKeys: edge.dataKeys ?? [],
+          through: throughByEdgeId[edge.id] ?? [],
+          breakpoints: extractBreakpoints(edge)
+        })),
     styles
   }
 }
@@ -501,6 +517,7 @@ function applyDiagramJson(raw: string): void {
     const parsedBlocks: SchemaBlock[] = Array.isArray(parsed?.blocks) ? parsed.blocks : []
     const parsedConnections: SchemaConnection[] = Array.isArray(parsed?.connections) ? parsed.connections : []
     const parsedStyles: SchemaStyles = parsed?.styles ?? null
+    const parsedDataFlows: Array<{ sourceBlock?: string | null; targetBlock?: string | null }> = Array.isArray(parsed?.dataFlows) ? parsed.dataFlows : []
     const blockStyles: Record<string, { color?: string; border_color?: string; border_width?: number; border_radius?: number; border_style?: string }> = {}
     const connectionStyles: Record<string, { color?: string; width?: number; type?: string }> = {}
 
@@ -540,6 +557,13 @@ function applyDiagramJson(raw: string): void {
       })
     })
 
+    const dataTargets: Record<string, string> = {}
+    parsedDataFlows.forEach(flow => {
+      if (flow?.sourceBlock && flow?.targetBlock) {
+        dataTargets[String(flow.sourceBlock)] = String(flow.targetBlock)
+      }
+    })
+
     const normalizedNodes: Node[] = parsedBlocks
       .map((b: SchemaBlock) => {
         if (!b?.id) return null
@@ -557,11 +581,13 @@ function applyDiagramJson(raw: string): void {
           height: typeof b.height === 'number' ? b.height : 60,
           parentId: b.parentId ?? null,
           passThroughEdges: passThroughByNode[String(b.id)] ?? [],
+          dataTargetId: dataTargets[String(b.id)] ?? (b as any).dataTargetId ?? null,
           color: style?.color ?? DEFAULT_NODE_COLOR,
           borderColor: style?.border_color ?? DEFAULT_BORDER_COLOR,
           borderWidth: style?.border_width ?? DEFAULT_BORDER_WIDTH,
           borderRadius: style?.border_radius ?? DEFAULT_BORDER_RADIUS,
           borderStyle: normalizeBorderStyle(style?.border_style),
+          borderStyleLocked: typeof (b as any).borderStyleLocked === 'boolean' ? (b as any).borderStyleLocked : false,
           meta
         } as Node
       })
@@ -589,13 +615,24 @@ function applyDiagramJson(raw: string): void {
           breakpointX: breakpoint?.x,
           breakpointY: breakpoint?.y,
           breakpointLocked: false,
-          geometry: undefined
+          geometry: undefined,
+          dataKeys: Array.isArray(c.dataKeys)
+            ? c.dataKeys.map(key => String(key))
+            : []
         } as Edge
       })
       .filter(Boolean) as Edge[]
 
     nodes.value = normalizedNodes
     edges.value = normalizedEdges
+    // После загрузки ограничиваем payload по фактическому набору данных исходного узла
+    const dataSets = buildNodeSendableData()
+    const targets = buildDataTargetsMap()
+    edges.value = edges.value.map(edge => {
+      const allowed = dataSets[edge.sourceNodeId] ?? []
+      const sanitized = (edge.dataKeys ?? allowed).filter(id => allowed.includes(id) && targets[id] !== edge.sourceNodeId)
+      return { ...edge, dataKeys: sanitized }
+    })
     refreshParentBorders()
     lastSerializedJson.value = JSON.stringify(serializeDiagram(), null, 2)
   } catch (err) {
@@ -615,6 +652,9 @@ watch(
 function updateNode(nodeId: string, updates: Partial<Node>): void {
   const node = nodes.value.find(n => n.id === nodeId)
   if (node) {
+    if (updates.borderStyle !== undefined) {
+      node.borderStyleLocked = true
+    }
     Object.assign(node, updates)
     maintainPassThroughEdges(nodeId)
   }
@@ -623,6 +663,12 @@ function updateNode(nodeId: string, updates: Partial<Node>): void {
 function updateEdge(edgeId: string, updates: Partial<Edge>): void {
   const edge = edges.value.find(e => e.id === edgeId)
   if (edge) {
+    // Разрешаем переносить только данные, которые содержатся в исходном узле
+    if (updates.dataKeys) {
+      const targets = buildDataTargetsMap()
+      const allowed = nodeSendableData.value[edge.sourceNodeId] ?? []
+      updates = { ...updates, dataKeys: updates.dataKeys.filter(id => allowed.includes(id) && targets[id] !== edge.sourceNodeId) }
+    }
     Object.assign(edge, updates)
   }
 }
@@ -702,10 +748,85 @@ const passThroughOffsets = computed(() => calculatePassThroughOffsets())
 const passThroughStatus = computed(() => evaluatePassThroughStatus())
 const nodePassThroughErrors = computed(() => passThroughStatus.value.nodeErrors)
 const edgePassThroughErrors = computed(() => passThroughStatus.value.edgeErrors)
+const nodeDataErrors = computed(() => evaluateDataIntegrity())
+const nodeSendableData = computed(() => buildNodeSendableData())
+const nodeMissingTarget = computed(() => {
+  const flags: Record<string, boolean> = {}
+  nodes.value.forEach(n => {
+    flags[n.id] = !n.dataTargetId
+  })
+  return flags
+})
+const nodeForbiddenOutgoing = computed(() => {
+  const flags: Record<string, boolean> = {}
+  nodes.value.forEach(n => {
+    const hasOutgoing = edges.value.some(e => e.sourceNodeId === n.id)
+    flags[n.id] = !!n.dataTargetId && n.dataTargetId === n.id && hasOutgoing
+  })
+  return flags
+})
 
 function alignAllPassThroughEdges(): void {
   if (isDraggingBreakpoint.value) return
   nodes.value.forEach(node => maintainPassThroughEdges(node.id))
+}
+
+function buildDataTargetsMap(): Record<string, string> {
+  const map: Record<string, string> = {}
+  nodes.value.forEach(n => {
+    if (n.dataTargetId) {
+      map[n.id] = n.dataTargetId
+    }
+  })
+  return map
+}
+
+function buildNodeSendableData(): Record<string, string[]> {
+  const targets = buildDataTargetsMap()
+  const sets: Record<string, Set<string>> = {}
+  nodes.value.forEach(n => {
+    const own = new Set<string>()
+    own.add(n.id)
+    sets[n.id] = own
+  })
+
+  let changed = true
+  let iter = 0
+  while (changed && iter < 200) {
+    changed = false
+    iter++
+    edges.value.forEach(edge => {
+      const payload = edge.dataKeys ?? []
+      const sourceSet = sets[edge.sourceNodeId]
+      const targetSet = sets[edge.targetNodeId]
+      if (!sourceSet || !targetSet) return
+
+      payload.forEach(key => {
+        if (!sourceSet.has(key)) return
+        // если цель данных - текущий получатель, дальше не переносим
+        if (targets[key] && targets[key] === edge.targetNodeId) return
+        if (!targetSet.has(key)) {
+          targetSet.add(key)
+          changed = true
+        }
+      })
+    })
+  }
+
+  // данные прекращают существование в своём конечном блоке
+  Object.entries(sets).forEach(([nodeId, set]) => {
+    Array.from(set).forEach(key => {
+      if (targets[key] && targets[key] === nodeId) {
+        set.delete(key)
+      }
+    })
+  })
+
+  const result: Record<string, string[]> = {}
+  Object.entries(sets).forEach(([id, set]) => {
+    result[id] = Array.from(set)
+  })
+  return result
 }
 
 watch(
@@ -902,7 +1023,8 @@ function addNode(): void {
     width: 120,
     height: 60,
     passThroughEdges: [],
-    borderStyle: 'solid'
+    borderStyle: 'solid',
+    borderStyleLocked: false
   }
   nodes.value.push(newNode)
 }
@@ -955,6 +1077,11 @@ function createConnection(
   targetId: string,
   targetSide: ConnectionSide
 ): void {
+  const sourceNode = nodes.value.find(n => n.id === sourceId)
+  if (sourceNode?.dataTargetId === sourceId) {
+    console.warn('Исходящий поток из конечного блока запрещён')
+    return
+  }
   // Проверяем, что связь не существует
   const existingEdge = edges.value.find(
     edge => edge.sourceNodeId === sourceId &&
@@ -975,7 +1102,8 @@ function createConnection(
     targetSide: targetSide,
     label: '',
     lineStyle: 'solid',
-    markerType: 'triangle'
+    markerType: 'triangle',
+    dataKeys: nodeSendableData.value[sourceId] ?? []
   }
 
   edges.value.push(newEdge)
@@ -1500,6 +1628,7 @@ function updateParentBorder(parentId: string | null | undefined): void {
   const parent = nodes.value.find(n => n.id === parentId)
   if (!parent) return
   const childrenCount = nodes.value.filter(n => n.parentId === parentId).length
+  if (parent.borderStyleLocked) return
   parent.borderStyle = childrenCount > 0 ? 'dashed' : 'solid'
 }
 
@@ -1512,7 +1641,9 @@ function refreshParentBorders(): void {
   })
   nodes.value.forEach(n => {
     const count = childCount[n.id] || 0
-    n.borderStyle = count > 0 ? 'dashed' : 'solid'
+    if (!n.borderStyleLocked) {
+      n.borderStyle = count > 0 ? 'dashed' : 'solid'
+    }
   })
 }
 
@@ -1580,6 +1711,41 @@ function evaluatePassThroughStatus(): { nodeErrors: Record<string, boolean>, edg
   })
   
   return { nodeErrors, edgeErrors }
+}
+
+function evaluateDataIntegrity(): Record<string, boolean> {
+  const nodeErrors: Record<string, boolean> = {}
+  nodes.value.forEach(node => {
+    const targetId = node.dataTargetId
+    if (!targetId) {
+      nodeErrors[node.id] = false
+      return
+    }
+    const ok = isDataReachable(node.id, targetId, node.id)
+    nodeErrors[node.id] = !ok
+  })
+  return nodeErrors
+}
+
+function isDataReachable(sourceNodeId: string, targetNodeId: string, dataId: string): boolean {
+  if (sourceNodeId === targetNodeId) return true
+  const visited = new Set<string>()
+  const queue: string[] = [sourceNodeId]
+  while (queue.length) {
+    const current = queue.shift()!
+    if (visited.has(current)) continue
+    visited.add(current)
+    
+    const outgoing = edges.value.filter(edge => edge.sourceNodeId === current)
+    for (const edge of outgoing) {
+      const payload = edge.dataKeys ?? []
+      if (!payload.includes(dataId)) continue
+      const next = edge.targetNodeId
+      if (next === targetNodeId) return true
+      if (!visited.has(next)) queue.push(next)
+    }
+  }
+  return false
 }
 
 function doesEdgePassThroughNode(edge: Edge, node: Node): boolean {

@@ -17,6 +17,7 @@ type ExportBlock = {
   height: number
   parentId: string | null
   borderStyle: Node['borderStyle']
+  dataTargetId?: string | null
 }
 
 type ExportConnection = {
@@ -102,7 +103,8 @@ function toExportBlock(node: Node): ExportBlock {
     width: node.width,
     height: node.height,
     parentId: node.parentId ?? null,
-    borderStyle: node.borderStyle ?? 'solid'
+    borderStyle: node.borderStyle ?? 'solid',
+    dataTargetId: node.dataTargetId ?? null
   }
 }
 
@@ -264,7 +266,7 @@ function toExportConnection(
     startSide: edge.sourceSide ?? null,
     endSide: edge.targetSide ?? null,
     label: edge.label ?? null,
-    dataKeys: [],
+    dataKeys: edge.dataKeys ?? [],
     through: throughByEdgeId[edge.id] ?? [],
     breakpoints: extractBreakpoints(edge, positions, nodes),
     lineStyle: edge.lineStyle ?? 'solid'
@@ -300,7 +302,14 @@ function buildPayload(): ExportPayload {
 
   return {
     blocks: props.nodes.map(toExportBlock),
-    dataFlows: [],
+    dataFlows: props.nodes
+      .filter(node => !!node.dataTargetId)
+      .map(node => ({
+        dataKey: node.id,
+        dataName: node.text,
+        startBlock: node.id,
+        finishBlocks: [node.dataTargetId as string]
+      })),
     connections: props.edges.map((edge) => toExportConnection(edge, throughByEdgeId, connectionPositions, props.nodes)),
     styles
   }

@@ -22,7 +22,13 @@ export interface Node {
   borderWidth?: number;
   borderRadius?: number;
   borderStyle?: NodeLineStyle;
+  borderStyleLocked?: boolean;
   meta?: Record<string, unknown> | null;
+  /**
+   * Идентификатор целевого блока, куда должны дойти данные,
+   * сформированные в этом блоке. Используется проверкой целостности.
+   */
+  dataTargetId?: string | null;
 }
 
 export type ConnectionSide = 'top' | 'right' | 'bottom' | 'left'
@@ -43,6 +49,11 @@ export interface Edge {
   breakpointY?: number;  // Для горизонтального среднего отрезка
   breakpointLocked?: boolean; // Пользователь зафиксировал точку излома
   geometry?: EdgeGeometry //Геометрия стрелки
+  /**
+   * Список идентификаторов блоков, чьи данные переносит эта связь.
+   * Например, если связь переносит данные из блока "1" и "4", поле будет ["1","4"].
+   */
+  dataKeys?: string[];
 }
 
 export interface Segment {

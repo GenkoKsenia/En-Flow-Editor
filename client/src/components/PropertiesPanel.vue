@@ -53,6 +53,24 @@
             </div>
           </div>
           <div class="property">
+            <label>Конечный блок данных:</label>
+            <select 
+              class="property-input"
+              :value="selectedNode.dataTargetId || ''"
+              @change="onNodeDataTargetChange"
+            >
+              <option value="">— не выбран —</option>
+              <option :value="selectedNode.id">Этот блок (конечный)</option>
+              <option 
+                v-for="option in dataTargetsOptions" 
+                :key="option.value" 
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          <div class="property">
             <label>Стиль рамки:</label>
             <select 
               class="property-input"
@@ -179,6 +197,26 @@
             />
           </div>
 
+          <div class="property-group">
+            <h5>Данные, которые переносит эта связь</h5>
+            <div class="edge-checkboxes">
+              <label 
+                v-for="option in edgeDataOptions" 
+                :key="option.value" 
+                class="edge-option"
+              >
+                <input 
+                  type="checkbox" 
+                  :value="option.value" 
+                  :checked="edgeCarries(option.value)"
+                  @change="onEdgeDataKeyToggle(option.value, $event)"
+                />
+                {{ option.label }}
+              </label>
+              <div v-if="!edgeDataOptions.length" class="hint">Нет доступных данных для этой стрелки</div>
+            </div>
+          </div>
+
           
         </div>
       </div>
@@ -206,6 +244,8 @@ interface SelectedObject {
 interface Props {
   selectedObject?: SelectedObject | null
   edges?: Edge[]
+  nodes?: Node[]
+  dataSets?: Record<string, string[]>
 }
 
 interface Emits {
@@ -229,6 +269,7 @@ const selectedEdge = computed(() => {
 })
 
 const availableEdges = computed(() => props.edges ?? [])
+const availableNodes = computed(() => props.nodes ?? [])
 const nodeLineStyleOptions: { value: LineStyle, label: string }[] = [
   { value: 'solid', label: 'Сплошная' },
   { value: 'dashed', label: 'Пунктирная' }
@@ -238,6 +279,11 @@ const edgeLineStyleOptions: { value: LineStyle, label: string }[] = [
   { value: 'dashed', label: 'Пунктирная' },
   { value: 'dotted', label: 'Пунктир с точкой' }
 ]
+
+const dataTargetsOptions = computed(() => {
+  return availableNodes.value
+    .map(node => ({ value: node.id, label: node.text || node.id }))
+})
 
 function formatEdgeLabel(edge: Edge): string {
   return edge.label?.trim() || edge.id
@@ -303,6 +349,14 @@ function onNodeBorderRadiusChange(): void {
   emit('update:node', selectedNode.value.id, { borderRadius: selectedNode.value.borderRadius })
 }
 
+function onNodeDataTargetChange(event: Event): void {
+  if (!selectedNode.value) return
+  const value = (event.target as HTMLSelectElement).value
+  const target = value === '' ? null : value
+  selectedNode.value.dataTargetId = target
+  emit('update:node', selectedNode.value.id, { dataTargetId: target })
+}
+
 function onPassThroughEdgeInput(edgeId: string, event: Event): void {
   const target = event.target as HTMLInputElement
   onPassThroughEdgeToggle(edgeId, target.checked)
@@ -356,6 +410,37 @@ function onEdgeWidthChange(): void {
   if (!selectedEdge.value) return
   emit('update:edge', selectedEdge.value.id, { width: selectedEdge.value.width })
 }
+
+function onEdgeDataKeyToggle(nodeId: string, event: Event): void {
+  if (!selectedEdge.value) return
+  const checked = (event.target as HTMLInputElement).checked
+  const current = [...(selectedEdge.value.dataKeys ?? [])]
+  const idx = current.indexOf(nodeId)
+  if (checked && idx === -1) {
+    current.push(nodeId)
+  } else if (!checked && idx !== -1) {
+    current.splice(idx, 1)
+  }
+  // ограничиваем данными исходного блока
+  const allowed = edgeDataOptions.value.map(o => o.value)
+  const sanitized = current.filter(id => allowed.includes(id))
+  selectedEdge.value.dataKeys = sanitized
+  emit('update:edge', selectedEdge.value.id, { dataKeys: sanitized })
+}
+
+function edgeCarries(nodeId: string): boolean {
+  return selectedEdge.value?.dataKeys?.includes(nodeId) ?? false
+}
+
+const edgeDataOptions = computed(() => {
+  const edge = selectedEdge.value
+  if (!edge) return []
+  const dataset = props.dataSets?.[edge.sourceNodeId] ?? []
+  return dataset.map(id => ({
+    value: id,
+    label: availableNodes.value.find(n => n.id === id)?.text || id
+  }))
+})
 
 function deleteSelectedObject(): void {
   if (!props.selectedObject) return
