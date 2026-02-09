@@ -83,6 +83,7 @@
         <div
           class="canvas"
           ref="canvas"
+          :style="canvasGridStyle"
           @click="onCanvasClick"
           @wheel.prevent="onCanvasWheel"
         >
@@ -252,6 +253,10 @@ const nodes = ref<Node[]>([
     width: 150,
     height: 60,
     passThroughEdges: [],
+    color: DEFAULT_NODE_COLOR,
+    borderColor: DEFAULT_BORDER_COLOR,
+    borderWidth: DEFAULT_BORDER_WIDTH,
+    borderRadius: DEFAULT_BORDER_RADIUS,
     borderStyle: 'solid'
   },
   {
@@ -261,6 +266,10 @@ const nodes = ref<Node[]>([
     width: 120,
     height: 60,
     passThroughEdges: [],
+    color: DEFAULT_NODE_COLOR,
+    borderColor: DEFAULT_BORDER_COLOR,
+    borderWidth: DEFAULT_BORDER_WIDTH,
+    borderRadius: DEFAULT_BORDER_RADIUS,
     borderStyle: 'solid'
   }
 ])
@@ -272,10 +281,35 @@ const edges = ref<Edge[]>([
     targetNodeId: '2',
     sourceSide: 'right',
     targetSide: 'left',
+    color: DEFAULT_EDGE_COLOR,
+    width: DEFAULT_EDGE_WIDTH,
     lineStyle: 'solid',
     markerType: 'triangle'
   }
 ])
+
+// Вычисляем позиции для соединений на каждой стороне каждого узла
+const connectionPositions = computed(() => {
+  const positions: Record<string, Record<ConnectionSide, string[]>> = {}
+
+  // Инициализируем структуру для всех узлов
+  nodes.value.forEach(node => {
+    positions[node.id] = {
+      top: [],
+      right: [],
+      bottom: [],
+      left: []
+    }
+  })
+
+  // Собираем все соединения по узлам и сторонам
+  edges.value.forEach(edge => {
+    positions[edge.sourceNodeId][edge.sourceSide].push(edge.id)
+    positions[edge.targetNodeId][edge.targetSide].push(edge.id)
+  })
+
+  return positions
+})
 
 const selectedObject = ref<{
   type: 'node' | 'edge'
@@ -316,6 +350,36 @@ type SchemaConnection = {
   through?: unknown
   breakpoints?: unknown
 }
+function normalizeLineStyle(style: unknown): Edge['lineStyle'] {
+  return style === 'dashed' || style === 'dotted' ? style : 'solid'
+}
+
+function normalizeBorderStyle(style: unknown): NodeLineStyle {
+  return style === 'dashed' ? 'dashed' : 'solid'
+}
+type SchemaStyles = {
+  blocks?: Array<{
+    element_id?: string
+    color?: string
+    border_color?: string
+    border_width?: number
+    border_radius?: number
+    border_style?: string
+  }>
+  connections?: Array<{
+    element_id?: string
+    color?: string
+    width?: number
+    type?: string
+  }>
+} | null
+
+const DEFAULT_NODE_COLOR = '#ffffff'
+const DEFAULT_BORDER_COLOR = '#666'
+const DEFAULT_BORDER_WIDTH = 2
+const DEFAULT_BORDER_RADIUS = 8
+const DEFAULT_EDGE_COLOR = '#666'
+const DEFAULT_EDGE_WIDTH = 2
 
 function extractInformation(meta?: Record<string, unknown> | null): string[] {
   if (!meta || typeof meta !== 'object') return []
@@ -335,21 +399,40 @@ function buildThroughMap(): Record<string, string[]> {
   }, {})
 }
 
+function buildStyles() {
+  const blockStyles = nodes.value.map(node => ({
+    element_id: node.id,
+    element_type: 'block',
+    color: node.color ?? DEFAULT_NODE_COLOR,
+    border_color: node.borderColor ?? DEFAULT_BORDER_COLOR,
+    border_width: node.borderWidth ?? DEFAULT_BORDER_WIDTH,
+    border_radius: node.borderRadius ?? DEFAULT_BORDER_RADIUS,
+    border_style: node.borderStyle ?? 'solid'
+  }))
+
+  const connectionStyles = edges.value.map(edge => ({
+    element_id: edge.id,
+    element_type: 'connection',
+    color: edge.color ?? DEFAULT_EDGE_COLOR,
+    width: edge.width ?? DEFAULT_EDGE_WIDTH,
+    type: edge.lineStyle ?? 'solid'
+  }))
+
+  return { blocks: blockStyles, connections: connectionStyles }
+}
+
 function extractBreakpoints(edge: Edge): SchemaPosition[] {
-  if (edge.geometry?.segments?.length) {
-    return edge.geometry.segments.slice(0, -1).map(segment => ({
-      x: segment.end.x,
-      y: segment.end.y
-    }))
-  }
-  if (typeof edge.breakpointX === 'number' && typeof edge.breakpointY === 'number') {
-    return [{ x: edge.breakpointX, y: edge.breakpointY }]
-  }
-  return []
+  const segments = getEdgeSegments(edge)
+  if (segments.length < 2) return []
+  return segments.slice(0, segments.length - 1).map(segment => ({
+    x: segment.end.x,
+    y: segment.end.y
+  }))
 }
 
 function serializeDiagram() {
   const throughByEdgeId = buildThroughMap()
+  const styles = buildStyles()
 
   return {
     blocks: nodes.value.map(node => ({
@@ -373,7 +456,7 @@ function serializeDiagram() {
       through: throughByEdgeId[edge.id] ?? [],
       breakpoints: extractBreakpoints(edge)
     })),
-    styles: { blocks: [], connections: [] }
+    styles
   }
 }
 
@@ -417,6 +500,35 @@ function applyDiagramJson(raw: string): void {
     const parsed = JSON.parse(raw)
     const parsedBlocks: SchemaBlock[] = Array.isArray(parsed?.blocks) ? parsed.blocks : []
     const parsedConnections: SchemaConnection[] = Array.isArray(parsed?.connections) ? parsed.connections : []
+    const parsedStyles: SchemaStyles = parsed?.styles ?? null
+    const blockStyles: Record<string, { color?: string; border_color?: string; border_width?: number; border_radius?: number; border_style?: string }> = {}
+    const connectionStyles: Record<string, { color?: string; width?: number; type?: string }> = {}
+
+    if (parsedStyles?.blocks) {
+      parsedStyles.blocks.forEach(style => {
+        if (style?.element_id) {
+          blockStyles[String(style.element_id)] = {
+            color: style.color,
+            border_color: style.border_color,
+            border_width: typeof style.border_width === 'number' ? style.border_width : undefined,
+            border_radius: typeof style.border_radius === 'number' ? style.border_radius : undefined,
+            border_style: style.border_style
+          }
+        }
+      })
+    }
+
+    if (parsedStyles?.connections) {
+      parsedStyles.connections.forEach(style => {
+        if (style?.element_id) {
+          connectionStyles[String(style.element_id)] = {
+            color: style.color,
+            width: typeof style.width === 'number' ? style.width : undefined,
+            type: style.type
+          }
+        }
+      })
+    }
 
     const passThroughByNode: Record<string, string[]> = {}
     parsedConnections.forEach(conn => {
@@ -433,6 +545,7 @@ function applyDiagramJson(raw: string): void {
         if (!b?.id) return null
         const information = normalizeInformation((b as any).information)
         const meta = information.length ? { information } : null
+        const style = blockStyles[String(b.id)]
         return {
           id: String(b.id),
           text: b.name ?? '',
@@ -444,7 +557,11 @@ function applyDiagramJson(raw: string): void {
           height: typeof b.height === 'number' ? b.height : 60,
           parentId: b.parentId ?? null,
           passThroughEdges: passThroughByNode[String(b.id)] ?? [],
-          borderStyle: 'solid',
+          color: style?.color ?? DEFAULT_NODE_COLOR,
+          borderColor: style?.border_color ?? DEFAULT_BORDER_COLOR,
+          borderWidth: style?.border_width ?? DEFAULT_BORDER_WIDTH,
+          borderRadius: style?.border_radius ?? DEFAULT_BORDER_RADIUS,
+          borderStyle: normalizeBorderStyle(style?.border_style),
           meta
         } as Node
       })
@@ -453,6 +570,7 @@ function applyDiagramJson(raw: string): void {
     const normalizedEdges: Edge[] = parsedConnections
       .map((c: SchemaConnection) => {
         if (!c?.id || !c?.startBlock || !c?.endBlock) return null
+        const style = connectionStyles[String(c.id)]
         const breakpoint = Array.isArray(c.breakpoints)
           ? (c.breakpoints as SchemaPosition[]).find(bp => typeof bp?.x === 'number' && typeof bp?.y === 'number')
           : null
@@ -464,7 +582,9 @@ function applyDiagramJson(raw: string): void {
           sourceSide: normalizeConnectionSide(c.startSide),
           targetSide: normalizeConnectionSide(c.endSide),
           label: c.label ?? '',
-          lineStyle: 'solid',
+          color: style?.color ?? DEFAULT_EDGE_COLOR,
+          width: style?.width ?? DEFAULT_EDGE_WIDTH,
+          lineStyle: normalizeLineStyle(style?.type),
           markerType: 'triangle',
           breakpointX: breakpoint?.x,
           breakpointY: breakpoint?.y,
@@ -476,6 +596,7 @@ function applyDiagramJson(raw: string): void {
 
     nodes.value = normalizedNodes
     edges.value = normalizedEdges
+    refreshParentBorders()
     lastSerializedJson.value = JSON.stringify(serializeDiagram(), null, 2)
   } catch (err) {
     jsonError.value = err instanceof Error ? err.message : 'Не удалось разобрать JSON'
@@ -626,6 +747,13 @@ const canvasTransformStyle = computed(() => ({
   transform: `scale(${zoom.value})`,
   transformOrigin: '0 0'
 }))
+const BASE_GRID_SIZE = 20
+const canvasGridStyle = computed(() => {
+  const size = BASE_GRID_SIZE * (zoom.value || 1)
+  return {
+    backgroundSize: `${size}px ${size}px`
+  }
+})
 
 // Округление координат для хранения без длинных дробей
 function roundCoord(value: number, precision = 2): number {
@@ -1138,12 +1266,15 @@ function onBreakpointDragStart(edgeId: string, event: MouseEvent): void {
     if (!edge) return
 
     const canvasRect = canvas.value.getBoundingClientRect()
+    const scale = zoom.value || 1
+    const scrollLeft = canvas.value.scrollLeft
+    const scrollTop = canvas.value.scrollTop
 
     if (axis === 'x') {
-      const newX = moveEvent.clientX - canvasRect.left
+      const newX = (moveEvent.clientX - canvasRect.left + scrollLeft) / scale
       edge.breakpointX = roundCoord(clampXValue(edge, newX))
     } else {
-      const newY = moveEvent.clientY - canvasRect.top
+      const newY = (moveEvent.clientY - canvasRect.top + scrollTop) / scale
       edge.breakpointY = roundCoord(clampYValue(edge, newY))
     }
   }
@@ -1234,29 +1365,6 @@ function clampYValue(edge: Edge, y: number): number {
 
   return Math.max(minY, Math.min(maxY, y))
 }
-
-// Вычисляем позиции для соединений на каждой стороне каждого узла
-const connectionPositions = computed(() => {
-  const positions: Record<string, Record<ConnectionSide, string[]>> = {}
-
-  // Инициализируем структуру для всех узлов
-  nodes.value.forEach(node => {
-    positions[node.id] = {
-      top: [],
-      right: [],
-      bottom: [],
-      left: []
-    }
-  })
-
-  // Собираем все соединения по узлам и сторонам
-  edges.value.forEach(edge => {
-    positions[edge.sourceNodeId][edge.sourceSide].push(edge.id)
-    positions[edge.targetNodeId][edge.targetSide].push(edge.id)
-  })
-
-  return positions
-})
 
 // Функция для получения позиции соединения на стороне
 function getConnectionPosition(nodeId: string, side: ConnectionSide, connectionId: string): number {
@@ -1393,6 +1501,19 @@ function updateParentBorder(parentId: string | null | undefined): void {
   if (!parent) return
   const childrenCount = nodes.value.filter(n => n.parentId === parentId).length
   parent.borderStyle = childrenCount > 0 ? 'dashed' : 'solid'
+}
+
+function refreshParentBorders(): void {
+  const childCount: Record<string, number> = {}
+  nodes.value.forEach(n => {
+    if (n.parentId) {
+      childCount[n.parentId] = (childCount[n.parentId] || 0) + 1
+    }
+  })
+  nodes.value.forEach(n => {
+    const count = childCount[n.id] || 0
+    n.borderStyle = count > 0 ? 'dashed' : 'solid'
+  })
 }
 
 function maintainPassThroughEdges(nodeId: string | null | undefined): void {

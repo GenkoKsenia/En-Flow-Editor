@@ -68,6 +68,44 @@
               </option>
             </select>
           </div>
+          <div class="property">
+            <label>Цвет блока:</label>
+            <input 
+              type="color"
+              class="property-input small"
+              :value="selectedNode.color || '#ffffff'"
+              @input="onNodeColorChange"
+            />
+          </div>
+          <div class="property">
+            <label>Цвет рамки:</label>
+            <input 
+              type="color"
+              class="property-input small"
+              :value="selectedNode.borderColor || '#666666'"
+              @input="onNodeBorderColorChange"
+            />
+          </div>
+          <div class="property">
+            <label>Толщина рамки:</label>
+            <input 
+              v-model.number="selectedNode.borderWidth" 
+              @change="onNodeBorderWidthChange"
+              type="number"
+              class="property-input small"
+              min="0"
+            />
+          </div>
+          <div class="property">
+            <label>Скругление:</label>
+            <input 
+              v-model.number="selectedNode.borderRadius" 
+              @change="onNodeBorderRadiusChange"
+              type="number"
+              class="property-input small"
+              min="0"
+            />
+          </div>
           <div class="property-group">
             <h5>Стрелки, проходящие через блок</h5>
             <details class="edge-selector">
@@ -122,45 +160,26 @@
             </select>
           </div>
           <div class="property">
-            <label>Наконечник:</label>
-            <select 
-              class="property-input"
-              :value="selectedEdge.markerType || 'triangle'"
-              @change="onEdgeMarkerTypeChange"
-            >
-              <option 
-                v-for="option in markerOptions" 
-                :key="option.value" 
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
+            <label>Цвет линии:</label>
+            <input 
+              type="color"
+              class="property-input small"
+              :value="selectedEdge.color || '#666666'"
+              @input="onEdgeColorChange"
+            />
+          </div>
+          <div class="property">
+            <label>Толщина линии:</label>
+            <input 
+              v-model.number="selectedEdge.width"
+              @change="onEdgeWidthChange"
+              type="number"
+              class="property-input small"
+              min="0"
+            />
           </div>
 
           
-          <!-- Точки излома для 3-сегментных стрелок -->
-          <div v-if="hasBreakpoint(selectedEdge)" class="property-group">
-            <h5>Точки излома</h5>
-            <div class="property" v-if="selectedEdge.breakpointX !== undefined">
-              <label>Позиция X:</label>
-              <input 
-                v-model.number="selectedEdge.breakpointX" 
-                @change="onEdgeBreakpointChange"
-                type="number"
-                class="property-input"
-              />
-            </div>
-            <div class="property" v-if="selectedEdge.breakpointY !== undefined">
-              <label>Позиция Y:</label>
-              <input 
-                v-model.number="selectedEdge.breakpointY" 
-                @change="onEdgeBreakpointChange"
-                type="number"
-                class="property-input"
-              />
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -176,7 +195,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Node, Edge, EdgeGeometry, LineStyle, EdgeMarkerType } from '../types'
+import type { Node, Edge, EdgeGeometry, LineStyle } from '../types'
 
 interface SelectedObject {
   type: 'node' | 'edge'
@@ -220,18 +239,8 @@ const edgeLineStyleOptions: { value: LineStyle, label: string }[] = [
   { value: 'dotted', label: 'Пунктир с точкой' }
 ]
 
-const markerOptions: { value: EdgeMarkerType, label: string }[] = [
-  { value: 'triangle', label: 'Треугольник' },
-  { value: 'none', label: 'Без наконечника' }
-]
-
 function formatEdgeLabel(edge: Edge): string {
   return edge.label?.trim() || edge.id
-}
-
-// Проверяем, есть ли у стрелки точки излома
-function hasBreakpoint(edge: Edge): boolean {
-  return edge.breakpointX !== undefined || edge.breakpointY !== undefined
 }
 
 // Обработчики изменений
@@ -268,6 +277,30 @@ function onNodeBorderStyleChange(event: Event): void {
   emit('update:node', selectedNode.value.id, {
     borderStyle: safeValue
   })
+}
+
+function onNodeColorChange(event: Event): void {
+  if (!selectedNode.value) return
+  const value = (event.target as HTMLInputElement).value
+  selectedNode.value.color = value
+  emit('update:node', selectedNode.value.id, { color: value })
+}
+
+function onNodeBorderColorChange(event: Event): void {
+  if (!selectedNode.value) return
+  const value = (event.target as HTMLInputElement).value
+  selectedNode.value.borderColor = value
+  emit('update:node', selectedNode.value.id, { borderColor: value })
+}
+
+function onNodeBorderWidthChange(): void {
+  if (!selectedNode.value) return
+  emit('update:node', selectedNode.value.id, { borderWidth: selectedNode.value.borderWidth })
+}
+
+function onNodeBorderRadiusChange(): void {
+  if (!selectedNode.value) return
+  emit('update:node', selectedNode.value.id, { borderRadius: selectedNode.value.borderRadius })
 }
 
 function onPassThroughEdgeInput(edgeId: string, event: Event): void {
@@ -312,22 +345,16 @@ function onEdgeLineStyleChange(event: Event): void {
   })
 }
 
-function onEdgeMarkerTypeChange(event: Event): void {
+function onEdgeColorChange(event: Event): void {
   if (!selectedEdge.value) return
-  const value = (event.target as HTMLSelectElement).value as EdgeMarkerType
-  selectedEdge.value.markerType = value
-  emit('update:edge', selectedEdge.value.id, {
-    markerType: value
-  })
+  const value = (event.target as HTMLInputElement).value
+  selectedEdge.value.color = value
+  emit('update:edge', selectedEdge.value.id, { color: value })
 }
 
-function onEdgeBreakpointChange(): void {
-  if (selectedEdge.value) {
-    emit('update:edge', selectedEdge.value.id, {
-      breakpointX: selectedEdge.value.breakpointX,
-      breakpointY: selectedEdge.value.breakpointY
-    })
-  }
+function onEdgeWidthChange(): void {
+  if (!selectedEdge.value) return
+  emit('update:edge', selectedEdge.value.id, { width: selectedEdge.value.width })
 }
 
 function deleteSelectedObject(): void {

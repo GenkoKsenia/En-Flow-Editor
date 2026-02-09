@@ -96,6 +96,8 @@ const nodeStyle = computed(() => {
   const absolutePos = getAbsolutePosition(props.node, props.allNodes)
   const baseZIndex = nodeDepth.value * 100 + 50
   const zIndex = props.isDragging ? baseZIndex + 1000 : baseZIndex
+  const borderWidth = props.node.borderWidth ?? 2
+  const borderRadius = props.node.borderRadius ?? 8
   
   return {
     left: `${absolutePos.x}px`,
@@ -104,7 +106,10 @@ const nodeStyle = computed(() => {
     height: `${props.node.height}px`,
     transform: props.isDragging ? 'translate(var(--drag-dx), var(--drag-dy))' : 'none',
     zIndex,
-    '--border-color': getBorderColor()
+    '--border-color': getBorderColor(),
+    '--border-width': `${borderWidth}px`,
+    '--border-radius': `${borderRadius}px`,
+    background: props.node.color ?? 'white'
   }
 })
 
@@ -121,7 +126,7 @@ function getBorderColor(): string {
   if (props.selected) {
     return '#007bff'
   }
-  return '#4CAF50'
+  return props.node.borderColor ?? '#4CAF50'
 }
 
 function calculateNodeDepth(node: Node, nodes: Node[], depth = 0): number {
@@ -194,10 +199,10 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 .node {
   position: absolute;
   background: white;
-  border-width: 2px;
+  border-width: var(--border-width, 2px);
   border-style: solid;
   border-color: var(--border-color, #4CAF50);
-  border-radius: 8px;
+  border-radius: var(--border-radius, 8px);
   padding: 10px;
   cursor: pointer;
   user-select: none;
@@ -221,6 +226,7 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 
 .node-title {
   width: 100%;
+  color: inherit;
 }
 
 .node:hover {
