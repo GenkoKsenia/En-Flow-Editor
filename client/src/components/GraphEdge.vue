@@ -473,7 +473,9 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
 }
 
 .edge path.pass-through-error {
-  stroke: #dc3545;
+  filter:
+    drop-shadow(0 0 0 rgba(224, 49, 49))   
+    drop-shadow(0 0 3px rgba(224, 49, 49)); 
 }
 
 .edge path.selected {

@@ -123,15 +123,6 @@ const nodeStyle = computed(() => {
 })
 
 function getBorderColor(): string {
-  if (props.hasForbiddenOutgoing) {
-    return '#ff0000'
-  }
-  if (props.hasDataError) {
-    return '#e03131'
-  }
-  if (props.hasPassThroughError) {
-    return '#dc3545'
-  }
   if (props.isConnectionSource) {
     return '#28a745'
   }
@@ -328,22 +319,18 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 .node.pass-through-error {
-  --border-color: #dc3545;
-  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.55);
 }
 
 .node.data-flow-error {
-  --border-color: #e03131;
-  box-shadow: 0 0 0 3px rgba(224, 49, 49, 0.25);
+  box-shadow: 0 0 0 3px rgba(224, 49, 49, 0.55);
 }
 
 .node.missing-target {
-  --border-color: #ffb400;
-  box-shadow: 0 0 0 3px rgba(255, 196, 0, 0.45);
+  box-shadow: 0 0 0 3px rgba(255, 196, 0, 0.55);
 }
 
 .node.forbidden-outgoing {
-  --border-color: #dc3545;
-  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.55);
 }
 </style>

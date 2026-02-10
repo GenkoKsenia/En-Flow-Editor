@@ -22,13 +22,16 @@ export interface Node {
   borderWidth?: number;
   borderRadius?: number;
   borderStyle?: NodeLineStyle;
-  borderStyleLocked?: boolean;
   meta?: Record<string, unknown> | null;
   /**
    * Идентификатор целевого блока, куда должны дойти данные,
    * сформированные в этом блоке. Используется проверкой целостности.
    */
   dataTargetId?: string | null;
+  /**
+   * Флаг, что конечный блок выбран пользователем (а не выставлен автоматически).
+   */
+  dataTargetSetManually?: boolean;
 }
 
 export type ConnectionSide = 'top' | 'right' | 'bottom' | 'left'

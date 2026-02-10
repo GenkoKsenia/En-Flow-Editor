@@ -198,9 +198,8 @@ import ArrowDefinitions from './ArrowDefinitions.vue'
 import CodeEditor from './CodeEditor.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
 import JsonExportButton from './JsonExportButton.vue'
-import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment } from '../types'
-
-//efwregtrhytjuy
+import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment, NodeLineStyle } from '../types'
+import * as DEFAULTS from '../constants'
 
 import axios from "axios"
 import Cookies from 'js-cookie';
@@ -258,12 +257,11 @@ const nodes = ref<Node[]>([
     width: 150,
     height: 60,
     passThroughEdges: [],
-    color: DEFAULT_NODE_COLOR,
-    borderColor: DEFAULT_BORDER_COLOR,
-    borderWidth: DEFAULT_BORDER_WIDTH,
-    borderRadius: DEFAULT_BORDER_RADIUS,
-    borderStyle: 'solid',
-    borderStyleLocked: false
+    color: DEFAULTS.DEFAULT_NODE_COLOR,
+    borderColor: DEFAULTS.DEFAULT_BORDER_COLOR,
+    borderWidth: DEFAULTS.DEFAULT_BORDER_WIDTH,
+    borderRadius: DEFAULTS.DEFAULT_BORDER_RADIUS,
+    borderStyle: 'solid'
   },
   {
     id: '2',
@@ -272,12 +270,11 @@ const nodes = ref<Node[]>([
     width: 120,
     height: 60,
     passThroughEdges: [],
-    color: DEFAULT_NODE_COLOR,
-    borderColor: DEFAULT_BORDER_COLOR,
-    borderWidth: DEFAULT_BORDER_WIDTH,
-    borderRadius: DEFAULT_BORDER_RADIUS,
-    borderStyle: 'solid',
-    borderStyleLocked: false
+    color: DEFAULTS.DEFAULT_NODE_COLOR,
+    borderColor: DEFAULTS.DEFAULT_BORDER_COLOR,
+    borderWidth: DEFAULTS.DEFAULT_BORDER_WIDTH,
+    borderRadius: DEFAULTS.DEFAULT_BORDER_RADIUS,
+    borderStyle: 'solid'
   }
 ])
 
@@ -288,8 +285,8 @@ const edges = ref<Edge[]>([
     targetNodeId: '2',
     sourceSide: 'right',
     targetSide: 'left',
-    color: DEFAULT_EDGE_COLOR,
-    width: DEFAULT_EDGE_WIDTH,
+    color: DEFAULTS.DEFAULT_EDGE_COLOR,
+    width: DEFAULTS.DEFAULT_EDGE_WIDTH,
     lineStyle: 'solid',
     markerType: 'triangle'
   }
@@ -345,8 +342,8 @@ type SchemaBlock = {
   width?: number
   height?: number
   parentId?: string | null
-  borderStyleLocked?: boolean
   dataTargetId?: string | null
+  dataTargetSetManually?: boolean
 }
 type SchemaConnection = {
   id: string
@@ -383,12 +380,6 @@ type SchemaStyles = {
   }>
 } | null
 
-const DEFAULT_NODE_COLOR = '#ffffff'
-const DEFAULT_BORDER_COLOR = '#666'
-const DEFAULT_BORDER_WIDTH = 2
-const DEFAULT_BORDER_RADIUS = 8
-const DEFAULT_EDGE_COLOR = '#666'
-const DEFAULT_EDGE_WIDTH = 2
 
 function extractInformation(meta?: Record<string, unknown> | null): string[] {
   if (!meta || typeof meta !== 'object') return []
@@ -412,18 +403,18 @@ function buildStyles() {
   const blockStyles = nodes.value.map(node => ({
     element_id: node.id,
     element_type: 'block',
-    color: node.color ?? DEFAULT_NODE_COLOR,
-    border_color: node.borderColor ?? DEFAULT_BORDER_COLOR,
-    border_width: node.borderWidth ?? DEFAULT_BORDER_WIDTH,
-    border_radius: node.borderRadius ?? DEFAULT_BORDER_RADIUS,
+    color: node.color ?? DEFAULTS.DEFAULT_NODE_COLOR,
+    border_color: node.borderColor ?? DEFAULTS.DEFAULT_BORDER_COLOR,
+    border_width: node.borderWidth ?? DEFAULTS.DEFAULT_BORDER_WIDTH,
+    border_radius: node.borderRadius ?? DEFAULTS.DEFAULT_BORDER_RADIUS,
     border_style: node.borderStyle ?? 'solid'
   }))
 
   const connectionStyles = edges.value.map(edge => ({
     element_id: edge.id,
     element_type: 'connection',
-    color: edge.color ?? DEFAULT_EDGE_COLOR,
-    width: edge.width ?? DEFAULT_EDGE_WIDTH,
+    color: edge.color ?? DEFAULTS.DEFAULT_EDGE_COLOR,
+    width: edge.width ?? DEFAULTS.DEFAULT_EDGE_WIDTH,
     type: edge.lineStyle ?? 'solid'
   }))
 
@@ -452,8 +443,8 @@ function serializeDiagram() {
       width: node.width,
       height: node.height,
       parentId: node.parentId ?? null,
-      borderStyleLocked: node.borderStyleLocked ?? false,
-      dataTargetId: node.dataTargetId ?? null
+      dataTargetId: node.dataTargetId ?? null,
+      dataTargetSetManually: node.dataTargetSetManually ?? false
     })),
     dataFlows: nodes.value
       .filter(node => !!node.dataTargetId)
@@ -508,6 +499,34 @@ function normalizeInformation(info: unknown): string[] {
   if (Array.isArray(info)) return info.filter((item): item is string => typeof item === 'string')
   if (typeof info === 'string') return [info]
   return []
+}
+
+function getNodeLabel(nodeId: string): string {
+  const node = nodes.value.find(n => n.id === nodeId)
+  return node?.text?.trim() || nodeId
+}
+
+function generateEdgeLabel(sourceId: string | null | undefined, targetId: string | null | undefined, existing: string[]): string {
+  const src = sourceId ? getNodeLabel(String(sourceId)) : 'Источник'
+  const tgt = targetId ? getNodeLabel(String(targetId)) : 'Цель'
+  const base = `${src} → ${tgt}`
+  if (!existing.includes(base)) return base
+  let idx = 2
+  let candidate = `${base} (${idx})`
+  while (existing.includes(candidate)) {
+    idx++
+    candidate = `${base} (${idx})`
+  }
+  return candidate
+}
+
+function ensureOwnDataIncluded(sourceBlock: string | null | undefined, keys: unknown[]): string[] {
+  const list = Array.isArray(keys) ? keys.map(k => String(k)) : []
+  const src = sourceBlock ? String(sourceBlock) : null
+  if (src && !list.includes(src)) {
+    list.push(src)
+  }
+  return list
 }
 
 function applyDiagramJson(raw: string): void {
@@ -570,6 +589,7 @@ function applyDiagramJson(raw: string): void {
         const information = normalizeInformation((b as any).information)
         const meta = information.length ? { information } : null
         const style = blockStyles[String(b.id)]
+        const targetId = dataTargets[String(b.id)] ?? (b as any).dataTargetId ?? null
         return {
           id: String(b.id),
           text: b.name ?? '',
@@ -581,17 +601,21 @@ function applyDiagramJson(raw: string): void {
           height: typeof b.height === 'number' ? b.height : 60,
           parentId: b.parentId ?? null,
           passThroughEdges: passThroughByNode[String(b.id)] ?? [],
-          dataTargetId: dataTargets[String(b.id)] ?? (b as any).dataTargetId ?? null,
-          color: style?.color ?? DEFAULT_NODE_COLOR,
-          borderColor: style?.border_color ?? DEFAULT_BORDER_COLOR,
-          borderWidth: style?.border_width ?? DEFAULT_BORDER_WIDTH,
-          borderRadius: style?.border_radius ?? DEFAULT_BORDER_RADIUS,
+          dataTargetId: targetId,
+          dataTargetSetManually: typeof (b as any).dataTargetSetManually === 'boolean'
+            ? (b as any).dataTargetSetManually
+            : targetId !== null,
+          color: style?.color ?? DEFAULTS.DEFAULT_NODE_COLOR,
+          borderColor: style?.border_color ?? DEFAULTS.DEFAULT_BORDER_COLOR,
+          borderWidth: style?.border_width ?? DEFAULTS.DEFAULT_BORDER_WIDTH,
+          borderRadius: style?.border_radius ?? DEFAULTS.DEFAULT_BORDER_RADIUS,
           borderStyle: normalizeBorderStyle(style?.border_style),
-          borderStyleLocked: typeof (b as any).borderStyleLocked === 'boolean' ? (b as any).borderStyleLocked : false,
           meta
         } as Node
       })
       .filter(Boolean) as Node[]
+
+    const existingEdgeLabels: string[] = []
 
     const normalizedEdges: Edge[] = parsedConnections
       .map((c: SchemaConnection) => {
@@ -600,6 +624,9 @@ function applyDiagramJson(raw: string): void {
         const breakpoint = Array.isArray(c.breakpoints)
           ? (c.breakpoints as SchemaPosition[]).find(bp => typeof bp?.x === 'number' && typeof bp?.y === 'number')
           : null
+        const labelRaw = (c.label ?? '').trim()
+        const label = labelRaw || generateEdgeLabel(c.startBlock, c.endBlock, existingEdgeLabels)
+        existingEdgeLabels.push(label)
 
         return {
           id: String(c.id),
@@ -607,9 +634,9 @@ function applyDiagramJson(raw: string): void {
           targetNodeId: String(c.endBlock),
           sourceSide: normalizeConnectionSide(c.startSide),
           targetSide: normalizeConnectionSide(c.endSide),
-          label: c.label ?? '',
-          color: style?.color ?? DEFAULT_EDGE_COLOR,
-          width: style?.width ?? DEFAULT_EDGE_WIDTH,
+          label,
+          color: style?.color ?? DEFAULTS.DEFAULT_EDGE_COLOR,
+          width: style?.width ?? DEFAULTS.DEFAULT_EDGE_WIDTH,
           lineStyle: normalizeLineStyle(style?.type),
           markerType: 'triangle',
           breakpointX: breakpoint?.x,
@@ -617,8 +644,8 @@ function applyDiagramJson(raw: string): void {
           breakpointLocked: false,
           geometry: undefined,
           dataKeys: Array.isArray(c.dataKeys)
-            ? c.dataKeys.map(key => String(key))
-            : []
+            ? ensureOwnDataIncluded(c.startBlock, c.dataKeys)
+            : [String(c.startBlock)]
         } as Edge
       })
       .filter(Boolean) as Edge[]
@@ -652,8 +679,8 @@ watch(
 function updateNode(nodeId: string, updates: Partial<Node>): void {
   const node = nodes.value.find(n => n.id === nodeId)
   if (node) {
-    if (updates.borderStyle !== undefined) {
-      node.borderStyleLocked = true
+    if (updates.dataTargetId !== undefined) {
+      updates = { ...updates, dataTargetSetManually: updates.dataTargetSetManually ?? true }
     }
     Object.assign(node, updates)
     maintainPassThroughEdges(nodeId)
@@ -667,9 +694,18 @@ function updateEdge(edgeId: string, updates: Partial<Edge>): void {
     if (updates.dataKeys) {
       const targets = buildDataTargetsMap()
       const allowed = nodeSendableData.value[edge.sourceNodeId] ?? []
-      updates = { ...updates, dataKeys: updates.dataKeys.filter(id => allowed.includes(id) && targets[id] !== edge.sourceNodeId) }
+      const sanitized = updates.dataKeys.filter(id => allowed.includes(id) && targets[id] !== edge.sourceNodeId)
+      // Собственные данные стрелки обязательны
+      if (!sanitized.includes(edge.sourceNodeId)) {
+        sanitized.push(edge.sourceNodeId)
+      }
+      updates = { ...updates, dataKeys: sanitized }
     }
     Object.assign(edge, updates)
+    // Гарантируем, что уже существующие стрелки тоже всегда содержат собственные данные
+    if (!edge.dataKeys?.includes(edge.sourceNodeId)) {
+      edge.dataKeys = [...(edge.dataKeys ?? []), edge.sourceNodeId]
+    }
   }
 }
 
@@ -679,6 +715,7 @@ function deleteNode(nodeId: string): void {
   edges.value = edges.value.filter(e =>
     e.sourceNodeId !== nodeId && e.targetNodeId !== nodeId
   )
+  refreshParentBorders()
   clearSelection()
 }
 
@@ -1023,8 +1060,7 @@ function addNode(): void {
     width: 120,
     height: 60,
     passThroughEdges: [],
-    borderStyle: 'solid',
-    borderStyleLocked: false
+    borderStyle: 'solid'
   }
   nodes.value.push(newNode)
 }
@@ -1070,6 +1106,22 @@ function handleNodeClickInConnectionMode(nodeId: string): void {
   }
 }
 
+function handleAutoDataTargetAfterConnection(sourceId: string, targetId: string): void {
+  const sourceNode = nodes.value.find(n => n.id === sourceId)
+  const targetNode = nodes.value.find(n => n.id === targetId)
+
+  // Если у целевого узла не выбран конечный блок и он не выбран вручную — делаем его конечным автоматически
+  if (targetNode && !targetNode.dataTargetId && !targetNode.dataTargetSetManually) {
+    targetNode.dataTargetId = targetNode.id
+    targetNode.dataTargetSetManually = false
+  }
+
+  // Если исходный узел был автоматически конечным, но теперь из него идёт стрелка — снимаем автоматический статус
+  if (sourceNode && sourceNode.dataTargetId === sourceNode.id && !sourceNode.dataTargetSetManually) {
+    sourceNode.dataTargetId = null
+  }
+}
+
 // Создание связи между узлами
 function createConnection(
   sourceId: string,
@@ -1077,11 +1129,6 @@ function createConnection(
   targetId: string,
   targetSide: ConnectionSide
 ): void {
-  const sourceNode = nodes.value.find(n => n.id === sourceId)
-  if (sourceNode?.dataTargetId === sourceId) {
-    console.warn('Исходящий поток из конечного блока запрещён')
-    return
-  }
   // Проверяем, что связь не существует
   const existingEdge = edges.value.find(
     edge => edge.sourceNodeId === sourceId &&
@@ -1094,20 +1141,23 @@ function createConnection(
   }
 
   // Создаем новую связь
+  const label = generateEdgeLabel(sourceId, targetId, edges.value.map(e => e.label ?? ''))
   const newEdge: Edge = {
     id: `edge-${Date.now()}`,
     sourceNodeId: sourceId,
     targetNodeId: targetId,
     sourceSide: sourceSide,
     targetSide: targetSide,
-    label: '',
+    label,
     lineStyle: 'solid',
     markerType: 'triangle',
-    dataKeys: nodeSendableData.value[sourceId] ?? []
+    dataKeys: ensureOwnDataIncluded(sourceId, nodeSendableData.value[sourceId] ?? [])
   }
 
   edges.value.push(newEdge)
   console.log('Создана связь:', sourceId, sourceSide, '→', targetId, targetSide)
+
+  handleAutoDataTargetAfterConnection(sourceId, targetId)
 }
 
 // Обработчик клика по холсту
@@ -1597,8 +1647,7 @@ function moveNodeToParent(nodeId: string, parentId: string | null, absoluteX?: n
   }
   
   maintainPassThroughEdges(nodeId)
-  updateParentBorder(parentId)
-  updateParentBorder(previousParentId)
+  refreshParentBorders()
 }
 
 function ensureParentPadding(parentId: string | null | undefined): void {
@@ -1623,15 +1672,18 @@ function ensureParentPadding(parentId: string | null | undefined): void {
   ensureParentPadding(parent.parentId)
 }
 
-function updateParentBorder(parentId: string | null | undefined): void {
-  if (!parentId) return
-  const parent = nodes.value.find(n => n.id === parentId)
-  if (!parent) return
-  const childrenCount = nodes.value.filter(n => n.parentId === parentId).length
-  if (parent.borderStyleLocked) return
-  parent.borderStyle = childrenCount > 0 ? 'dashed' : 'solid'
+function maintainPassThroughEdges(nodeId: string | null | undefined): void {
+  if (!nodeId) return
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (!node || !node.passThroughEdges?.length) return
+  node.passThroughEdges.forEach(edgeId => {
+    const edge = edges.value.find(e => e.id === edgeId)
+    if (!edge || edge.breakpointLocked) return
+    alignEdgeToNode(edge, node)
+  })
 }
 
+// Родительские блоки всегда пунктирные, остальные — сплошные
 function refreshParentBorders(): void {
   const childCount: Record<string, number> = {}
   nodes.value.forEach(n => {
@@ -1641,20 +1693,7 @@ function refreshParentBorders(): void {
   })
   nodes.value.forEach(n => {
     const count = childCount[n.id] || 0
-    if (!n.borderStyleLocked) {
-      n.borderStyle = count > 0 ? 'dashed' : 'solid'
-    }
-  })
-}
-
-function maintainPassThroughEdges(nodeId: string | null | undefined): void {
-  if (!nodeId) return
-  const node = nodes.value.find(n => n.id === nodeId)
-  if (!node || !node.passThroughEdges?.length) return
-  node.passThroughEdges.forEach(edgeId => {
-    const edge = edges.value.find(e => e.id === edgeId)
-    if (!edge || edge.breakpointLocked) return
-    alignEdgeToNode(edge, node)
+    n.borderStyle = count > 0 ? 'dashed' : 'solid'
   })
 }
 

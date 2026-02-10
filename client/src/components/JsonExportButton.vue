@@ -18,6 +18,7 @@ type ExportBlock = {
   parentId: string | null
   borderStyle: Node['borderStyle']
   dataTargetId?: string | null
+  dataTargetSetManually?: boolean
 }
 
 type ExportConnection = {
@@ -75,12 +76,7 @@ const props = defineProps<{
 
 const fileName = computed(() => props.fileName ?? 'diagram.json')
 
-const DEFAULT_NODE_COLOR = '#ffffff'
-const DEFAULT_BORDER_COLOR = '#666'
-const DEFAULT_BORDER_WIDTH = 1
-const DEFAULT_BORDER_RADIUS = 5
-const DEFAULT_EDGE_COLOR = '#666'
-const DEFAULT_EDGE_WIDTH = 2
+import * as DEFAULTS from '../constants'
 
 function extractInformation(meta?: Record<string, unknown> | null): string[] {
   if (!meta || typeof meta !== 'object') return []
@@ -104,7 +100,8 @@ function toExportBlock(node: Node): ExportBlock {
     height: node.height,
     parentId: node.parentId ?? null,
     borderStyle: node.borderStyle ?? 'solid',
-    dataTargetId: node.dataTargetId ?? null
+    dataTargetId: node.dataTargetId ?? null,
+    dataTargetSetManually: node.dataTargetSetManually ?? false
   }
 }
 
@@ -277,18 +274,18 @@ function buildStyles(nodes: Node[], edges: Edge[]): ExportStyles {
   const blockStyles: ExportStyles['blocks'] = nodes.map((node) => ({
     element_id: node.id,
     element_type: 'block',
-    color: DEFAULT_NODE_COLOR,
-    border_color: DEFAULT_BORDER_COLOR,
-    border_width: DEFAULT_BORDER_WIDTH,
-    border_radius: DEFAULT_BORDER_RADIUS,
+    color: DEFAULTS.DEFAULT_NODE_COLOR,
+    border_color: DEFAULTS.DEFAULT_BORDER_COLOR,
+    border_width: DEFAULTS.DEFAULT_BORDER_WIDTH,
+    border_radius: DEFAULTS.DEFAULT_BORDER_RADIUS,
     border_style: node.borderStyle ?? 'solid'
   }))
 
   const connectionStyles: ExportStyles['connections'] = edges.map((edge) => ({
     element_id: edge.id,
     element_type: 'connection',
-    color: DEFAULT_EDGE_COLOR,
-    width: DEFAULT_EDGE_WIDTH,
+    color: DEFAULTS.DEFAULT_EDGE_COLOR,
+    width: DEFAULTS.DEFAULT_EDGE_WIDTH,
     type: edge.lineStyle ?? 'solid'
   }))
 

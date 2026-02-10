@@ -209,9 +209,11 @@
                   type="checkbox" 
                   :value="option.value" 
                   :checked="edgeCarries(option.value)"
+                  :disabled="option.locked"
                   @change="onEdgeDataKeyToggle(option.value, $event)"
                 />
                 {{ option.label }}
+                <span v-if="option.locked" class="hint">(обязательно)</span>
               </label>
               <div v-if="!edgeDataOptions.length" class="hint">Нет доступных данных для этой стрелки</div>
             </div>
@@ -282,6 +284,7 @@ const edgeLineStyleOptions: { value: LineStyle, label: string }[] = [
 
 const dataTargetsOptions = computed(() => {
   return availableNodes.value
+    .filter(node => !selectedNode.value || node.id !== selectedNode.value.id) // исключаем сам блок
     .map(node => ({ value: node.id, label: node.text || node.id }))
 })
 
@@ -354,7 +357,8 @@ function onNodeDataTargetChange(event: Event): void {
   const value = (event.target as HTMLSelectElement).value
   const target = value === '' ? null : value
   selectedNode.value.dataTargetId = target
-  emit('update:node', selectedNode.value.id, { dataTargetId: target })
+  selectedNode.value.dataTargetSetManually = true
+  emit('update:node', selectedNode.value.id, { dataTargetId: target, dataTargetSetManually: true })
 }
 
 function onPassThroughEdgeInput(edgeId: string, event: Event): void {
@@ -413,6 +417,8 @@ function onEdgeWidthChange(): void {
 
 function onEdgeDataKeyToggle(nodeId: string, event: Event): void {
   if (!selectedEdge.value) return
+  // Собственные данные связи не разрешаем снимать
+  if (nodeId === selectedEdge.value.sourceNodeId) return
   const checked = (event.target as HTMLInputElement).checked
   const current = [...(selectedEdge.value.dataKeys ?? [])]
   const idx = current.indexOf(nodeId)
@@ -438,9 +444,24 @@ const edgeDataOptions = computed(() => {
   const dataset = props.dataSets?.[edge.sourceNodeId] ?? []
   return dataset.map(id => ({
     value: id,
-    label: availableNodes.value.find(n => n.id === id)?.text || id
+    label: resolveDataLabel(id, edge),
+    locked: id === edge.sourceNodeId // собственные данные всегда обязательны
   }))
 })
+
+function resolveDataLabel(dataId: string, edge: Edge): string {
+  // Пытаемся найти входящую стрелку, которая принесла эти данные в исходный узел
+  const incomingEdge = availableEdges.value.find(
+    e => e.targetNodeId === edge.sourceNodeId && (e.dataKeys ?? []).includes(dataId)
+  )
+
+  if (incomingEdge) {
+    return incomingEdge.label?.trim() || incomingEdge.id
+  }
+
+  // Если данных не приносили, считаем, что стрелка переносит собственные данные
+  return edge.label?.trim() || edge.id
+}
 
 function deleteSelectedObject(): void {
   if (!props.selectedObject) return
