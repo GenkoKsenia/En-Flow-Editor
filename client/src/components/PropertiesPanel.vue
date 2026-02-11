@@ -573,7 +573,7 @@ function clearSelection(): void {
   border: 1px solid #ced4da;
   border-radius: 4px;
   font-size: 13px;
-  width: 120px;
+  width: 128px;
 }
 
 .property-input.small {

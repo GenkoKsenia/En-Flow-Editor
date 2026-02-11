@@ -1,6 +1,16 @@
 <template>
   <svg class="edge" :style="{ zIndex: edgeZIndex }">
     <!-- Основной путь стрелки -->
+    <!-- Увеличенная зона клика по стрелке (прозрачный дублирующий путь) -->
+    <path
+      :d="pathData"
+      stroke="transparent"
+      stroke-width="16"
+      fill="none"
+      @mousedown="onPathMouseDown"
+      class="edge-hit-area"
+    />
+
     <path
       :d="pathData"
       :stroke="strokeColor"
@@ -476,6 +486,10 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   filter:
     drop-shadow(0 0 0 rgba(224, 49, 49))   
     drop-shadow(0 0 3px rgba(224, 49, 49)); 
+}
+
+.edge-hit-area {
+  pointer-events: all;
 }
 
 .edge path.selected {

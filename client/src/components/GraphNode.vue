@@ -177,7 +177,8 @@ function onMouseLeave() {
 }
 
 function getClosestSide(x: number, y: number, width: number, height: number): ConnectionSide | null {
-  const threshold = 15; // Уменьшим порог для более точного определения
+  // Делаем зону попадания по грани шире, но не дальше середины короткой стороны
+  const threshold = Math.min(28, Math.min(width, height) / 2)
   
   // Вычисляем расстояния до каждой стороны
   const topDist = y
