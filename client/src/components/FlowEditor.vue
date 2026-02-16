@@ -1979,11 +1979,25 @@ function getEdgeSegments(edge: Edge): Segment[] {
     (sourceSide === 'top' && targetSide === 'bottom') ||
     (sourceSide === 'bottom' && targetSide === 'top') ||
     (sourceSide === 'left' && targetSide === 'left') ||
-    (sourceSide === 'right' && targetSide === 'right')
-  
+    (sourceSide === 'right' && targetSide === 'right') ||
+    (sourceSide === 'top' && targetSide === 'top') ||
+    (sourceSide === 'bottom' && targetSide === 'bottom')
+
   if (needsThreeSegments || edge.breakpointX !== undefined || edge.breakpointY !== undefined) {
-    const breakpointX = edge.breakpointX ?? ((start.x + end.x) / 2)
-    const breakpointY = edge.breakpointY ?? ((start.y + end.y) / 2)
+    const defaultBreakpointX = (() => {
+      if (sourceSide === 'left' && targetSide === 'left') return Math.min(start.x, end.x) - 80
+      if (sourceSide === 'right' && targetSide === 'right') return Math.max(start.x, end.x) + 80
+      return (start.x + end.x) / 2
+    })()
+
+    const defaultBreakpointY = (() => {
+      if (sourceSide === 'top' && targetSide === 'top') return Math.min(start.y, end.y) - 40
+      if (sourceSide === 'bottom' && targetSide === 'bottom') return Math.max(start.y, end.y) + 40
+      return (start.y + end.y) / 2
+    })()
+
+    const breakpointX = edge.breakpointX ?? defaultBreakpointX
+    const breakpointY = edge.breakpointY ?? defaultBreakpointY
     
     if (sourceSide === 'left' || sourceSide === 'right') {
       const point1 = { x: breakpointX, y: start.y }
