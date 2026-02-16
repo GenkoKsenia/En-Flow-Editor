@@ -24,14 +24,10 @@ export interface Node {
   borderStyle?: NodeLineStyle;
   meta?: Record<string, unknown> | null;
   /**
-   * Идентификатор целевого блока, куда должны дойти данные,
-   * сформированные в этом блоке. Используется проверкой целостности.
+   * Идентификаторы информационных объектов, которые сейчас находятся в блоке.
+   * Список задаётся в JSON как поле "information".
    */
-  dataTargetId?: string | null;
-  /**
-   * Флаг, что конечный блок выбран пользователем (а не выставлен автоматически).
-   */
-  dataTargetSetManually?: boolean;
+  informationIds?: string[];
 }
 
 export type ConnectionSide = 'top' | 'right' | 'bottom' | 'left'
@@ -57,6 +53,13 @@ export interface Edge {
    * Например, если связь переносит данные из блока "1" и "4", поле будет ["1","4"].
    */
   dataKeys?: string[];
+}
+
+export interface DataFlow {
+  dataKey: string;
+  dataName: string;
+  startBlock: string;
+  finishBlocks: string[];
 }
 
 export interface Segment {
