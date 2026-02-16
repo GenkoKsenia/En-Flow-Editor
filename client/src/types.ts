@@ -23,6 +23,11 @@ export interface Node {
   borderRadius?: number;
   borderStyle?: NodeLineStyle;
   meta?: Record<string, unknown> | null;
+  /**
+   * Идентификаторы информационных объектов, которые сейчас находятся в блоке.
+   * Список задаётся в JSON как поле "information".
+   */
+  informationIds?: string[];
 }
 
 export type ConnectionSide = 'top' | 'right' | 'bottom' | 'left'
@@ -43,6 +48,18 @@ export interface Edge {
   breakpointY?: number;  // Для горизонтального среднего отрезка
   breakpointLocked?: boolean; // Пользователь зафиксировал точку излома
   geometry?: EdgeGeometry //Геометрия стрелки
+  /**
+   * Список идентификаторов блоков, чьи данные переносит эта связь.
+   * Например, если связь переносит данные из блока "1" и "4", поле будет ["1","4"].
+   */
+  dataKeys?: string[];
+}
+
+export interface DataFlow {
+  dataKey: string;
+  dataName: string;
+  startBlock: string;
+  finishBlocks: string[];
 }
 
 export interface Segment {

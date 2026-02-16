@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ConnectionSide, Edge, Node, Position, Segment, NodeLineStyle } from '../types'
+import type { ConnectionSide, Edge, Node, Position, Segment, NodeLineStyle, DataFlow } from '../types'
 
 type ExportBlock = {
   id: string
@@ -32,13 +32,6 @@ type ExportConnection = {
   lineStyle: Edge['lineStyle']
 }
 
-type ExportDataFlow = {
-  dataKey: string
-  dataName: string
-  startBlock: string
-  finishBlocks: string[]
-}
-
 type ExportStyles = {
   blocks: Array<{
     element_id: string
@@ -60,7 +53,7 @@ type ExportStyles = {
 
 type ExportPayload = {
   blocks: ExportBlock[]
-  dataFlows: ExportDataFlow[]
+  dataFlows: DataFlow[]
   connections: ExportConnection[]
   styles: ExportStyles
 }
@@ -68,36 +61,20 @@ type ExportPayload = {
 const props = defineProps<{
   nodes: Node[]
   edges: Edge[]
+  dataFlows?: DataFlow[]
   styles?: ExportStyles
   fileName?: string
 }>()
 
 const fileName = computed(() => props.fileName ?? 'diagram.json')
 
-const DEFAULT_NODE_COLOR = '#ffffff'
-const DEFAULT_BORDER_COLOR = '#666'
-const DEFAULT_BORDER_WIDTH = 1
-const DEFAULT_BORDER_RADIUS = 5
-const DEFAULT_EDGE_COLOR = '#666'
-const DEFAULT_EDGE_WIDTH = 2
-
-function extractInformation(meta?: Record<string, unknown> | null): string[] {
-  if (!meta || typeof meta !== 'object') return []
-  const info = (meta as Record<string, unknown>).information
-  if (Array.isArray(info)) {
-    return info.filter((item): item is string => typeof item === 'string')
-  }
-  if (typeof info === 'string') {
-    return [info]
-  }
-  return []
-}
+import * as DEFAULTS from '../constants'
 
 function toExportBlock(node: Node): ExportBlock {
   return {
     id: node.id,
     name: node.text,
-    information: extractInformation(node.meta),
+    information: node.informationIds ?? [],
     position: { x: node.position.x, y: node.position.y },
     width: node.width,
     height: node.height,
@@ -188,7 +165,9 @@ function needsThreeSegments(edge: Edge): boolean {
     (sourceSide === 'top' && targetSide === 'bottom') ||
     (sourceSide === 'bottom' && targetSide === 'top') ||
     (sourceSide === 'left' && targetSide === 'left') ||
-    (sourceSide === 'right' && targetSide === 'right')
+    (sourceSide === 'right' && targetSide === 'right') ||
+    (sourceSide === 'top' && targetSide === 'top') ||
+    (sourceSide === 'bottom' && targetSide === 'bottom')
   )
 }
 
@@ -205,8 +184,16 @@ function getEdgeSegments(
   const segments: Segment[] = []
   let current = start
   const useThreeSegments = needsThreeSegments(edge) || edge.breakpointX !== undefined || edge.breakpointY !== undefined
-  const breakpointX = edge.breakpointX ?? (start.x + end.x) / 2
-  const breakpointY = edge.breakpointY ?? (start.y + end.y) / 2
+  const breakpointX = edge.breakpointX ?? (() => {
+    if (edge.sourceSide === 'left' && edge.targetSide === 'left') return Math.min(start.x, end.x) - 80
+    if (edge.sourceSide === 'right' && edge.targetSide === 'right') return Math.max(start.x, end.x) + 80
+    return (start.x + end.x) / 2
+  })()
+  const breakpointY = edge.breakpointY ?? (() => {
+    if (edge.sourceSide === 'top' && edge.targetSide === 'top') return Math.min(start.y, end.y) - 40
+    if (edge.sourceSide === 'bottom' && edge.targetSide === 'bottom') return Math.max(start.y, end.y) + 40
+    return (start.y + end.y) / 2
+  })()
 
   if (useThreeSegments) {
     if (edge.sourceSide === 'left' || edge.sourceSide === 'right') {
@@ -264,7 +251,7 @@ function toExportConnection(
     startSide: edge.sourceSide ?? null,
     endSide: edge.targetSide ?? null,
     label: edge.label ?? null,
-    dataKeys: [],
+    dataKeys: edge.dataKeys ?? [],
     through: throughByEdgeId[edge.id] ?? [],
     breakpoints: extractBreakpoints(edge, positions, nodes),
     lineStyle: edge.lineStyle ?? 'solid'
@@ -275,18 +262,18 @@ function buildStyles(nodes: Node[], edges: Edge[]): ExportStyles {
   const blockStyles: ExportStyles['blocks'] = nodes.map((node) => ({
     element_id: node.id,
     element_type: 'block',
-    color: DEFAULT_NODE_COLOR,
-    border_color: DEFAULT_BORDER_COLOR,
-    border_width: DEFAULT_BORDER_WIDTH,
-    border_radius: DEFAULT_BORDER_RADIUS,
+    color: node.color ?? DEFAULTS.DEFAULT_NODE_COLOR,
+    border_color: node.borderColor ?? DEFAULTS.DEFAULT_BORDER_COLOR,
+    border_width: node.borderWidth ?? DEFAULTS.DEFAULT_BORDER_WIDTH,
+    border_radius: node.borderRadius ?? DEFAULTS.DEFAULT_BORDER_RADIUS,
     border_style: node.borderStyle ?? 'solid'
   }))
 
   const connectionStyles: ExportStyles['connections'] = edges.map((edge) => ({
     element_id: edge.id,
     element_type: 'connection',
-    color: DEFAULT_EDGE_COLOR,
-    width: DEFAULT_EDGE_WIDTH,
+    color: edge.color ?? DEFAULTS.DEFAULT_EDGE_COLOR,
+    width: edge.width ?? DEFAULTS.DEFAULT_EDGE_WIDTH,
     type: edge.lineStyle ?? 'solid'
   }))
 
@@ -300,7 +287,7 @@ function buildPayload(): ExportPayload {
 
   return {
     blocks: props.nodes.map(toExportBlock),
-    dataFlows: [],
+    dataFlows: props.dataFlows ?? [],
     connections: props.edges.map((edge) => toExportConnection(edge, throughByEdgeId, connectionPositions, props.nodes)),
     styles
   }

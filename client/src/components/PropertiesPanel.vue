@@ -52,6 +52,50 @@
               />
             </div>
           </div>
+          <div class="property-group">
+            <div class="property header-row">
+              <label>Данные блока</label>
+              <button class="icon-btn small" type="button" @click="onAddDataItem">＋</button>
+            </div>
+            <div v-if="blockDataItems.length" class="data-list">
+              <div v-for="item in blockDataItems" :key="item.dataKey" class="data-row">
+                <div class="data-row-line">
+                  <label>Название:</label>
+                  <input 
+                    class="property-input"
+                    :value="item.dataName"
+                    @input="e => onDataNameChange(item.dataKey, (e.target as HTMLInputElement).value)"
+                  />
+                </div>
+                <div class="data-row-line">
+                  <label>Конечные блоки:</label>
+                  <details class="checkbox-dropdown">
+                    <summary>{{ finishLabel(item.finishBlocks ?? []) }}</summary>
+                    <div class="checkbox-list">
+                      <label 
+                        v-for="opt in finishOptions" 
+                        :key="opt.value" 
+                        class="checkbox-option"
+                      >
+                        <input 
+                          type="checkbox" 
+                          :value="opt.value" 
+                          :checked="(item.finishBlocks ?? []).includes(opt.value)"
+                          :disabled="opt.value === selectedNode.id"
+                          @change="e => onToggleFinish(item.dataKey, opt.value, (e.target as HTMLInputElement).checked)"
+                        />
+                        {{ opt.label }}
+                      </label>
+                    </div>
+                  </details>
+                </div>
+                <div class="data-row-actions">
+                  <button class="delete-btn small" type="button" @click="onRemoveDataItem(item.dataKey)">Удалить</button>
+                </div>
+              </div>
+            </div>
+            <div v-else></div>
+          </div>
           <div class="property">
             <label>Стиль рамки:</label>
             <select 
@@ -179,6 +223,28 @@
             />
           </div>
 
+          <div class="property-group">
+            <h5>Данные, которые переносит эта связь</h5>
+            <div class="edge-checkboxes">
+              <label 
+                v-for="option in edgeDataOptions" 
+                :key="option.value" 
+                class="edge-option"
+              >
+                <input 
+                  type="checkbox" 
+                  :value="option.value" 
+                  :checked="edgeCarries(option.value)"
+                  :disabled="option.locked"
+                  @change="onEdgeDataKeyToggle(option.value, $event)"
+                />
+                {{ option.label }}
+                <span v-if="option.locked" class="hint">(обязательно)</span>
+              </label>
+              <div v-if="!edgeDataOptions.length" class="hint">Нет доступных данных для этой стрелки</div>
+            </div>
+          </div>
+
           
         </div>
       </div>
@@ -195,7 +261,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Node, Edge, EdgeGeometry, LineStyle } from '../types'
+import type { Node, Edge, EdgeGeometry, LineStyle, DataFlow } from '../types'
 
 interface SelectedObject {
   type: 'node' | 'edge'
@@ -206,6 +272,9 @@ interface SelectedObject {
 interface Props {
   selectedObject?: SelectedObject | null
   edges?: Edge[]
+  nodes?: Node[]
+  dataSets?: Record<string, string[]>
+  dataFlows?: DataFlow[]
 }
 
 interface Emits {
@@ -214,6 +283,7 @@ interface Emits {
   (e: 'delete:node', nodeId: string): void
   (e: 'delete:edge', edgeId: string): void
   (e: 'clear-selection'): void
+  (e: 'update:dataFlows', flows: DataFlow[]): void
 }
 
 const props = defineProps<Props>()
@@ -238,6 +308,22 @@ const edgeLineStyleOptions: { value: LineStyle, label: string }[] = [
   { value: 'dashed', label: 'Пунктирная' },
   { value: 'dotted', label: 'Пунктир с точкой' }
 ]
+
+const dataFlowMap = computed(() => {
+  const map = new Map<string, DataFlow>()
+  ;(props.dataFlows ?? []).forEach(flow => map.set(flow.dataKey, flow))
+  return map
+})
+
+const blockDataItems = computed(() => {
+  if (!selectedNode.value) return []
+  return (props.dataFlows ?? []).filter(flow => flow.startBlock === selectedNode.value!.id)
+})
+
+const finishOptions = computed(() => {
+  if (!props.nodes) return []
+  return props.nodes.map(n => ({ value: n.id, label: n.text || n.id }))
+})
 
 function formatEdgeLabel(edge: Edge): string {
   return edge.label?.trim() || edge.id
@@ -303,6 +389,70 @@ function onNodeBorderRadiusChange(): void {
   emit('update:node', selectedNode.value.id, { borderRadius: selectedNode.value.borderRadius })
 }
 
+function collectSelected(event: Event): string[] {
+  const select = event.target as HTMLSelectElement
+  return Array.from(select.selectedOptions).map(o => o.value)
+}
+
+function syncInformationIds(nodeId: string, flows: DataFlow[]): void {
+  const ids = flows.filter(f => f.startBlock === nodeId).map(f => f.dataKey)
+  emit('update:node', nodeId, { informationIds: ids })
+}
+
+function onAddDataItem(): void {
+  if (!selectedNode.value) return
+  const newId = Date.now().toString()
+  const flows = [...(props.dataFlows ?? []), {
+    dataKey: newId,
+    dataName: `Данные ${blockDataItems.value.length + 1}`,
+    startBlock: selectedNode.value.id,
+    finishBlocks: []
+  } satisfies DataFlow]
+  emit('update:dataFlows', flows)
+  syncInformationIds(selectedNode.value.id, flows)
+}
+
+function onDataNameChange(dataKey: string, value: string): void {
+  if (!props.dataFlows) return
+  const flows = props.dataFlows.map(f => f.dataKey === dataKey ? { ...f, dataName: value } : f)
+  emit('update:dataFlows', flows)
+}
+
+function onDataFinishChange(dataKey: string, finishes: string[]): void {
+  if (!props.dataFlows) return
+  const flows = props.dataFlows.map(f => f.dataKey === dataKey ? { ...f, finishBlocks: finishes } : f)
+  emit('update:dataFlows', flows)
+}
+
+function onRemoveDataItem(dataKey: string): void {
+  if (!props.dataFlows || !selectedNode.value) return
+  const flows = props.dataFlows.filter(f => f.dataKey !== dataKey)
+  emit('update:dataFlows', flows)
+  syncInformationIds(selectedNode.value.id, flows)
+}
+
+function finishLabel(selected: string[]): string {
+  if (!selected.length) return 'Не выбрано'
+  const labels = selected
+    .map(id => finishOptions.value.find(o => o.value === id)?.label ?? id)
+  return labels.join(', ')
+}
+
+function onToggleFinish(dataKey: string, value: string, checked: boolean): void {
+  if (!props.dataFlows) return
+  const flows = props.dataFlows.map(f => {
+    if (f.dataKey !== dataKey) return f
+    const set = new Set(f.finishBlocks ?? [])
+    if (checked) {
+      set.add(value)
+    } else {
+      set.delete(value)
+    }
+    return { ...f, finishBlocks: Array.from(set) }
+  })
+  emit('update:dataFlows', flows)
+}
+
 function onPassThroughEdgeInput(edgeId: string, event: Event): void {
   const target = event.target as HTMLInputElement
   onPassThroughEdgeToggle(edgeId, target.checked)
@@ -355,6 +505,56 @@ function onEdgeColorChange(event: Event): void {
 function onEdgeWidthChange(): void {
   if (!selectedEdge.value) return
   emit('update:edge', selectedEdge.value.id, { width: selectedEdge.value.width })
+}
+
+function onEdgeDataKeyToggle(nodeId: string, event: Event): void {
+  if (!selectedEdge.value) return
+  const checked = (event.target as HTMLInputElement).checked
+  const current = [...(selectedEdge.value.dataKeys ?? [])]
+  const idx = current.indexOf(nodeId)
+  if (checked && idx === -1) {
+    current.push(nodeId)
+  } else if (!checked && idx !== -1) {
+    current.splice(idx, 1)
+  }
+  // ограничиваем данными исходного блока
+  const allowed = edgeDataOptions.value.map(o => o.value)
+  const sanitized = current.filter(id => allowed.includes(id))
+  selectedEdge.value.dataKeys = sanitized
+  emit('update:edge', selectedEdge.value.id, { dataKeys: sanitized })
+}
+
+function edgeCarries(nodeId: string): boolean {
+  return selectedEdge.value?.dataKeys?.includes(nodeId) ?? false
+}
+
+const edgeDataOptions = computed(() => {
+  const edge = selectedEdge.value
+  if (!edge) return []
+  const dataset = props.dataSets?.[edge.sourceNodeId] ?? []
+  return dataset.map(id => ({
+    value: id,
+    label: resolveDataLabel(id, edge),
+    locked: false
+  }))
+})
+
+function resolveDataLabel(dataId: string, edge: Edge): string {
+  const flow = dataFlowMap.value.get(dataId)
+  if (flow) {
+    return flow.dataName || flow.dataKey
+  }
+  // Пытаемся найти входящую стрелку, которая принесла эти данные в исходный узел
+  const incomingEdge = availableEdges.value.find(
+    e => e.targetNodeId === edge.sourceNodeId && (e.dataKeys ?? []).includes(dataId)
+  )
+
+  if (incomingEdge) {
+    return incomingEdge.label?.trim() || incomingEdge.id
+  }
+
+  // Если данных не приносили, показываем id
+  return dataId
 }
 
 function deleteSelectedObject(): void {
@@ -467,11 +667,104 @@ function clearSelection(): void {
   border: 1px solid #ced4da;
   border-radius: 4px;
   font-size: 13px;
-  width: 120px;
+  width: 128px;
 }
 
 .property-input.small {
   width: 60px;
+}
+
+.data-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.data-row {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fafafa;
+}
+
+.data-row-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.data-row-line label {
+  min-width: 110px;
+  color: #495057;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.data-row-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.checkbox-dropdown {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: #fff;
+  padding: 6px 8px;
+  width: 100%;
+}
+
+.checkbox-dropdown summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  color: #333;
+}
+
+.checkbox-dropdown summary::-webkit-details-marker {
+  display: none;
+}
+
+.checkbox-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.delete-btn.small {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.icon-btn.small {
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.property-input.multiline {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+}
+
+.info-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .position-inputs,

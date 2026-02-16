@@ -1,6 +1,16 @@
 <template>
   <svg class="edge" :style="{ zIndex: edgeZIndex }">
     <!-- Основной путь стрелки -->
+    <!-- Увеличенная зона клика по стрелке (прозрачный дублирующий путь) -->
+    <path
+      :d="pathData"
+      stroke="transparent"
+      stroke-width="16"
+      fill="none"
+      @mousedown="onPathMouseDown"
+      class="edge-hit-area"
+    />
+
     <path
       :d="pathData"
       :stroke="strokeColor"
@@ -202,12 +212,14 @@ const edgeGeometry = computed((): EdgeGeometry => {
     (sourceSide === 'top' && targetSide === 'bottom') ||
     (sourceSide === 'bottom' && targetSide === 'top') ||
     (sourceSide === 'left' && targetSide === 'left') ||
-    (sourceSide === 'right' && targetSide === 'right')
+    (sourceSide === 'right' && targetSide === 'right') ||
+    (sourceSide === 'top' && targetSide === 'top') ||
+    (sourceSide === 'bottom' && targetSide === 'bottom')
   
   if (needsThreeSegments) {
     // 3-сегментная стрелка
     const breakpointX = props.edge.breakpointX ?? getDefaultBreakpointX()
-    const breakpointY = props.edge.breakpointY ?? (start.y + end.y) / 2
+    const breakpointY = props.edge.breakpointY ?? getDefaultBreakpointY()
     
     if (sourceSide === 'left' || sourceSide === 'right') {
       // Горизонтальные соединения
@@ -363,6 +375,22 @@ function getDefaultBreakpointX(): number {
   }
 }
 
+function getDefaultBreakpointY(): number {
+  const start = startPoint.value!
+  const end = endPoint.value!
+  const { sourceSide, targetSide } = props.edge
+
+  if (sourceSide === 'top' && targetSide === 'top') {
+    // для top-top уходим вверх
+    return Math.min(start.y, end.y) - 40
+  } else if (sourceSide === 'bottom' && targetSide === 'bottom') {
+    // для bottom-bottom уходим вниз
+    return Math.max(start.y, end.y) + 40
+  } else {
+    return (start.y + end.y) / 2
+  }
+}
+
 // Определяем тип стрелки для перетаскивания
 const edgeType = computed(() => {
   const { sourceSide, targetSide } = props.edge
@@ -372,7 +400,9 @@ const edgeType = computed(() => {
     (sourceSide === 'top' && targetSide === 'bottom') ||
     (sourceSide === 'bottom' && targetSide === 'top') ||
     (sourceSide === 'left' && targetSide === 'left')  ||
-    (sourceSide === 'right' && targetSide === 'right')
+    (sourceSide === 'right' && targetSide === 'right') ||
+    (sourceSide === 'top' && targetSide === 'top') ||
+    (sourceSide === 'bottom' && targetSide === 'bottom')
   
   return props.forceThreeSegments || isOppositeSides ? 'threeSegment' : 'twoSegment'
 })
@@ -396,9 +426,14 @@ const breakpoint = computed(() => {
     }
   } else {
     // Вертикальные 3-сегментные стрелки
+    const defaultY = (() => {
+      if (sourceSide === 'top' && targetSide === 'top') return Math.min(start.y, end.y) - 40
+      if (sourceSide === 'bottom' && targetSide === 'bottom') return Math.max(start.y, end.y) + 40
+      return (start.y + end.y) / 2
+    })()
     return {
       x: (start.x + end.x) / 2,
-      y: props.edge.breakpointY ?? (start.y + end.y) / 2
+      y: props.edge.breakpointY ?? defaultY
     }
   }
 })
@@ -473,7 +508,13 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
 }
 
 .edge path.pass-through-error {
-  stroke: #dc3545;
+  filter:
+    drop-shadow(0 0 0 rgba(224, 49, 49))   
+    drop-shadow(0 0 3px rgba(224, 49, 49)); 
+}
+
+.edge-hit-area {
+  pointer-events: all;
 }
 
 .edge path.selected {

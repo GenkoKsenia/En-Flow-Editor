@@ -11,6 +11,9 @@
       'potential-parent': isPotentialParent,
       'has-children': hasChildren,
       'pass-through-error': hasPassThroughError,
+      'data-flow-error': hasDataError,
+      'missing-target': hasMissingTarget,
+      'forbidden-outgoing': hasForbiddenOutgoing,
       [nodeBorderClass]: true
     }"
     @mousedown="onMouseDown"
@@ -47,6 +50,9 @@ interface Props {
   isPotentialParent?: boolean
   allNodes?: Node[] // Все узлы для вычисления абсолютной позиции
   hasPassThroughError?: boolean
+  hasDataError?: boolean
+  hasMissingTarget?: boolean
+  hasForbiddenOutgoing?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -58,7 +64,10 @@ const props = withDefaults(defineProps<Props>(), {
   childrenCount: 0,
   isPotentialParent: false,
   allNodes: () => [],
-  hasPassThroughError: false
+  hasPassThroughError: false,
+  hasDataError: false,
+  hasMissingTarget: false,
+  hasForbiddenOutgoing: false
 })
 
 const emit = defineEmits<{
@@ -114,9 +123,6 @@ const nodeStyle = computed(() => {
 })
 
 function getBorderColor(): string {
-  if (props.hasPassThroughError) {
-    return '#dc3545'
-  }
   if (props.isConnectionSource) {
     return '#28a745'
   }
@@ -171,7 +177,8 @@ function onMouseLeave() {
 }
 
 function getClosestSide(x: number, y: number, width: number, height: number): ConnectionSide | null {
-  const threshold = 15; // Уменьшим порог для более точного определения
+  // Делаем зону попадания по грани шире, но не дальше середины короткой стороны
+  const threshold = Math.min(28, Math.min(width, height) / 2)
   
   // Вычисляем расстояния до каждой стороны
   const topDist = y
@@ -313,7 +320,18 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 .node.pass-through-error {
-  --border-color: #dc3545;
-  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.55);
+}
+
+.node.data-flow-error {
+  box-shadow: 0 0 0 3px rgba(224, 49, 49, 0.55);
+}
+
+.node.missing-target {
+  box-shadow: 0 0 0 3px rgba(255, 196, 0, 0.55);
+}
+
+.node.forbidden-outgoing {
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.55);
 }
 </style>
