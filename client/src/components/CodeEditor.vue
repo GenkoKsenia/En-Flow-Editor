@@ -145,6 +145,7 @@ function handleEnter(event: KeyboardEvent): void {
   emit('update:content', code.value)
 }
 
+
 // Закрытие редактора при клике вне его
 function handleClickOutside(event: MouseEvent): void {
   if (!textareaRef.value?.contains(event.target as Node)) {
@@ -231,7 +232,11 @@ watch(isActive, (active) => {
 }
 
 .code-textarea {
+  position: relative;
+  z-index: 1;
   flex: 1;
+  width: 100%;
+  height: 100%;
   border: none;
   padding: 12px;
   font-family: 'Courier New', monospace;
@@ -239,15 +244,31 @@ watch(isActive, (active) => {
   line-height: 1.5;
   resize: none;
   outline: none;
-  background: #fafafa;
+  background: transparent;
+  color: #111;
+  caret-color: #111;
   transition: all 0.2s ease;
   overflow: auto;
   white-space: pre;
 }
 
 .code-textarea.active {
-  background: white;
   box-shadow: inset 0 0 0 2px #007bff;
+}
+
+.code-textarea::-webkit-scrollbar,
+.line-numbers::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.code-textarea::-webkit-scrollbar-thumb {
+  background: #c5cbd3;
+  border-radius: 6px;
+}
+
+.code-textarea::-webkit-scrollbar-thumb:hover {
+  background: #aeb5bf;
 }
 
 .code-textarea:focus {

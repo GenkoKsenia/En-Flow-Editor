@@ -16,6 +16,7 @@
       'forbidden-outgoing': hasForbiddenOutgoing,
       [nodeBorderClass]: true
     }"
+    :title="tooltipText"
     @mousedown="onMouseDown"
     @click="onClick"
     @mousemove="onMouseMove"
@@ -53,6 +54,8 @@ interface Props {
   hasDataError?: boolean
   hasMissingTarget?: boolean
   hasForbiddenOutgoing?: boolean
+  errorMessage?: string | null
+  warningMessage?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -67,7 +70,9 @@ const props = withDefaults(defineProps<Props>(), {
   hasPassThroughError: false,
   hasDataError: false,
   hasMissingTarget: false,
-  hasForbiddenOutgoing: false
+  hasForbiddenOutgoing: false,
+  errorMessage: null,
+  warningMessage: null
 })
 
 const emit = defineEmits<{
@@ -120,6 +125,12 @@ const nodeStyle = computed(() => {
     '--border-radius': `${borderRadius}px`,
     background: props.node.color ?? 'white'
   }
+})
+
+const tooltipText = computed<string | undefined>(() => {
+  if (props.errorMessage) return props.errorMessage
+  if (props.warningMessage) return props.warningMessage
+  return undefined
 })
 
 function getBorderColor(): string {

@@ -701,6 +701,12 @@ function clearSelection(): void {
   font-weight: 500;
 }
 
+.data-row-line .property-input {
+  width: 115px;
+  max-width: 115px;
+  flex: 0 0 auto;
+}
+
 .data-row-actions {
   display: flex;
   justify-content: flex-end;
@@ -711,7 +717,9 @@ function clearSelection(): void {
   border-radius: 4px;
   background: #fff;
   padding: 6px 8px;
-  width: 100%;
+  width: 115px;
+  max-width: 150px;
+  flex: 0 0 auto;
 }
 
 .checkbox-dropdown summary {
