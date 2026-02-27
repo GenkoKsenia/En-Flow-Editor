@@ -61,7 +61,9 @@ type ExportPayload = {
 
 type ExportComment = {
   id: string
-  targetType: 'node' | 'edge' | 'canvas'
+  /**
+   * Encoded target: node:<id>, edge:<id> или canvas
+   */
   targetId: string | null
   offset: { x: number; y: number }
   text: string

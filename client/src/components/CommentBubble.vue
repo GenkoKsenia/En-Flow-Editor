@@ -21,7 +21,9 @@ type CommentTarget = 'node' | 'edge' | 'canvas'
 
 interface Comment {
   id: string
-  targetType: CommentTarget
+  /**
+   * Encoded target: node:<id>, edge:<id> или canvas
+   */
   targetId: string | null
   offset: Position
   text: string

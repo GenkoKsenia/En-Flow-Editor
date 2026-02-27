@@ -229,7 +229,9 @@ import Cookies from 'js-cookie';
 type CommentTarget = 'node' | 'edge' | 'canvas'
 type Comment = {
   id: string
-  targetType: CommentTarget
+  /**
+   * Encoded target: node:<id>, edge:<id> или canvas
+   */
   targetId: string | null
   offset: Position
   text: string
@@ -238,13 +240,48 @@ type Comment = {
 }
 
 type SchemaComment = {
-  id: string
-  targetType: CommentTarget
-  targetId: string | null
+  id?: string
+  targetId?: string | null
+  targetType?: CommentTarget
   offset?: { x?: number; y?: number }
   text?: string
   author?: string
   createdAt?: string
+}
+
+function normalizeNodeId(id: unknown): string | null {
+  if (id === null || id === undefined) return null
+  const str = String(id)
+  return str.startsWith('node-') ? str : `node-${str}`
+}
+
+function encodeTargetId(type: CommentTarget, id: string | null): string {
+  if (type === 'canvas') return 'canvas'
+  const suffix = id ?? ''
+  return `${type}:${suffix}`
+}
+
+function decodeTargetId(raw: string | null | undefined, fallbackType?: CommentTarget, fallbackId?: string | null): { type: CommentTarget; id: string | null; normalized: string } {
+  if (typeof raw === 'string') {
+    if (raw === 'canvas') return { type: 'canvas', id: null, normalized: 'canvas' }
+    if (raw.startsWith('node:')) {
+      const id = raw.slice('node:'.length) || null
+      return { type: 'node', id, normalized: encodeTargetId('node', id) }
+    }
+    if (raw.startsWith('edge:')) {
+      const id = raw.slice('edge:'.length) || null
+      return { type: 'edge', id, normalized: encodeTargetId('edge', id) }
+    }
+    // Старый формат без типа — считаем узлом
+    return { type: 'node', id: raw || null, normalized: encodeTargetId('node', raw || null) }
+  }
+
+  if (fallbackType) {
+    const encoded = encodeTargetId(fallbackType, fallbackId ?? null)
+    return { type: fallbackType, id: fallbackId ?? null, normalized: encoded }
+  }
+
+  return { type: 'canvas', id: null, normalized: 'canvas' }
 }
 
 onBeforeMount(() => {
@@ -292,7 +329,7 @@ async function onGetCode() {
 // Состояние
 const nodes = ref<Node[]>([
   {
-    id: '1',
+    id: 'node-1',
     position: { x: 50, y: 50 },
     text: 'Начальный узел',
     width: 150,
@@ -305,7 +342,7 @@ const nodes = ref<Node[]>([
     borderStyle: 'solid'
   },
   {
-    id: '2',
+    id: 'node-2',
     position: { x: 300, y: 150 },
     text: 'Процесс',
     width: 120,
@@ -322,8 +359,8 @@ const nodes = ref<Node[]>([
 const edges = ref<Edge[]>([
   {
     id: 'e1',
-    sourceNodeId: '1',
-    targetNodeId: '2',
+    sourceNodeId: 'node-1',
+    targetNodeId: 'node-2',
     sourceSide: 'right',
     targetSide: 'left',
     color: DEFAULTS.DEFAULT_EDGE_COLOR,
@@ -508,8 +545,7 @@ function serializeDiagram() {
     styles,
     comments: comments.value.map(c => ({
       id: c.id,
-      targetType: c.targetType,
-      targetId: c.targetId,
+      targetId: c.targetId ?? 'canvas',
       offset: { x: c.offset.x, y: c.offset.y },
       text: c.text,
       author: c.author,
@@ -602,6 +638,7 @@ function applyDiagramJson(raw: string): void {
     const parsedComments: SchemaComment[] = Array.isArray(parsed?.comments) ? parsed.comments : []
     const blockStyles: Record<string, { color?: string; border_color?: string; border_width?: number; border_radius?: number; border_style?: string }> = {}
     const connectionStyles: Record<string, { color?: string; width?: number; type?: string }> = {}
+    const nodeIdMap: Record<string, string> = {}
 
     if (parsedStyles?.blocks) {
       parsedStyles.blocks.forEach(style => {
@@ -633,7 +670,7 @@ function applyDiagramJson(raw: string): void {
     parsedConnections.forEach(conn => {
       const through = Array.isArray(conn?.through) ? conn.through : []
       through.forEach(blockId => {
-        const nodeId = String(blockId)
+        const nodeId = normalizeNodeId(blockId) ?? String(blockId)
         if (!passThroughByNode[nodeId]) passThroughByNode[nodeId] = []
         if (conn?.id) passThroughByNode[nodeId].push(String(conn.id))
       })
@@ -650,21 +687,26 @@ function applyDiagramJson(raw: string): void {
     const normalizedNodes: Node[] = parsedBlocks
       .map((b: SchemaBlock) => {
         if (!b?.id) return null
+        const rawId = String(b.id)
+        const normalizedId = normalizeNodeId(rawId)
+        if (!normalizedId) return null
+        nodeIdMap[rawId] = normalizedId
+
         const information = normalizeInformation((b as any).information)
         const style = blockStyles[String(b.id)]
         information.forEach(id => {
           const existing = dataFlowMap.get(id)
           if (existing) {
             if (!existing.startBlock) {
-              existing.startBlock = String(b.id)
+              existing.startBlock = normalizedId
             }
           } else {
-            const fallback = normalizeDataFlow({ dataKey: id, dataName: id, startBlock: b.id, finishBlocks: [] }, String(b.id))
+            const fallback = normalizeDataFlow({ dataKey: id, dataName: id, startBlock: normalizedId, finishBlocks: [] }, normalizedId)
             if (fallback) dataFlowMap.set(fallback.dataKey, fallback)
           }
         })
         return {
-          id: String(b.id),
+          id: normalizedId,
           text: b.name ?? '',
           position: {
             x: typeof b.position?.x === 'number' ? b.position.x : 0,
@@ -672,8 +714,8 @@ function applyDiagramJson(raw: string): void {
           },
           width: typeof b.width === 'number' ? b.width : 120,
           height: typeof b.height === 'number' ? b.height : 60,
-          parentId: b.parentId ?? null,
-          passThroughEdges: passThroughByNode[String(b.id)] ?? [],
+          parentId: b.parentId ? (nodeIdMap[String(b.parentId)] ?? normalizeNodeId(b.parentId)) : null,
+          passThroughEdges: passThroughByNode[normalizedId] ?? [],
           color: style?.color ?? DEFAULTS.DEFAULT_NODE_COLOR,
           borderColor: style?.border_color ?? DEFAULTS.DEFAULT_BORDER_COLOR,
           borderWidth: style?.border_width ?? DEFAULTS.DEFAULT_BORDER_WIDTH,
@@ -689,18 +731,21 @@ function applyDiagramJson(raw: string): void {
     const normalizedEdges: Edge[] = parsedConnections
       .map((c: SchemaConnection) => {
         if (!c?.id || !c?.startBlock || !c?.endBlock) return null
+        const startId = nodeIdMap[String(c.startBlock)] ?? normalizeNodeId(c.startBlock)
+        const endId = nodeIdMap[String(c.endBlock)] ?? normalizeNodeId(c.endBlock)
+        if (!startId || !endId) return null
         const style = connectionStyles[String(c.id)]
         const breakpoint = Array.isArray(c.breakpoints)
           ? (c.breakpoints as SchemaPosition[]).find(bp => typeof bp?.x === 'number' && typeof bp?.y === 'number')
           : null
         const labelRaw = (c.label ?? '').trim()
-        const label = labelRaw || generateEdgeLabel(c.startBlock, c.endBlock, existingEdgeLabels)
+        const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels)
         existingEdgeLabels.push(label)
 
         return {
           id: String(c.id),
-          sourceNodeId: String(c.startBlock),
-          targetNodeId: String(c.endBlock),
+          sourceNodeId: startId,
+          targetNodeId: endId,
           sourceSide: normalizeConnectionSide(c.startSide),
           targetSide: normalizeConnectionSide(c.endSide),
           label,
@@ -719,9 +764,21 @@ function applyDiagramJson(raw: string): void {
       })
       .filter(Boolean) as Edge[]
 
-  nodes.value = normalizedNodes
-  dataFlows.value = Array.from(dataFlowMap.values())
-  edges.value = normalizedEdges
+    const normalizedDataFlows = Array.from(dataFlowMap.values()).map(flow => {
+      const start = nodeIdMap[String(flow.startBlock)] ?? normalizeNodeId(flow.startBlock)
+      const finish = Array.isArray(flow.finishBlocks)
+        ? flow.finishBlocks.map(id => nodeIdMap[String(id)] ?? normalizeNodeId(id)).filter(Boolean) as string[]
+        : []
+      return {
+        ...flow,
+        startBlock: start,
+        finishBlocks: finish
+      }
+    })
+
+    nodes.value = normalizedNodes
+    dataFlows.value = normalizedDataFlows
+    edges.value = normalizedEdges
   // После загрузки ограничиваем payload по фактическому набору данных исходного узла
   const dataSets = buildNodeSendableData()
     edges.value = edges.value.map(edge => {
@@ -730,18 +787,32 @@ function applyDiagramJson(raw: string): void {
       const sanitized = Array.from(new Set(preferred.filter(id => allowed.includes(id))))
       return { ...edge, dataKeys: sanitized }
     })
-    comments.value = parsedComments.map((c, idx) => ({
-      id: c.id ?? `comment-${idx + 1}`,
-      targetType: c.targetType ?? 'canvas',
-      targetId: c.targetId ?? null,
-      offset: {
-        x: typeof c.offset?.x === 'number' ? c.offset.x : 0,
-        y: typeof c.offset?.y === 'number' ? c.offset.y : 0
-      },
-      text: typeof c.text === 'string' ? c.text : '',
-      author: typeof c.author === 'string' ? c.author : currentAuthor(),
-      createdAt: typeof c.createdAt === 'string' ? c.createdAt : new Date().toLocaleString('ru-RU')
-    }))
+    comments.value = parsedComments.map((c, idx) => {
+      const fallbackId = typeof c.targetId === 'string'
+        ? c.targetId
+        : (c.targetId != null ? String(c.targetId) : null)
+      const target = decodeTargetId(
+        typeof c.targetId === 'string' ? c.targetId : null,
+        c.targetType,
+        fallbackId
+      )
+      const mappedTargetId = target.type === 'node'
+        ? (nodeIdMap[String(target.id)] ?? normalizeNodeId(target.id))
+        : target.id
+      const finalTargetId = encodeTargetId(target.type, mappedTargetId)
+
+      return {
+        id: c.id ?? `comment-${idx + 1}`,
+        targetId: finalTargetId,
+        offset: {
+          x: typeof c.offset?.x === 'number' ? c.offset.x : 0,
+          y: typeof c.offset?.y === 'number' ? c.offset.y : 0
+        },
+        text: typeof c.text === 'string' ? c.text : '',
+        author: typeof c.author === 'string' ? c.author : currentAuthor(),
+        createdAt: typeof c.createdAt === 'string' ? c.createdAt : new Date().toLocaleString('ru-RU')
+      }
+    })
     refreshParentBorders()
     refreshCounters()
     lastSerializedJson.value = JSON.stringify(serializeDiagram(), null, 2)
@@ -1314,8 +1385,7 @@ function addCommentForNode(nodeId: string): void {
   const offset = { x: rect.width + 12, y: 0 }
   comments.value.push({
     id: makeCommentId(),
-    targetType: 'node',
-    targetId: nodeId,
+    targetId: encodeTargetId('node', nodeId),
     offset,
     text: '',
     author: currentAuthor(),
@@ -1357,8 +1427,7 @@ function addCommentForEdge(edgeId: string): void {
   const offset = { x: 12, y: -12 }
   comments.value.push({
     id: makeCommentId(),
-    targetType: 'edge',
-    targetId: edgeId,
+    targetId: encodeTargetId('edge', edgeId),
     offset,
     text: '',
     author: currentAuthor(),
@@ -1374,8 +1443,7 @@ function addCommentOnCanvas(event: MouseEvent): void {
   const y = (event.clientY - rect.top) / scale
   comments.value.push({
     id: makeCommentId(),
-    targetType: 'canvas',
-    targetId: null,
+    targetId: encodeTargetId('canvas', null),
     offset: { x, y },
     text: '',
     author: currentAuthor(),
@@ -1387,8 +1455,10 @@ function getCommentStyle(comment: Comment) {
   let left = comment.offset.x
   let top = comment.offset.y
 
-  if (comment.targetType === 'node' && comment.targetId) {
-    const node = nodes.value.find(n => n.id === comment.targetId)
+  const { type, id } = decodeTargetId(comment.targetId)
+
+  if (type === 'node' && id) {
+    const node = nodes.value.find(n => n.id === id)
     if (node) {
       const rect = getNodeRect(node)
       left = rect.left + comment.offset.x
@@ -1396,8 +1466,8 @@ function getCommentStyle(comment: Comment) {
     }
   }
 
-  if (comment.targetType === 'edge' && comment.targetId) {
-    const edge = edges.value.find(e => e.id === comment.targetId)
+  if (type === 'edge' && id) {
+    const edge = edges.value.find(e => e.id === id)
     if (edge) {
       const anchor = getEdgeAnchor(edge)
       left = anchor.x + comment.offset.x
