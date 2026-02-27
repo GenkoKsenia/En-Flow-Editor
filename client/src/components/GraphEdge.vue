@@ -75,6 +75,8 @@ interface Props {
   forceThreeSegments?: boolean
   hasPassThroughError?: boolean
   isPassThrough?: boolean
+  errorMessage?: string | null
+  warningMessage?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -84,7 +86,9 @@ const props = withDefaults(defineProps<Props>(), {
   getConnectionPosition: () => 0.5,
   forceThreeSegments: false,
   hasPassThroughError: false,
-  isPassThrough: false
+  isPassThrough: false,
+  errorMessage: null,
+  warningMessage: null
 })
 
 const emit = defineEmits<{
@@ -92,7 +96,11 @@ const emit = defineEmits<{
   'breakpoint-drag-start': [edgeId: string, event: MouseEvent] 
 }>()
 
-const edgeTitle = computed(() => props.edge.label?.trim() ?? '')
+const edgeTitle = computed(() => {
+  if (props.errorMessage) return props.errorMessage
+  if (props.warningMessage) return props.warningMessage
+  return props.edge.label?.trim() ?? ''
+})
 const edgeLabel = computed(() => {
   const label = props.edge.label?.trim()
   return label ? label : ''

@@ -3,13 +3,10 @@
     <div class="editor-layout">
       <!-- Левая панель - редактор кода -->
       <div class="left-panel">
-        <button class="save-btn" @click="onSetCode" style="margin: 20px; padding: 10px;">
-          Отправить псевдокод
-        </button>
-
-        <button class="save-btn" @click="onGetCode" style="margin: 20px; padding: 10px;">
-          Получить псевдокод
-        </button>
+        <div class="code-actions">
+          <button class="save-btn" @click="onSetCode">Отправить псевдокод</button>
+          <button class="save-btn" @click="onGetCode">Получить псевдокод</button>
+        </div>
 
         <CodeEditor 
           v-model:content="diagramJson" 
@@ -39,10 +36,17 @@
             <button class="icon-btn" type="button" title="Хранилище данных" aria-label="Хранилище данных">
               <img src="/icon/data-store.png" alt="Хранилище данных">
             </button>
-            <button class="icon-btn" type="button" title="Комментарий" aria-label="Комментарий">
+            <button
+              class="icon-btn"
+              type="button"
+              :class="{ active: isCommentMode }"
+              @click="toggleCommentMode"
+              title="Комментарий"
+              aria-label="Комментарий"
+            >
               <img src="/icon/comment.png" alt="Комментарий">
             </button>
-            <button class="icon-btn" type="button" title="Граница системы" aria-label="Граница системы">
+            <button class="icon-btn" type="button" @click="addBoundary" title="Граница системы" aria-label="Граница системы">
               <img src="/icon/boundary.png" alt="Граница системы">
             </button>
           </div>
@@ -64,6 +68,7 @@
               :nodes="nodes"
               :edges="edges"
               :data-flows="dataFlows"
+              :comments="comments"
             />
             <button class="save-btn" @click="exportAsPng">Сохранить PNG</button>
           </div>
@@ -109,6 +114,8 @@
               :force-three-segments="edgeRequiresPassThrough[edge.id]"
               :has-pass-through-error="edgePassThroughErrors[edge.id]"
               :is-pass-through="edgeRequiresPassThrough[edge.id]"
+              :error-message="edgeErrorMessages[edge.id]"
+              :warning-message="edgeWarningMessages[edge.id]"
               @edge-click="onEdgeClick"
               @breakpoint-drag-start="onBreakpointDragStart" 
             />
@@ -131,9 +138,20 @@
               :has-data-error="nodeDataErrors[node.id]"
               :has-missing-target="nodeMissingTarget[node.id]"
               :has-forbidden-outgoing="nodeForbiddenOutgoing[node.id]"
+              :error-message="nodeErrorMessages[node.id]"
+              :warning-message="nodeWarningMessages[node.id]"
               @node-mousedown="onNodeMouseDown" 
               @node-click="onNodeClick" 
               @node-hover-side="onNodeHoverSide" 
+            />
+
+            <!-- Комментарии -->
+            <CommentBubble
+              v-for="comment in comments"
+              :key="comment.id"
+              :comment="comment"
+              :style-object="getCommentStyle(comment)"
+              @remove="removeComment"
             />
           </div>
           <div class="canvas-zoom-controls">
@@ -201,11 +219,70 @@ import ArrowDefinitions from './ArrowDefinitions.vue'
 import CodeEditor from './CodeEditor.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
 import JsonExportButton from './JsonExportButton.vue'
+import CommentBubble from './CommentBubble.vue'
 import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment, NodeLineStyle, DataFlow } from '../types'
 import * as DEFAULTS from '../constants'
 
 import axios from "axios"
 import Cookies from 'js-cookie';
+
+type CommentTarget = 'node' | 'edge' | 'canvas'
+type Comment = {
+  id: string
+  /**
+   * Encoded target: node:<id>, edge:<id> или canvas
+   */
+  targetId: string | null
+  offset: Position
+  text: string
+  author: string
+  createdAt: string
+}
+
+type SchemaComment = {
+  id?: string
+  targetId?: string | null
+  targetType?: CommentTarget
+  offset?: { x?: number; y?: number }
+  text?: string
+  author?: string
+  createdAt?: string
+}
+
+function normalizeNodeId(id: unknown): string | null {
+  if (id === null || id === undefined) return null
+  const str = String(id)
+  return str.startsWith('node-') ? str : `node-${str}`
+}
+
+function encodeTargetId(type: CommentTarget, id: string | null): string {
+  if (type === 'canvas') return 'canvas'
+  const suffix = id ?? ''
+  return `${type}:${suffix}`
+}
+
+function decodeTargetId(raw: string | null | undefined, fallbackType?: CommentTarget, fallbackId?: string | null): { type: CommentTarget; id: string | null; normalized: string } {
+  if (typeof raw === 'string') {
+    if (raw === 'canvas') return { type: 'canvas', id: null, normalized: 'canvas' }
+    if (raw.startsWith('node:')) {
+      const id = raw.slice('node:'.length) || null
+      return { type: 'node', id, normalized: encodeTargetId('node', id) }
+    }
+    if (raw.startsWith('edge:')) {
+      const id = raw.slice('edge:'.length) || null
+      return { type: 'edge', id, normalized: encodeTargetId('edge', id) }
+    }
+    // Старый формат без типа — считаем узлом
+    return { type: 'node', id: raw || null, normalized: encodeTargetId('node', raw || null) }
+  }
+
+  if (fallbackType) {
+    const encoded = encodeTargetId(fallbackType, fallbackId ?? null)
+    return { type: fallbackType, id: fallbackId ?? null, normalized: encoded }
+  }
+
+  return { type: 'canvas', id: null, normalized: 'canvas' }
+}
 
 onBeforeMount(() => {
   axios.defaults.headers.common['X-CSRFToken'] = Cookies.get("csrftoken");
@@ -252,7 +329,7 @@ async function onGetCode() {
 // Состояние
 const nodes = ref<Node[]>([
   {
-    id: '1',
+    id: 'node-1',
     position: { x: 50, y: 50 },
     text: 'Начальный узел',
     width: 150,
@@ -265,7 +342,7 @@ const nodes = ref<Node[]>([
     borderStyle: 'solid'
   },
   {
-    id: '2',
+    id: 'node-2',
     position: { x: 300, y: 150 },
     text: 'Процесс',
     width: 120,
@@ -282,8 +359,8 @@ const nodes = ref<Node[]>([
 const edges = ref<Edge[]>([
   {
     id: 'e1',
-    sourceNodeId: '1',
-    targetNodeId: '2',
+    sourceNodeId: 'node-1',
+    targetNodeId: 'node-2',
     sourceSide: 'right',
     targetSide: 'left',
     color: DEFAULTS.DEFAULT_EDGE_COLOR,
@@ -294,6 +371,12 @@ const edges = ref<Edge[]>([
 ])
 
 const dataFlows = ref<DataFlow[]>([])
+const nextNodeId = ref(3)
+const nextEdgeId = ref(2)
+const nextBoundaryId = ref(1)
+const comments = ref<Comment[]>([])
+const nextCommentId = ref(1)
+const isCommentMode = ref(false)
 
 // Вычисляем позиции для соединений на каждой стороне каждого узла
 const connectionPositions = computed(() => {
@@ -459,7 +542,15 @@ function serializeDiagram() {
       through: throughByEdgeId[edge.id] ?? [],
       breakpoints: extractBreakpoints(edge)
     })),
-    styles
+    styles,
+    comments: comments.value.map(c => ({
+      id: c.id,
+      targetId: c.targetId ?? 'canvas',
+      offset: { x: c.offset.x, y: c.offset.y },
+      text: c.text,
+      author: c.author,
+      createdAt: c.createdAt
+    }))
   }
 }
 
@@ -475,7 +566,7 @@ function updateDiagramJson(): void {
   isUpdatingFromState.value = false
 }
 
-watch([nodes, edges, dataFlows], updateDiagramJson, { deep: true, immediate: true })
+watch([nodes, edges, dataFlows, comments], updateDiagramJson, { deep: true, immediate: true })
 
 function debounceApplyFromEditor(): void {
   if (applyTimeout) {
@@ -544,8 +635,10 @@ function applyDiagramJson(raw: string): void {
     const parsedConnections: SchemaConnection[] = Array.isArray(parsed?.connections) ? parsed.connections : []
     const parsedStyles: SchemaStyles = parsed?.styles ?? null
     const parsedDataFlows: SchemaDataFlow[] = Array.isArray(parsed?.dataFlows) ? parsed.dataFlows : []
+    const parsedComments: SchemaComment[] = Array.isArray(parsed?.comments) ? parsed.comments : []
     const blockStyles: Record<string, { color?: string; border_color?: string; border_width?: number; border_radius?: number; border_style?: string }> = {}
     const connectionStyles: Record<string, { color?: string; width?: number; type?: string }> = {}
+    const nodeIdMap: Record<string, string> = {}
 
     if (parsedStyles?.blocks) {
       parsedStyles.blocks.forEach(style => {
@@ -577,7 +670,7 @@ function applyDiagramJson(raw: string): void {
     parsedConnections.forEach(conn => {
       const through = Array.isArray(conn?.through) ? conn.through : []
       through.forEach(blockId => {
-        const nodeId = String(blockId)
+        const nodeId = normalizeNodeId(blockId) ?? String(blockId)
         if (!passThroughByNode[nodeId]) passThroughByNode[nodeId] = []
         if (conn?.id) passThroughByNode[nodeId].push(String(conn.id))
       })
@@ -594,21 +687,26 @@ function applyDiagramJson(raw: string): void {
     const normalizedNodes: Node[] = parsedBlocks
       .map((b: SchemaBlock) => {
         if (!b?.id) return null
+        const rawId = String(b.id)
+        const normalizedId = normalizeNodeId(rawId)
+        if (!normalizedId) return null
+        nodeIdMap[rawId] = normalizedId
+
         const information = normalizeInformation((b as any).information)
         const style = blockStyles[String(b.id)]
         information.forEach(id => {
           const existing = dataFlowMap.get(id)
           if (existing) {
             if (!existing.startBlock) {
-              existing.startBlock = String(b.id)
+              existing.startBlock = normalizedId
             }
           } else {
-            const fallback = normalizeDataFlow({ dataKey: id, dataName: id, startBlock: b.id, finishBlocks: [] }, String(b.id))
+            const fallback = normalizeDataFlow({ dataKey: id, dataName: id, startBlock: normalizedId, finishBlocks: [] }, normalizedId)
             if (fallback) dataFlowMap.set(fallback.dataKey, fallback)
           }
         })
         return {
-          id: String(b.id),
+          id: normalizedId,
           text: b.name ?? '',
           position: {
             x: typeof b.position?.x === 'number' ? b.position.x : 0,
@@ -616,8 +714,8 @@ function applyDiagramJson(raw: string): void {
           },
           width: typeof b.width === 'number' ? b.width : 120,
           height: typeof b.height === 'number' ? b.height : 60,
-          parentId: b.parentId ?? null,
-          passThroughEdges: passThroughByNode[String(b.id)] ?? [],
+          parentId: b.parentId ? (nodeIdMap[String(b.parentId)] ?? normalizeNodeId(b.parentId)) : null,
+          passThroughEdges: passThroughByNode[normalizedId] ?? [],
           color: style?.color ?? DEFAULTS.DEFAULT_NODE_COLOR,
           borderColor: style?.border_color ?? DEFAULTS.DEFAULT_BORDER_COLOR,
           borderWidth: style?.border_width ?? DEFAULTS.DEFAULT_BORDER_WIDTH,
@@ -633,18 +731,21 @@ function applyDiagramJson(raw: string): void {
     const normalizedEdges: Edge[] = parsedConnections
       .map((c: SchemaConnection) => {
         if (!c?.id || !c?.startBlock || !c?.endBlock) return null
+        const startId = nodeIdMap[String(c.startBlock)] ?? normalizeNodeId(c.startBlock)
+        const endId = nodeIdMap[String(c.endBlock)] ?? normalizeNodeId(c.endBlock)
+        if (!startId || !endId) return null
         const style = connectionStyles[String(c.id)]
         const breakpoint = Array.isArray(c.breakpoints)
           ? (c.breakpoints as SchemaPosition[]).find(bp => typeof bp?.x === 'number' && typeof bp?.y === 'number')
           : null
         const labelRaw = (c.label ?? '').trim()
-        const label = labelRaw || generateEdgeLabel(c.startBlock, c.endBlock, existingEdgeLabels)
+        const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels)
         existingEdgeLabels.push(label)
 
         return {
           id: String(c.id),
-          sourceNodeId: String(c.startBlock),
-          targetNodeId: String(c.endBlock),
+          sourceNodeId: startId,
+          targetNodeId: endId,
           sourceSide: normalizeConnectionSide(c.startSide),
           targetSide: normalizeConnectionSide(c.endSide),
           label,
@@ -663,18 +764,57 @@ function applyDiagramJson(raw: string): void {
       })
       .filter(Boolean) as Edge[]
 
+    const normalizedDataFlows = Array.from(dataFlowMap.values()).map(flow => {
+      const start = nodeIdMap[String(flow.startBlock)] ?? normalizeNodeId(flow.startBlock)
+      const finish = Array.isArray(flow.finishBlocks)
+        ? flow.finishBlocks.map(id => nodeIdMap[String(id)] ?? normalizeNodeId(id)).filter(Boolean) as string[]
+        : []
+      return {
+        ...flow,
+        startBlock: start,
+        finishBlocks: finish
+      }
+    })
+
     nodes.value = normalizedNodes
-    dataFlows.value = Array.from(dataFlowMap.values())
+    dataFlows.value = normalizedDataFlows
     edges.value = normalizedEdges
-    // После загрузки ограничиваем payload по фактическому набору данных исходного узла
-    const dataSets = buildNodeSendableData()
+  // После загрузки ограничиваем payload по фактическому набору данных исходного узла
+  const dataSets = buildNodeSendableData()
     edges.value = edges.value.map(edge => {
       const allowed = dataSets[edge.sourceNodeId] ?? []
       const preferred = edge.dataKeys ?? allowed
       const sanitized = Array.from(new Set(preferred.filter(id => allowed.includes(id))))
       return { ...edge, dataKeys: sanitized }
     })
+    comments.value = parsedComments.map((c, idx) => {
+      const fallbackId = typeof c.targetId === 'string'
+        ? c.targetId
+        : (c.targetId != null ? String(c.targetId) : null)
+      const target = decodeTargetId(
+        typeof c.targetId === 'string' ? c.targetId : null,
+        c.targetType,
+        fallbackId
+      )
+      const mappedTargetId = target.type === 'node'
+        ? (nodeIdMap[String(target.id)] ?? normalizeNodeId(target.id))
+        : target.id
+      const finalTargetId = encodeTargetId(target.type, mappedTargetId)
+
+      return {
+        id: c.id ?? `comment-${idx + 1}`,
+        targetId: finalTargetId,
+        offset: {
+          x: typeof c.offset?.x === 'number' ? c.offset.x : 0,
+          y: typeof c.offset?.y === 'number' ? c.offset.y : 0
+        },
+        text: typeof c.text === 'string' ? c.text : '',
+        author: typeof c.author === 'string' ? c.author : currentAuthor(),
+        createdAt: typeof c.createdAt === 'string' ? c.createdAt : new Date().toLocaleString('ru-RU')
+      }
+    })
     refreshParentBorders()
+    refreshCounters()
     lastSerializedJson.value = JSON.stringify(serializeDiagram(), null, 2)
   } catch (err) {
     jsonError.value = err instanceof Error ? err.message : 'Не удалось разобрать JSON'
@@ -829,6 +969,77 @@ const nodeForbiddenOutgoing = computed(() => {
   const flags: Record<string, boolean> = {}
   nodes.value.forEach(n => { flags[n.id] = false })
   return flags
+})
+
+const nodeErrorMessages = computed<Record<string, string | null>>(() => {
+  const messages: Record<string, string | null> = {}
+  nodes.value.forEach(node => {
+    let message: string | null = null
+
+    if (nodePassThroughErrors.value[node.id]) {
+      const required = node.passThroughEdges ?? []
+      const missing = required.filter(edgeId => {
+        const edge = edges.value.find(e => e.id === edgeId)
+        if (!edge) return true
+        return !doesEdgePassThroughNode(edge, node)
+      })
+      const missingNames = missing
+        .map(edgeId => {
+          const edge = edges.value.find(e => e.id === edgeId)
+          return edge?.label?.trim() || edgeId
+        })
+        .filter(Boolean)
+      const list = missingNames.join(', ')
+      message = list
+        ? `Через блок должен проходить поток ${list}`
+        : 'Через блок должен проходить поток'
+    } else if (nodeDataErrors.value[node.id]) {
+      message = 'Данные из блока не доставлены всем получателям.'
+    }
+
+    messages[node.id] = message
+  })
+  return messages
+})
+
+const nodeWarningMessages = computed<Record<string, string | null>>(() => {
+  const messages: Record<string, string | null> = {}
+  nodes.value.forEach(node => {
+    const hasError = nodeErrorMessages.value[node.id]
+    if (!hasError && nodeMissingTarget.value[node.id]) {
+      messages[node.id] = 'Есть данные без указанного получателя.'
+    } else {
+      messages[node.id] = null
+    }
+  })
+  return messages
+})
+
+const edgeErrorMessages = computed<Record<string, string | null>>(() => {
+  const messages: Record<string, string | null> = {}
+  edges.value.forEach(edge => {
+    if (!edgePassThroughErrors.value[edge.id]) {
+      messages[edge.id] = null
+      return
+    }
+
+    const requiredBlocks = nodes.value
+      .filter(node => (node.passThroughEdges ?? []).includes(edge.id))
+      .filter(node => !doesEdgePassThroughNode(edge, node))
+      .map(node => node.text?.trim() || node.id)
+
+    const list = requiredBlocks.join(', ')
+    messages[edge.id] = list
+      ? `Поток должен проходить через блок ${list}`
+      : 'Поток должен проходить через блок'
+  })
+  return messages
+})
+
+const edgeWarningMessages = computed<Record<string, string | null>>(() => {
+  const messages: Record<string, string | null> = {}
+  edges.value.forEach(edge => { messages[edge.id] = null })
+  return messages
 })
 
 function alignAllPassThroughEdges(): void {
@@ -1115,7 +1326,7 @@ async function exportAsPng(): Promise<void> {
 // Методы
 function addNode(): void {
   const newNode: Node = {
-    id: Date.now().toString(),
+    id: `node-${nextNodeId.value++}`,
     position: { x: 100, y: 100 + nodes.value.length * 80 },
     text: `Узел ${nodes.value.length + 1}`,
     width: 120,
@@ -1124,6 +1335,154 @@ function addNode(): void {
     borderStyle: 'solid'
   }
   nodes.value.push(newNode)
+}
+
+function getNextBoundaryIndex(): number {
+  const prefix = 'Область '
+  const indices = nodes.value
+    .map(n => n.text?.startsWith(prefix) ? Number(n.text.slice(prefix.length)) : NaN)
+    .filter(num => Number.isFinite(num)) as number[]
+  return indices.length ? Math.max(...indices) + 1 : 1
+}
+
+function addBoundary(): void {
+  const index = getNextBoundaryIndex()
+  const newNode: Node = {
+    id: `boundary-${nextBoundaryId.value++}`,
+    position: { x: 80, y: 80 + nodes.value.length * 60 },
+    text: `Область ${index}`,
+    width: 180,
+    height: 150,
+    passThroughEdges: [],
+    color: DEFAULTS.DEFAULT_NODE_COLOR,
+    borderColor: DEFAULTS.DEFAULT_BORDER_COLOR,
+    borderWidth: DEFAULTS.DEFAULT_BORDER_WIDTH,
+    borderRadius: DEFAULTS.DEFAULT_BORDER_RADIUS,
+    borderStyle: 'dashed'
+  }
+  nodes.value.push(newNode)
+}
+
+function toggleCommentMode(): void {
+  isCommentMode.value = !isCommentMode.value
+  if (isCommentMode.value) {
+    resetConnectionMode()
+  }
+}
+
+function makeCommentId(): string {
+  return `comment-${nextCommentId.value++}`
+}
+
+function currentAuthor(): string {
+  return 'User'
+}
+
+function addCommentForNode(nodeId: string): void {
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (!node) return
+  const rect = getNodeRect(node)
+  const offset = { x: rect.width + 12, y: 0 }
+  comments.value.push({
+    id: makeCommentId(),
+    targetId: encodeTargetId('node', nodeId),
+    offset,
+    text: '',
+    author: currentAuthor(),
+    createdAt: new Date().toLocaleString('ru-RU')
+  })
+}
+
+function getEdgeAnchor(edge: Edge): Position {
+  const segments = getEdgeSegments(edge)
+  if (!segments.length) return { x: 0, y: 0 }
+  let total = 0
+  segments.forEach(s => { total += distance(s.start, s.end) })
+  let target = total / 2
+  for (const s of segments) {
+    const len = distance(s.start, s.end)
+    if (target <= len) {
+      const t = target / len
+      return {
+        x: s.start.x + (s.end.x - s.start.x) * t,
+        y: s.start.y + (s.end.y - s.start.y) * t
+      }
+    }
+    target -= len
+  }
+  const last = segments[segments.length - 1]
+  return last ? last.end : { x: 0, y: 0 }
+}
+
+function distance(a: Position, b: Position): number {
+  const dx = a.x - b.x
+  const dy = a.y - b.y
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+function addCommentForEdge(edgeId: string): void {
+  const edge = edges.value.find(e => e.id === edgeId)
+  if (!edge) return
+  const anchor = getEdgeAnchor(edge)
+  const offset = { x: 12, y: -12 }
+  comments.value.push({
+    id: makeCommentId(),
+    targetId: encodeTargetId('edge', edgeId),
+    offset,
+    text: '',
+    author: currentAuthor(),
+    createdAt: new Date().toLocaleString('ru-RU')
+  })
+}
+
+function addCommentOnCanvas(event: MouseEvent): void {
+  if (!canvasContent.value) return
+  const rect = canvasContent.value.getBoundingClientRect()
+  const scale = zoom.value || 1
+  const x = (event.clientX - rect.left) / scale
+  const y = (event.clientY - rect.top) / scale
+  comments.value.push({
+    id: makeCommentId(),
+    targetId: encodeTargetId('canvas', null),
+    offset: { x, y },
+    text: '',
+    author: currentAuthor(),
+    createdAt: new Date().toLocaleString('ru-RU')
+  })
+}
+
+function getCommentStyle(comment: Comment) {
+  let left = comment.offset.x
+  let top = comment.offset.y
+
+  const { type, id } = decodeTargetId(comment.targetId)
+
+  if (type === 'node' && id) {
+    const node = nodes.value.find(n => n.id === id)
+    if (node) {
+      const rect = getNodeRect(node)
+      left = rect.left + comment.offset.x
+      top = rect.top + comment.offset.y
+    }
+  }
+
+  if (type === 'edge' && id) {
+    const edge = edges.value.find(e => e.id === id)
+    if (edge) {
+      const anchor = getEdgeAnchor(edge)
+      left = anchor.x + comment.offset.x
+      top = anchor.y + comment.offset.y
+    }
+  }
+
+  return {
+    left: `${left}px`,
+    top: `${top}px`
+  }
+}
+
+function removeComment(commentId: string): void {
+  comments.value = comments.value.filter(c => c.id !== commentId)
 }
 
 // Включаем режим создания связи
@@ -1189,7 +1548,7 @@ function createConnection(
   const label = generateEdgeLabel(sourceId, targetId, edges.value.map(e => e.label ?? ''))
   const initialPayload = nodeSendableData.value[sourceId] ?? []
   const newEdge: Edge = {
-    id: `edge-${Date.now()}`,
+    id: `edge-${nextEdgeId.value++}`,
     sourceNodeId: sourceId,
     targetNodeId: targetId,
     sourceSide: sourceSide,
@@ -1206,6 +1565,11 @@ function createConnection(
 
 // Обработчик клика по холсту
 function onCanvasClick(event: MouseEvent): void {
+  if (isCommentMode.value) {
+    addCommentOnCanvas(event)
+    return
+  }
+
   // Если клик по пустому месту в режиме соединения - сбрасываем режим
   if (isConnectionMode.value && !(event.target as Element).closest('.node')) {
     resetConnectionMode()
@@ -1242,6 +1606,11 @@ function selectNode(nodeId: string): void {
 // Обработчик клика по узлу 
 function onNodeClick(nodeId: string, event: MouseEvent): void {
   event.stopPropagation()
+
+  if (isCommentMode.value) {
+    addCommentForNode(nodeId)
+    return
+  }
 
   if (isConnectionMode.value) {
     handleNodeClickInConnectionMode(nodeId) // Режим соединения
@@ -1435,7 +1804,7 @@ function startDrag(nodeId: string, event: MouseEvent): void {
 
 // Обработчик начала перетаскивания
 function onNodeMouseDown(nodeId: string, event: MouseEvent): void {
-  if (isConnectionMode.value) {
+  if (isConnectionMode.value || isCommentMode.value) {
     event.preventDefault()
     return
   }
@@ -1445,6 +1814,12 @@ function onNodeMouseDown(nodeId: string, event: MouseEvent): void {
 
 // Обработчик клика по стрелке
 function onEdgeClick(edgeId: string, event: MouseEvent): void {
+  if (isCommentMode.value) {
+    addCommentForEdge(edgeId)
+    event.stopPropagation()
+    return
+  }
+
   const edge = edges.value.find(e => e.id === edgeId)
   if (edge) {
     selectedEdgeId.value = edgeId
@@ -1737,8 +2112,51 @@ function refreshParentBorders(): void {
   })
   nodes.value.forEach(n => {
     const count = childCount[n.id] || 0
+    const isBoundary = n.text?.startsWith('Область ')
+    if (isBoundary) {
+      n.borderStyle = 'dashed'
+      return
+    }
     n.borderStyle = count > 0 ? 'dashed' : 'solid'
   })
+}
+
+function refreshCounters(): void {
+  const nodeMax = Math.max(
+    0,
+    ...nodes.value.map(n => {
+      const match = String(n.id).match(/(\d+)(?!.*\d)/)
+      return match ? Number(match[1]) : 0
+    })
+  )
+  const edgeMax = Math.max(
+    0,
+    ...edges.value.map(e => {
+      const match = String(e.id).match(/(\d+)(?!.*\d)/)
+      return match ? Number(match[1]) : 0
+    })
+  )
+  const boundaryMax = Math.max(
+    0,
+    ...nodes.value
+      .filter(n => String(n.id).startsWith('boundary-'))
+      .map(n => {
+        const match = String(n.id).match(/boundary-(\d+)/)
+        return match ? Number(match[1]) : 0
+      })
+  )
+  const commentMax = Math.max(
+    0,
+    ...comments.value.map(c => {
+      const match = String(c.id).match(/comment-(\d+)/)
+      return match ? Number(match[1]) : 0
+    })
+  )
+
+  nextNodeId.value = Math.max(nextNodeId.value, nodeMax + 1)
+  nextEdgeId.value = Math.max(nextEdgeId.value, edgeMax + 1)
+  nextBoundaryId.value = Math.max(nextBoundaryId.value, boundaryMax + 1)
+  nextCommentId.value = Math.max(nextCommentId.value, commentMax + 1)
 }
 
 function alignEdgeToNode(edge: Edge, node: Node): void {
@@ -2060,7 +2478,8 @@ function getChildrenCount(nodeId: string): number {
 
 <style scoped>
 .flow-editor {
-  height: 100vh;
+  height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -2069,6 +2488,7 @@ function getChildrenCount(nodeId: string): number {
   flex: 1;
   display: flex;
   height: 100%;
+  width: 100%;
 }
 
 .left-panel {
@@ -2077,6 +2497,28 @@ function getChildrenCount(nodeId: string): number {
   min-width: 300px;
   background: white;
   border-right: 1px solid #dee2e6;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+:deep(.code-actions) {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+:deep(.code-actions .save-btn) {
+  margin: 0;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+:deep(.code-editor-container) {
+  flex: 1;
+  min-height: 0;
 }
 
 .right-panel {

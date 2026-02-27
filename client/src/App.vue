@@ -18,7 +18,9 @@
         </div>
       </div>
     </header>
-    <FlowEditor />
+    <main class="main">
+      <FlowEditor />
+    </main>
   </div>
 </template>
 
@@ -39,6 +41,13 @@ body {
 
 #app {
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }

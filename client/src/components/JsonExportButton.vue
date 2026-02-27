@@ -56,6 +56,19 @@ type ExportPayload = {
   dataFlows: DataFlow[]
   connections: ExportConnection[]
   styles: ExportStyles
+  comments?: ExportComment[]
+}
+
+type ExportComment = {
+  id: string
+  /**
+   * Encoded target: node:<id>, edge:<id> или canvas
+   */
+  targetId: string | null
+  offset: { x: number; y: number }
+  text: string
+  author: string
+  createdAt: string
 }
 
 const props = defineProps<{
@@ -63,6 +76,7 @@ const props = defineProps<{
   edges: Edge[]
   dataFlows?: DataFlow[]
   styles?: ExportStyles
+  comments?: ExportComment[]
   fileName?: string
 }>()
 
@@ -289,7 +303,8 @@ function buildPayload(): ExportPayload {
     blocks: props.nodes.map(toExportBlock),
     dataFlows: props.dataFlows ?? [],
     connections: props.edges.map((edge) => toExportConnection(edge, throughByEdgeId, connectionPositions, props.nodes)),
-    styles
+    styles,
+    comments: props.comments ?? []
   }
 }
 
