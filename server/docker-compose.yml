@@ -1,0 +1,80 @@
+version: '3.8'
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mssql_data:
+  postgres_data:
+
+services:
+  # MS SQL Server
+  mssql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql-server
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong!Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # PostgreSQL для FastAPI
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=1
+      - POSTGRES_DB=EN_domain
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # ASP.NET Core бэкенд
+  aspnet-backend:
+    build:
+      context: ./asp-backend      # Путь к папке с .NET проектом
+      dockerfile: Dockerfile
+    container_name: aspnet-backend
+    environment:
+      # Подключение к MS SQL (по имени сервиса)
+      - ConnectionStrings__DefaultConnection=Server=mssql-server,1433;Database=redactor;User Id=sa;Password=Qwerty!2345;TrustServerCertificate=True;Encrypt=True
+      # URL для вызова FastAPI (по имени сервиса)
+      - FastApi__BaseUrl=http://fastapi-backend:8000
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "5000:8080"                   # Хост:Контейнер
+    networks:
+      - app-network
+    depends_on:
+      - mssql-server
+      - fastapi-backend
+    restart: unless-stopped
+
+  # FastAPI бэкенд
+  fastapi-backend:
+    build:
+      context: ./fastapi-backend      # Путь к папке с FastAPI проектом
+      dockerfile: Dockerfile
+    container_name: fastapi-backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:1@postgres-db:5432/EN_domain
+    ports:
+      - "8000:8000"                   # Хост:Контейнер
+    networks:
+      - app-network
+    depends_on:
+      - postgres-db
+    restart: unless-stopped
