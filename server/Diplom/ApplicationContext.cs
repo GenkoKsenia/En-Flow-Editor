@@ -1,4 +1,4 @@
-﻿using Diplom.Models;
+﻿using Diplom.Models.DB;
 using Microsoft.EntityFrameworkCore;
 
 namespace Diplom
@@ -6,7 +6,8 @@ namespace Diplom
     public class ApplicationContext : DbContext
     {
         public DbSet<Scheme> Schemes { get; set; } = null;
-        public DbSet<Models.Version> Versions { get; set; } = null;
+        public DbSet<Models.DB.Version> Versions { get; set; } = null;
+        public DbSet<Comment> Comments { get; set; } = null;
         public DbSet<Access_Right> Access_Rights { get; set; } = null;
         public DbSet<Access_User_Schema_Right> Access_User_Schema_Rights { get; set; } = null;
         public DbSet<Access_Group_Schema_Right> Access_Group_Schema_Rights { get; set; } = null;
@@ -21,10 +22,16 @@ namespace Diplom
             base.OnModelCreating(modelBuilder);
 
             //Version
-            modelBuilder.Entity<Models.Version>()
+            modelBuilder.Entity<Models.DB.Version>()
                 .HasOne(s => s.Scheme)
                 .WithMany(v => v.Versions)
                 .HasForeignKey(v => v.SchemeID);
+
+            //Comment
+            modelBuilder.Entity<Comment>()
+                .HasOne(c => c.Version)
+                .WithMany(v => v.Comments)
+                .HasForeignKey(c => c.VersionID);
 
             //Access_User_Schema_Right
             modelBuilder.Entity<Access_User_Schema_Right>()

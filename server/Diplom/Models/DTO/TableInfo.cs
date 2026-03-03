@@ -1,4 +1,4 @@
-﻿namespace Diplom.Models
+﻿namespace Diplom.Models.DTO
 {
     public class TableInfo
     {

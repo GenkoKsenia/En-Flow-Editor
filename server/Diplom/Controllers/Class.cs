@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Net.Mime;
 using System.Security.Claims;
 using System.Security.Principal;
+using System.DirectoryServices.AccountManagement;
 
 
 namespace Diplom.Controllers
@@ -39,13 +40,32 @@ namespace Diplom.Controllers
 
             var userInfo = new
             {
-                domainUser = new DomainUser { Sid = windowsIdentity.User.Value, Name = windowsIdentity.Name }, 
+                domainUser = new DomainUser { 
+                    Sid = windowsIdentity.User.Value, 
+                    Name = windowsIdentity.Name, 
+                    DisplayName = GetAdUserName(windowsIdentity.User.Value)
+                }, 
                 isAuthenticated = windowsIdentity.IsAuthenticated,
                 authenticationType = windowsIdentity.AuthenticationType,
                 groups = groups, 
             };
 
             return Ok(userInfo);
+        }
+
+        private string GetAdUserName(string Sid)
+        {
+            using (var context = new PrincipalContext(ContextType.Domain, "some.Domain"))
+            {
+                var user = UserPrincipal.FindByIdentity(context, IdentityType.Sid, Sid);
+
+                if (user == null)
+                {
+                    return "";
+                }
+
+                return user.DisplayName;
+            }
         }
     }
 
@@ -59,5 +79,6 @@ namespace Diplom.Controllers
     {
         public string Sid { get; set; }
         public string Name { get; set; }
+        public string DisplayName { get; set; }
     }
 }

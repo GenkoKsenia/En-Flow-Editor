@@ -1,10 +1,15 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Diplom.Models;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Principal;
 using System.DirectoryServices;
+using Diplom.Services;
+using System.Text.Json;
+using Diplom.Mappers;
+using Diplom.Models.DB;
+using Diplom.Models.DTO;
+using Diplom.Models.Requests;
 
 namespace Diplom.Controllers
 {
@@ -14,51 +19,45 @@ namespace Diplom.Controllers
     public class VersionController : Controller
     {
         private ApplicationContext context;
-
-        public VersionController(ApplicationContext _context)
+        private IUserContextService userContextService;
+        public VersionController(ApplicationContext _context, IUserContextService _userContextService)
         {
             context = _context;
+            userContextService = _userContextService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Models.Version>>> Get()
+        public async Task<ActionResult<IEnumerable<Models.DB.Version>>> Get()
         {
             return Ok(await context.Versions.ToListAsync());
         }
 
         [HttpGet("{schemeId}")]
-        public async Task<ActionResult<IEnumerable<Models.Version>>> GetAllVersionsByScheme(int schemeId)
+        public async Task<ActionResult<IEnumerable<VersionResponseDto>>> GetAllVersionsByScheme(int schemeId)
         {
-            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
+            string Sid = userContextService.GetCurrentUserSid();
+            var groups = userContextService.GetCurrentUserGroups();
 
-            String Sid = windowsIdentity.User.Value;
-            var groups = windowsIdentity.Groups
-                .Cast<IdentityReference>()
-                .Select(g => g.Value)
-                .ToList();
-
-            return Ok(await context.Versions
+            List<Models.DB.Version> versions = await context.Versions
                 .Include(v => v.Scheme)
                 .Include(v => v.Scheme.Access_User_Schema_Rights)
                 .Include(v => v.Scheme.Access_Group_Schema_Rights)
                 .Where(v => v.Scheme.ID == schemeId)
-                .Where(v => v.Scheme.UserID == Sid || 
+                .Where(v => v.Scheme.UserID == Sid ||
                     v.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
                     v.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
-                .ToListAsync()
+                .ToListAsync();
+
+            return Ok(
+                versions.Select(v => VersionToDtoMapper.Map(v)).ToList()
             );
         }
 
         [HttpPost("post/{schemeId}")]
-        public async Task<ActionResult<Models.Version>> Post(int schemeId, [FromBody] string code)
+        public async Task<ActionResult<VersionResponseDto>> Post(int schemeId, [FromBody] CodeRequest request)
         {
-            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
-
-            String Sid = windowsIdentity.User.Value;
-            var groups = windowsIdentity.Groups
-                .Cast<IdentityReference>()
-                .Select(g => g.Value)
-                .ToList();
+            string Sid = userContextService.GetCurrentUserSid();
+            var groups = userContextService.GetCurrentUserGroups();
 
             int editingRightLevel = 2;
 
@@ -89,28 +88,25 @@ namespace Diplom.Controllers
             if (availableScheme == null)
                 return Forbid();
 
-            Models.Version version = new Models.Version { Code = code, SchemeID = schemeId };
+            string pseudoCode = JsonSerializer.Serialize(request);
+
+            Models.DB.Version version = new Models.DB.Version { Code = pseudoCode, SchemeID = schemeId };
 
             context.Versions.Add(version);
             await context.SaveChangesAsync();
 
-            return version;
+            return VersionToDtoMapper.Map(version);
         }
 
-        [HttpPut("put/{id}-{code}")]
-        public async Task<ActionResult<Models.Version>> Put(int id, string code)
+        [HttpPut("put/{id}")]
+        public async Task<ActionResult<VersionResponseDto>> Put(int id, [FromBody] CodeRequest request)
         {
-            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
-
-            String Sid = windowsIdentity.User.Value;
-            var groups = windowsIdentity.Groups
-                .Cast<IdentityReference>()
-                .Select(g => g.Value)
-                .ToList();
+            string Sid = userContextService.GetCurrentUserSid();
+            var groups = userContextService.GetCurrentUserGroups();
 
             int editingRightLevel = 2;
 
-            Models.Version version = await context.Versions
+            Models.DB.Version version = await context.Versions
                 .Include(v => v.Scheme)
                 .Include(v => v.Scheme.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
@@ -125,24 +121,24 @@ namespace Diplom.Controllers
             if (version == null)
                 return Forbid();
 
-            version.Code = code;
+            if (version.Scheme.IsReadOnly)
+                return Forbid();
+
+            string pseudoCode = JsonSerializer.Serialize(request);
+
+            version.Code = pseudoCode;
             await context.SaveChangesAsync();
 
-            return version;
+            return VersionToDtoMapper.Map(version);
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
+            string Sid = userContextService.GetCurrentUserSid();
+            var groups = userContextService.GetCurrentUserGroups();
 
-            String Sid = windowsIdentity.User.Value;
-            var groups = windowsIdentity.Groups
-                .Cast<IdentityReference>()
-                .Select(g => g.Value)
-                .ToList();
-
-            Models.Version version = await context.Versions
+            Models.DB.Version version = await context.Versions
                 .Include(v => v.Scheme)
                 .Include(v => v.Scheme.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
@@ -155,7 +151,7 @@ namespace Diplom.Controllers
             bool hasEditingRights = version.Scheme.UserID != Sid ||
                 version.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
                 version.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel);
-
+            
             if (!hasEditingRights)
                 return Forbid();
 

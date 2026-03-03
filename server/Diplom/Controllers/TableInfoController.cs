@@ -1,4 +1,5 @@
 ﻿using Diplom.Models;
+using Diplom.Models.DTO;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;

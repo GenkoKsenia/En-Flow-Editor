@@ -1,4 +1,6 @@
-﻿using Diplom.Models;
+﻿using Diplom.Models.DB;
+using Diplom.Models.Requests;
+using Diplom.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,9 +14,11 @@ namespace Diplom.Controllers
     public class AccessGroupSchemaRightController : Controller
     {
         private ApplicationContext context;
-        public AccessGroupSchemaRightController(ApplicationContext _context)
+        private IUserContextService userContextService;
+        public AccessGroupSchemaRightController(ApplicationContext _context, IUserContextService _userContextService)
         {
             context = _context;
+            userContextService = _userContextService;
         }
 
         [HttpGet("{schemeId}")]
@@ -38,57 +42,58 @@ namespace Diplom.Controllers
         }
 
         [HttpPost("post/{schemeId}-{rightId}")]
-        public async Task<ActionResult<Access_Group_Schema_Right>> Post(int schemeId, [FromBody] string groupId, int rightId)
+        public async Task<ActionResult<Access_Group_Schema_Right>> Post(int schemeId, [FromBody] GroupAccessRequest request, int rightId)
         {
-            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
-            String Sid = windowsIdentity.User.Value;
+            string Sid = userContextService.GetCurrentUserSid();
 
             Scheme scheme = await context.Schemes.FirstOrDefaultAsync(s => s.ID == schemeId);
 
-            if (scheme.UserID == Sid)
+            if (scheme.UserID != Sid)
                 return Unauthorized();
 
-            Access_Group_Schema_Right groupRight = new Access_Group_Schema_Right { SchemeID = schemeId, GroupID = groupId, RightID = rightId };
+            Access_Group_Schema_Right groupRight = new Access_Group_Schema_Right { SchemeID = schemeId, GroupID = request.GroupId, RightID = rightId };
 
             context.Access_Group_Schema_Rights.Add(groupRight);
             await context.SaveChangesAsync();
 
-            return groupRight;
+            return await context.Access_Group_Schema_Rights
+                .Include(r => r.Access_Right)
+                .FirstOrDefaultAsync(r => r.ID == groupRight.ID);
         }
 
         [HttpPut("put/{id}-{schemeId}-{rightId}")]
-        public async Task<ActionResult<Access_Group_Schema_Right>> Put(int id, int schemeId, [FromBody] string groupId, int rightId)
+        public async Task<ActionResult<Access_Group_Schema_Right>> Put(int id, int schemeId, [FromBody] GroupAccessRequest request, int rightId)
         {
-            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
-            String Sid = windowsIdentity.User.Value;
+            string Sid = userContextService.GetCurrentUserSid();
 
             Access_Group_Schema_Right groupRight = await context.Access_Group_Schema_Rights
                 .Include(r => r.Scheme)
                 .FirstOrDefaultAsync(r => r.ID == id);
 
-            if (groupRight.Scheme.UserID == Sid)
+            if (groupRight.Scheme.UserID != Sid)
                 return Unauthorized();
 
             groupRight.SchemeID = schemeId;
-            groupRight.GroupID = groupId;
+            groupRight.GroupID = request.GroupId;
             groupRight.RightID = rightId;
 
             await context.SaveChangesAsync();
 
-            return groupRight;
+            return await context.Access_Group_Schema_Rights
+                .Include(r => r.Access_Right)
+                .FirstOrDefaultAsync(r => r.ID == groupRight.ID);
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
-            String Sid = windowsIdentity.User.Value;
+            string Sid = userContextService.GetCurrentUserSid();
 
             Access_Group_Schema_Right groupRight = await context.Access_Group_Schema_Rights
                 .Include(r => r.Scheme)
                 .FirstOrDefaultAsync(r => r.ID == id);
 
-            if (groupRight.Scheme.UserID == Sid)
+            if (groupRight.Scheme.UserID != Sid)
                 return Unauthorized();
 
             await context.Access_Group_Schema_Rights

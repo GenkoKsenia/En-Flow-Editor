@@ -2,7 +2,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
-namespace Diplom.Models
+namespace Diplom.Models.DB
 {
     public class Version
     {
@@ -12,8 +12,10 @@ namespace Diplom.Models
         [Required]
         public DateTime Date { get; set; } = DateTime.Now;
         [ForeignKey("Scheme")]
-        public int SchemeID {  get; set; }
+        public int SchemeID { get; set; }
         [JsonIgnore]
-        public virtual Scheme Scheme {  get; set; }
+        public virtual Scheme Scheme { get; set; }
+        [JsonIgnore]
+        public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
     }
 }

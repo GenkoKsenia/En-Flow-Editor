@@ -2,14 +2,30 @@ using Diplom;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
+using Diplom.Services;
+using Diplom.Hubs;
+using Diplom.Services.UserTrackers;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Настройка логирования
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(); // Логи в консоль
 
 // получаем строку подключения из файла конфигурации
 string connection = builder.Configuration.GetConnectionString("DefaultConnection");
 
 // добавляем контекст ApplicationContext в качестве сервиса в приложение
 builder.Services.AddDbContext<ApplicationContext>(options => options.UseSqlServer(connection));
+
+builder.Services.AddSignalR();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IUserContextService, UserContextService>();
+builder.Services.AddSingleton<IUserTracker, UserTracker>();
+//builder.Services.AddHostedService<VersionCreatorService>();
+
+builder.Services.AddHttpClient();
 
 /*
 builder.Services.AddDbContext<ApplicationContext>(options =>
@@ -61,5 +77,8 @@ app.UseAuthorization();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHub<SchemeHub>("/hubs/scheme");
+app.MapHub<CommentsHub>("/hubs/comments");
 
 app.Run();

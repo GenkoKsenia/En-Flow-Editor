@@ -1,21 +1,18 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
 
-namespace Diplom.Models
+namespace Diplom.Models.DB
 {
-    public class Access_Right
+    public class Scheme
     {
         [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int ID { get; set; }
         [Required]
-        public int Level {  get; set; }
+        public string Name { get; set; } = "Untitled";
+        public bool IsReadOnly { get; set; } = false;
         [Required]
-        public string Title { get; set; }
-        [JsonIgnore]
+        public string UserID { get; set; }
+        public virtual ICollection<Version> Versions { get; set; } = new List<Version>();
         public virtual ICollection<Access_User_Schema_Right> Access_User_Schema_Rights { get; set; } = new List<Access_User_Schema_Right>();
-        [JsonIgnore]
         public virtual ICollection<Access_Group_Schema_Right> Access_Group_Schema_Rights { get; set; } = new List<Access_Group_Schema_Right>();
     }
 }

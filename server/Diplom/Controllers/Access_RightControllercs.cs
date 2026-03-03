@@ -1,9 +1,10 @@
-﻿using Diplom.Models;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection.Emit;
 using System.Security.Principal;
 using Microsoft.AspNetCore.Authorization;
+using Diplom.Models.DB;
+using Diplom.Models.Requests;
 
 namespace Diplom.Controllers
 {
@@ -30,10 +31,10 @@ namespace Diplom.Controllers
             return Ok(await context.Access_Rights.FirstOrDefaultAsync(r => r.ID == id));
         }
 
-        [HttpPost("post/{level}-{title}")]
-        public async Task<Access_Right> Post(int level, string title)
+        [HttpPost("post")]
+        public async Task<Access_Right> Post([FromBody] AccessRightRequest request)
         {
-            Access_Right right = new Access_Right { Level = level, Title = title };
+            Access_Right right = new Access_Right { Level = request.level, Title = request.title };
 
             context.Access_Rights.Add(right);
             await context.SaveChangesAsync();
@@ -41,13 +42,13 @@ namespace Diplom.Controllers
             return right;
         }
 
-        [HttpPut("put/{id}-{level}-{title}")]
-        public async Task<Access_Right> Put(int id, int level, string title)
+        [HttpPut("put/{id}")]
+        public async Task<Access_Right> Put(int id, [FromBody] AccessRightRequest request)
         {
             Access_Right right = await context.Access_Rights.FirstOrDefaultAsync(r => r.ID == id);
 
-            right.Level = level;
-            right.Title = title;
+            right.Level = request.level;
+            right.Title = request.title;
 
             await context.SaveChangesAsync();
 
