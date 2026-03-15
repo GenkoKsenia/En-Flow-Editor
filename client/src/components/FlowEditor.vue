@@ -21,20 +21,20 @@
         <div class="toolbar">
           <div class="toolbar-group icon-group">
             <button class="icon-btn" type="button" @click="addNode" title="Процесс" aria-label="Процесс">
-              <img src="/icon/process.png" alt="Процесс">
+              <Square class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" @click="startConnectionMode" :class="{ active: isConnectionMode }"
               title="Поток данных" aria-label="Связь">
-              <img src="/icon/connection.png" alt="Связь">
+              <GitBranch class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" title="Внешняя система" aria-label="Внешняя система">
-              <img src="/icon/external-system.png" alt="Внешняя система">
+              <Globe class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" title="Пользователь" aria-label="Пользователь">
-              <img src="/icon/user.png" alt="Пользователь">
+              <UserRound class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" title="Хранилище данных" aria-label="Хранилище данных">
-              <img src="/icon/data-store.png" alt="Хранилище данных">
+              <Database class="toolbar-icon" />
             </button>
             <button
               class="icon-btn"
@@ -44,10 +44,10 @@
               title="Комментарий"
               aria-label="Комментарий"
             >
-              <img src="/icon/comment.png" alt="Комментарий">
+              <MessageSquare class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" @click="addBoundary" title="Граница системы" aria-label="Граница системы">
-              <img src="/icon/boundary.png" alt="Граница системы">
+              <SquareDashed class="toolbar-icon" />
             </button>
           </div>
           <div class="toolbar-right">
@@ -151,6 +151,7 @@
               :key="comment.id"
               :comment="comment"
               :style-object="getCommentStyle(comment)"
+              @drag-start="startCommentDrag"
               @remove="removeComment"
             />
           </div>
@@ -167,7 +168,9 @@
       <div class="modal-window">
         <div class="modal-header">
           <span>Команда</span>
-          <button class="close-btn" @click="showTeamModal = false" aria-label="Закрыть">×</button>
+          <button class="close-btn" @click="showTeamModal = false" aria-label="Закрыть">
+            <X :size="16" />
+          </button>
         </div>
         <div class="modal-body">
           <div class="team-section">
@@ -213,6 +216,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeMount } from 'vue'
+import { Database, GitBranch, Globe, MessageSquare, Square, SquareDashed, UserRound, X } from 'lucide-vue-next'
 import GraphNode from './GraphNode.vue'
 import GraphEdge from './GraphEdge.vue'
 import ArrowDefinitions from './ArrowDefinitions.vue'
@@ -1485,6 +1489,35 @@ function removeComment(commentId: string): void {
   comments.value = comments.value.filter(c => c.id !== commentId)
 }
 
+function startCommentDrag(commentId: string, event: MouseEvent): void {
+  const comment = comments.value.find(c => c.id === commentId)
+  if (!comment) return
+
+  const startMouseX = event.clientX
+  const startMouseY = event.clientY
+  const startOffsetX = comment.offset.x
+  const startOffsetY = comment.offset.y
+  const scale = zoom.value || 1
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const deltaX = (moveEvent.clientX - startMouseX) / scale
+    const deltaY = (moveEvent.clientY - startMouseY) / scale
+    comment.offset.x = roundCoord(startOffsetX + deltaX)
+    comment.offset.y = roundCoord(startOffsetY + deltaY)
+  }
+
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+
+  event.preventDefault()
+  event.stopPropagation()
+}
+
 // Включаем режим создания связи
 function startConnectionMode(): void {
   isConnectionMode.value = true
@@ -1565,19 +1598,29 @@ function createConnection(
 
 // Обработчик клика по холсту
 function onCanvasClick(event: MouseEvent): void {
+  const target = event.target as Element | null
+
   if (isCommentMode.value) {
+    if (
+      target?.closest('.node') ||
+      target?.closest('.edge') ||
+      target?.closest('.comment-bubble') ||
+      target?.closest('.canvas-zoom-controls')
+    ) {
+      return
+    }
     addCommentOnCanvas(event)
     return
   }
 
   // Если клик по пустому месту в режиме соединения - сбрасываем режим
-  if (isConnectionMode.value && !(event.target as Element).closest('.node')) {
+  if (isConnectionMode.value && !target?.closest('.node')) {
     resetConnectionMode()
   }
 
   // Если клик по пустому месту - сбрасываем выделение
-  if (!(event.target as Element).closest('.node') &&
-    !(event.target as Element).closest('.edge')) {
+  if (!target?.closest('.node') &&
+    !target?.closest('.edge')) {
     clearSelection()
   }
 }
@@ -2569,10 +2612,14 @@ function getChildrenCount(nodeId: string): number {
   justify-content: center;
 }
 
-.icon-btn img {
-  width: 16px;
-  height: 16px;
-  filter: invert(19%) sepia(59%) saturate(808%) hue-rotate(130deg) brightness(94%) contrast(96%);
+.toolbar-icon {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px;
+  min-height: 20px;
+  flex: 0 0 20px;
+  display: block;
+  stroke-width: 2;
 }
 
 .team-button {

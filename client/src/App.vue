@@ -1,9 +1,14 @@
 <template>
   <div id="app">
     <header class="topbar">
-      <div class="brand">
+      <button
+        class="brand"
+        type="button"
+        :class="{ clickable: currentView === 'editor' }"
+        @click="onLogoClick"
+      >
         <img src="/image/logo.png" alt="logo" class="logo" />
-      </div>
+      </button>
       <div class="user-block">
         <div class="user-avatar">
           <span class="avatar-main">OP</span>
@@ -14,18 +19,39 @@
         </div>
         <div class="user-divider"></div>
         <div class="user-actions">
-          <img src="/icon/IconExit.png" alt="exit" class="exit-icon" />
+          <LogOut class="exit-icon" :size="18" />
         </div>
       </div>
     </header>
     <main class="main">
-      <FlowEditor />
+      <SchemesListPage
+        v-if="currentView === 'schemes'"
+        @create="openEditor"
+        @open="openEditor"
+      />
+      <FlowEditor v-else />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
+import { LogOut } from 'lucide-vue-next'
 import FlowEditor from './components/FlowEditor.vue'
+import SchemesListPage from './components/SchemesListPage.vue'
+
+type ViewMode = 'schemes' | 'editor'
+
+const currentView = ref<ViewMode>('schemes')
+
+function openEditor(_schemeId?: string): void {
+  currentView.value = 'editor'
+}
+
+function onLogoClick(): void {
+  if (currentView.value !== 'editor') return
+  currentView.value = 'schemes'
+}
 </script>
 
 <style>
@@ -73,11 +99,18 @@ h1 {
   display: flex;
   align-items: center;
   height: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 .logo {
   height: 40px;
   object-fit: contain;
+}
+
+.brand.clickable {
+  cursor: pointer;
 }
 
 .user-block {
@@ -87,8 +120,8 @@ h1 {
 }
 
 .user-avatar {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   background: #c0c2c5;
   color: #fff;
   border-radius: 4px;
@@ -102,7 +135,7 @@ h1 {
 }
 
 .avatar-main {
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .avatar-sub {
@@ -120,11 +153,11 @@ h1 {
 
 .user-name {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .user-email {
-  font-size: 12px;
+  font-size: 14px;
   color: #555;
 }
 
@@ -143,5 +176,6 @@ h1 {
   width: 18px;
   height: 18px;
   opacity: 0.8;
+  color: #5e636b;
 }
 </style>
