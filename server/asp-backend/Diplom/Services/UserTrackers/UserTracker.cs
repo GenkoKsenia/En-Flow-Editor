@@ -28,13 +28,20 @@ namespace Diplom.Services.UserTrackers
 
             List<TrackedUser> schemeUsers = SchemeUpdates.CurrentConnections.GetOrAdd(schemeId, new List<TrackedUser>());
 
+            logger
+                .LogInformation($"[] Список пользователей подключения ({schemeUsers.Count} пользователей): {schemeUsers.Select(su => su.ConnectionID).ToList()}.");
+
+
             foreach (var user in schemeUsers)
             {
                 user.DateTime = sendingDateTime;
             }
 
+            logger.LogInformation($"[] Ожидание получения обновлений началось.");
+
             while (!schemeUsers.All(u => u.IsUpdatesSended))
             {
+                logger.LogInformation($"[] Всего клиентов схемы- {schemeUsers.Count}, галочек- {schemeUsers.Where(su => su.IsUpdatesSended).ToList().Count}.");
                 //задержка в секунду
                 await Task.Delay(1000);
             }
@@ -44,6 +51,8 @@ namespace Diplom.Services.UserTrackers
             {
                 user.IsUpdatesSended = false;
             }
+
+            logger.LogInformation($"[] Обновления успешно получены.");
 
             //собираем полученные изменнеия
             return GetAllUpdates(schemeId);
@@ -55,23 +64,28 @@ namespace Diplom.Services.UserTrackers
                 .TryGetValue(schemeId, out List<TrackedUser> users))
             {
                 List<HubCodeRequest> updates = users.Select(u => u.Updates).ToList();
-                
-                var hubStyles = updates
+
+                var nonNullUpdates = users
+                    .Select(u => u.Updates)
                     .Where(u => u != null)
+                    .ToList();
+
+                var hubStyles = nonNullUpdates
                     .Select(u => u.HubStyles)
+                    .Where(hs => hs != null)
                     .ToList();
 
                 return new HubCodeRequest
                 {
-                    Blocks = updates
+                    Blocks = nonNullUpdates
                         .Where(u => u.Blocks != null)
                         .SelectMany(u => u.Blocks)
                         .ToList(),
-                    DataFlows = updates
+                    DataFlows = nonNullUpdates
                         .Where(u => u.DataFlows != null)
                         .SelectMany(u => u.DataFlows)
                         .ToList(),
-                    Connections = updates
+                    Connections = nonNullUpdates
                         .Where(u => u.Connections != null)
                         .SelectMany(u => u.Connections)
                         .ToList(),
@@ -119,7 +133,7 @@ namespace Diplom.Services.UserTrackers
             return Task.CompletedTask;
         }
 
-        public void AddClient(int schemeId, string ConnectionId)
+        public Task AddClient(int schemeId, string ConnectionId)
         {
             List<TrackedUser> schemeUsers =  SchemeUpdates.CurrentConnections.GetOrAdd(schemeId, new List<TrackedUser>());
 
@@ -127,21 +141,27 @@ namespace Diplom.Services.UserTrackers
             {
                 ConnectionID = ConnectionId
             });
+
+            return Task.CompletedTask;
         }
 
-        public void DeleteClient(int schemeId, string ConnectionId)
+        public Task DeleteClient(int schemeId, string ConnectionId)
         {
             List<TrackedUser> schemeUsers = SchemeUpdates.CurrentConnections.GetOrAdd(schemeId, new List<TrackedUser>());
 
             schemeUsers.RemoveAll(su => su.ConnectionID == ConnectionId);
+
+            return Task.CompletedTask;
         }
 
-        public void DeleteClientEverywhere(string ConnectionId)
+        public Task DeleteClientEverywhere(string ConnectionId)
         {
             foreach (int schemeId in SchemeUpdates.CurrentConnections.Keys)
             {
                 DeleteClient(schemeId, ConnectionId);
             }
+
+            return Task.CompletedTask;
         }
     }
 }

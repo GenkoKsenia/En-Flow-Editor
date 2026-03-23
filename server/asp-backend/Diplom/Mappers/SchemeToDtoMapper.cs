@@ -7,13 +7,14 @@ namespace Diplom.Mappers
 {
     public class SchemeToDtoMapper
     {
-        public static SchemeResponseDto Map(Scheme scheme)
+        public static SchemeResponseDto Map(Scheme scheme, bool isFavorite)
         {
             return new SchemeResponseDto
             {
                 ID = scheme.ID,
                 Name = scheme.Name,
                 IsReadOnly = scheme.IsReadOnly,
+                isFavorite = isFavorite, 
                 UserID = scheme.UserID,
                 Versions = scheme.Versions.Select(v => new VersionResponseDto
                 {

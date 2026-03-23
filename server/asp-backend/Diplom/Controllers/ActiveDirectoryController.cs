@@ -26,7 +26,7 @@ namespace Diplom.Controllers
             var httpClient = _httpClientFactory.CreateClient();
 
             var data = await httpClient
-                .GetFromJsonAsync<IEnumerable<AdUser>>("http://fastapi-backend:8000/users");
+                .GetFromJsonAsync<IEnumerable<AdUser>>("http://127.0.0.1:8000/users");
 
             return data;
         }
@@ -37,7 +37,7 @@ namespace Diplom.Controllers
             var httpClient = _httpClientFactory.CreateClient();
 
             var data = await httpClient
-                .GetFromJsonAsync<IEnumerable<AdUser>>("http://fastapi-backend:8000/users");
+                .GetFromJsonAsync<IEnumerable<AdUser>>("http://127.0.0.1:8000/users");
 
             return data
                 .Where(d => d.Name.ToLower().Contains(displayName.ToLower()));
@@ -49,7 +49,7 @@ namespace Diplom.Controllers
             var httpClient = _httpClientFactory.CreateClient();
 
             var data = await httpClient
-                .GetFromJsonAsync<IEnumerable<AdGroup>>("http://fastapi-backend:8000/groups");
+                .GetFromJsonAsync<IEnumerable<AdGroup>>("http://127.0.0.1:8000/groups");
 
             return data;
         }
@@ -60,7 +60,7 @@ namespace Diplom.Controllers
             var httpClient = _httpClientFactory.CreateClient();
 
             var data = await httpClient
-                .GetFromJsonAsync<IEnumerable<AdGroup>>("http://fastapi-backend:8000/groups");
+                .GetFromJsonAsync<IEnumerable<AdGroup>>("http://127.0.0.1:8000/groups");
 
             return data
                 .Where(d => d.Name.ToLower().Contains(groupName.ToLower())).ToList();

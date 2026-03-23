@@ -7,9 +7,9 @@ namespace Diplom.Services.UserTrackers
 {
     public interface IUserTracker
     {
-        void AddClient(int schemeId, string ConnectionId);
-        void DeleteClient(int schemeId, string ConnectionId);
-        void DeleteClientEverywhere(string ConnectionId);
+        Task AddClient(int schemeId, string ConnectionId);
+        Task DeleteClient(int schemeId, string ConnectionId);
+        Task DeleteClientEverywhere(string ConnectionId);
         Task<HubCodeRequest> GetUpdates(int schemeId);
         Task SetUpdatesSending(int schemeId, string ConnetcionId);
         Task SetUserUpdates(int schemeId, string ConnectionId, HubCodeRequest codeRequest);

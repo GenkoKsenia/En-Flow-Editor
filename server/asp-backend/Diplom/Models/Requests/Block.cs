@@ -17,10 +17,10 @@ namespace Diplom.Models.Requests
         public Position Position { get; set; } = new();
 
         [JsonPropertyName("width")]
-        public int Width { get; set; }
+        public float Width { get; set; }
 
         [JsonPropertyName("height")]
-        public int Height { get; set; }
+        public float Height { get; set; }
 
         [JsonPropertyName("parentId")]
         public string? ParentId { get; set; }

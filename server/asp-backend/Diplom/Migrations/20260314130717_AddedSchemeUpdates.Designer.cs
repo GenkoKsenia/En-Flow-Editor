@@ -4,6 +4,7 @@ using Diplom;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Diplom.Migrations
 {
     [DbContext(typeof(ApplicationContext))]
-    partial class ApplicationContextModelSnapshot : ModelSnapshot
+    [Migration("20260314130717_AddedSchemeUpdates")]
+    partial class AddedSchemeUpdates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -135,28 +138,6 @@ namespace Diplom.Migrations
                     b.ToTable("Comments");
                 });
 
-            modelBuilder.Entity("Diplom.Models.DB.FavoriteScheme", b =>
-                {
-                    b.Property<int>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ID"));
-
-                    b.Property<int>("SchemeID")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UserID")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("SchemeID");
-
-                    b.ToTable("FavoriteSchemes");
-                });
-
             modelBuilder.Entity("Diplom.Models.DB.Scheme", b =>
                 {
                     b.Property<int>("ID")
@@ -179,6 +160,37 @@ namespace Diplom.Migrations
                     b.HasKey("ID");
 
                     b.ToTable("Schemes");
+                });
+
+            modelBuilder.Entity("Diplom.Models.DB.SchemeUpdate", b =>
+                {
+                    b.Property<int>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ID"));
+
+                    b.Property<string>("ConnectionID")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsSent")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("SchemeID")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("SendDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Updates")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("SchemeID");
+
+                    b.ToTable("SchemeUpdates");
                 });
 
             modelBuilder.Entity("Diplom.Models.DB.Version", b =>
@@ -255,10 +267,10 @@ namespace Diplom.Migrations
                     b.Navigation("Version");
                 });
 
-            modelBuilder.Entity("Diplom.Models.DB.FavoriteScheme", b =>
+            modelBuilder.Entity("Diplom.Models.DB.SchemeUpdate", b =>
                 {
                     b.HasOne("Diplom.Models.DB.Scheme", "Scheme")
-                        .WithMany("FavoriteSchemes")
+                        .WithMany("SchemeUpdates")
                         .HasForeignKey("SchemeID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -290,7 +302,7 @@ namespace Diplom.Migrations
 
                     b.Navigation("Access_User_Schema_Rights");
 
-                    b.Navigation("FavoriteSchemes");
+                    b.Navigation("SchemeUpdates");
 
                     b.Navigation("Versions");
                 });

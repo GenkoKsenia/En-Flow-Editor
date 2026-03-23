@@ -16,6 +16,7 @@ using System.Security.Principal;
 using Diplom.Models.DTO;
 using Microsoft.Extensions.Logging;
 using Diplom.Services.UserTrackers;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Diplom.Hubs
 {
@@ -69,7 +70,17 @@ namespace Diplom.Hubs
             //удалить клиента из статичной переменной
             //и удалить записи о заблокированных элементах
 
-            userTracker.DeleteClientEverywhere(Context.ConnectionId);
+            await userTracker.DeleteClientEverywhere(Context.ConnectionId);
+
+            var keysToRemove = lockedElements
+                .Where(k => k.Value.ConnectionId == Context.ConnectionId)
+                .Select(k => k.Key)
+                .ToList();
+
+            foreach (var key in keysToRemove)
+            {
+                lockedElements.TryRemove(key, out _);
+            }
 
             // SignalR сам удалит из всех групп
             await base.OnDisconnectedAsync(exception);
@@ -82,6 +93,7 @@ namespace Diplom.Hubs
 
             Scheme availableScheme = await context.Schemes
                 .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
+                .Include(s => s.FavoriteSchemes.Where(f => f.UserID == Sid))
                 .Include(s => s.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
                 .Include(s => s.Access_Group_Schema_Rights)
@@ -98,18 +110,18 @@ namespace Diplom.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, $"scheme-{schemeId}");
 
             //добавляем клиента в слежку
-            userTracker.AddClient(schemeId, Context.ConnectionId);
+            await userTracker.AddClient(schemeId, Context.ConnectionId);
 
             logger.LogInformation($"Клиент подключился к конкретной схеме- {schemeId}. ConnectionId: {Context.ConnectionId}");
-
-            return SchemeToDtoMapper.Map(availableScheme);
+            
+            return SchemeToDtoMapper.Map(availableScheme, availableScheme.FavoriteSchemes.Any());
         }
 
         public async Task LeaveScheme(int schemeId)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"scheme-{schemeId}");
 
-            userTracker.DeleteClient(schemeId, Context.ConnectionId);
+            await userTracker.DeleteClient(schemeId, Context.ConnectionId);
 
             logger.LogInformation($"Клиент отключился от конкретной схемы- {schemeId}. ConnectionId: {Context.ConnectionId}");
         }
@@ -174,7 +186,7 @@ namespace Diplom.Hubs
                     Timestamp = DateTime.UtcNow
                 });
 
-                logger.LogInformation($"Клиент отправил изменения к схеме- {schemeId}. ConnectionId: {Context.ConnectionId}");
+                logger.LogInformation($"Клиент отправил изменения к схеме- {schemeId}. ConnectionId: {Context.ConnectionId}, изменения: {JsonSerializer.Serialize(codeRequest)}");
             }
         }
 
@@ -312,6 +324,8 @@ namespace Diplom.Hubs
             }
 
             await userTracker.SetUserUpdates(schemeId, Context.ConnectionId, codeRequest);
+
+            logger.LogInformation($"Несохраненные изменения клиента ({Context.ConnectionId}) приняты! Изменения: {JsonSerializer.Serialize(codeRequest)}");
 
             await Clients.Caller.SendAsync("UpdatesSubmitted", schemeId);
         }

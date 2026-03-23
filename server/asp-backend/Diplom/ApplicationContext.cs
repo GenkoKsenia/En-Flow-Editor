@@ -11,6 +11,8 @@ namespace Diplom
         public DbSet<Access_Right> Access_Rights { get; set; } = null;
         public DbSet<Access_User_Schema_Right> Access_User_Schema_Rights { get; set; } = null;
         public DbSet<Access_Group_Schema_Right> Access_Group_Schema_Rights { get; set; } = null;
+        //public DbSet<SchemeUpdate> SchemeUpdates { get; set; } = null;
+        public DbSet<FavoriteScheme> FavoriteSchemes { get; set; } = null;
 
         public ApplicationContext(DbContextOptions<ApplicationContext> options)
             : base(options)
@@ -26,6 +28,19 @@ namespace Diplom
                 .HasOne(s => s.Scheme)
                 .WithMany(v => v.Versions)
                 .HasForeignKey(v => v.SchemeID);
+
+            // FavoriteScheme
+            modelBuilder.Entity<FavoriteScheme>()
+                .HasOne(f => f.Scheme)
+                .WithMany(s => s.FavoriteSchemes)
+                .HasForeignKey(f => f.SchemeID);
+
+            /*SchemeUpdate
+            modelBuilder.Entity<SchemeUpdate>()
+                .HasOne(su => su.Scheme)
+                .WithMany(s => s.SchemeUpdates)
+                .HasForeignKey(su => su.SchemeID);
+            */
 
             //Comment
             modelBuilder.Entity<Comment>()

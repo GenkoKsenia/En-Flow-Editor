@@ -46,15 +46,16 @@ namespace Diplom.Controllers
             string Sid = userContextService.GetCurrentUserSid();
             var groups = userContextService.GetCurrentUserGroups();
 
-            Scheme scheme =  await context.Schemes
+            Scheme scheme = await context.Schemes
                 .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
+                .Include(s => s.FavoriteSchemes.Where(f => f.UserID == Sid))
                 .Include(s => s.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
                 .Include(s => s.Access_Group_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
                 .Where(s => s.UserID == Sid ||
-                s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
-                s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
                 .FirstOrDefaultAsync(s => s.ID == id);
 
             /*
@@ -62,7 +63,7 @@ namespace Diplom.Controllers
                 return Unauthorized();
             */
 
-            return SchemeToDtoMapper.Map(scheme);
+            return SchemeToDtoMapper.Map(scheme, scheme.FavoriteSchemes.Any());
         }
 
         // TODO: в списке схем выводить основную инфу, а в выводе конкретной схемы выводить полную
@@ -72,8 +73,10 @@ namespace Diplom.Controllers
             string Sid = userContextService.GetCurrentUserSid();
             var groups = userContextService.GetCurrentUserGroups();
 
+            /*
             var schemes = await context.Schemes
                 //.Include(s => s.Versions)
+                .Include(s => s.FavoriteSchemes.Where(f => f.UserID == Sid))
                 .Include(s => s.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
                 .Include(s => s.Access_Group_Schema_Rights)
@@ -81,6 +84,23 @@ namespace Diplom.Controllers
                 .Where(s => s.UserID == Sid ||
                 s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
                 s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                .Distinct()
+                .ToListAsync();
+            */
+
+            var schemes = await context.Schemes
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                .Select(s => new SchemeDbDTO
+                {
+                    Scheme = s, 
+                    IsFavorite = s.FavoriteSchemes.Any(f => f.UserID == Sid)
+                })
                 .Distinct()
                 .ToListAsync();
 
@@ -95,7 +115,7 @@ namespace Diplom.Controllers
             }
             */
 
-            return Ok(schemes.Select(s => SchemeToDtoMapper.Map(s)));
+            return Ok(schemes.Select(s => SchemeToDtoMapper.Map(s.Scheme, s.IsFavorite)));
         }
 
         [HttpPost("post")]
@@ -118,7 +138,7 @@ namespace Diplom.Controllers
             await context.SaveChangesAsync();
 
             //return scheme;
-            return SchemeToDtoMapper.Map(scheme);
+            return SchemeToDtoMapper.Map(scheme, false);
         }
 
         [HttpPatch("patch/{id}")]
@@ -126,7 +146,9 @@ namespace Diplom.Controllers
         {
             string Sid = userContextService.GetCurrentUserSid();
 
-            Scheme scheme = await context.Schemes.FirstOrDefaultAsync(s => s.ID == id);
+            Scheme scheme = await context.Schemes
+                .Include(s => s.FavoriteSchemes.Where(f => f.UserID == Sid))
+                .FirstOrDefaultAsync(s => s.ID == id);
 
             if (scheme.UserID != Sid)
                 return Unauthorized();
@@ -135,7 +157,7 @@ namespace Diplom.Controllers
             await context.SaveChangesAsync();
 
             //return scheme;
-            return SchemeToDtoMapper.Map(scheme);
+            return SchemeToDtoMapper.Map(scheme, scheme.FavoriteSchemes.Any());
         }
 
         [HttpDelete("delete/{id}")]

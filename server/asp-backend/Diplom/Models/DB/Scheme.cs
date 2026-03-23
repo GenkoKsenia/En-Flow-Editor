@@ -14,5 +14,7 @@ namespace Diplom.Models.DB
         public virtual ICollection<Version> Versions { get; set; } = new List<Version>();
         public virtual ICollection<Access_User_Schema_Right> Access_User_Schema_Rights { get; set; } = new List<Access_User_Schema_Right>();
         public virtual ICollection<Access_Group_Schema_Right> Access_Group_Schema_Rights { get; set; } = new List<Access_Group_Schema_Right>();
+        //public virtual ICollection<SchemeUpdate> SchemeUpdates { get; set; } = new List<SchemeUpdate>();
+        public virtual ICollection<FavoriteScheme> FavoriteSchemes { get; set; } = new List<FavoriteScheme>();
     }
 }

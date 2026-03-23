@@ -8,5 +8,6 @@
         public short MaxLength { get; set; }
         public byte Precision { get; set; }
         public byte Scale { get; set; }
+        public ForeignKeyInfo? ForeignKeyInfo { get; set; }
     }
 }
