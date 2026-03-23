@@ -1,0 +1,10 @@
+.git
+.vs
+.vscode
+client
+node_modules
+server/asp-backend
+server/postgres-init
+server/fastapi-backend/__pycache__
+server/fastapi-backend/**/*.pyc
+server/fastapi-backend/.env

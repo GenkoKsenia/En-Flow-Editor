@@ -7,7 +7,6 @@ volumes:
   postgres_data:
 
 services:
-  # MS SQL Server
   mssql-server:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql-server
@@ -29,7 +28,6 @@ services:
       - app-network
     restart: unless-stopped
 
-  # PostgreSQL для FastAPI
   postgres-db:
     image: postgres:15-alpine
     container_name: postgres-db
@@ -41,7 +39,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./postgres-init:/docker-entrypoint-initdb.d
+      - ./server/postgres-init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d EN_domain"]
       interval: 10s
@@ -52,20 +50,17 @@ services:
       - app-network
     restart: unless-stopped
 
-  # ASP.NET Core бэкенд
   aspnet-backend:
     build:
-      context: ./asp-backend      # Путь к папке с .NET проектом
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./docker/asp-backend/Dockerfile
     container_name: aspnet-backend
     environment:
-      # Подключение к MS SQL (по имени сервиса) - пароль совпадает с SA_PASSWORD
       - ConnectionStrings__DefaultConnection=Server=mssql-server,1433;Database=redactor;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Encrypt=True
-      # URL для вызова FastAPI (по имени сервиса)
       - FastApi__BaseUrl=http://fastapi-backend:8000
       - ASPNETCORE_ENVIRONMENT=Development
     ports:
-      - "5000:8080"                   # Хост:Контейнер
+      - "5000:8080"
     networks:
       - app-network
     depends_on:
@@ -75,11 +70,10 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # FastAPI бэкенд
   fastapi-backend:
     build:
-      context: ./fastapi-backend      # Путь к папке с FastAPI проектом
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./docker/fastapi-backend/Dockerfile
     container_name: fastapi-backend
     environment:
       - DB_HOST=postgres-db
@@ -88,7 +82,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=1
     ports:
-      - "8000:8000"                   # Хост:Контейнер
+      - "8000:8000"
     networks:
       - app-network
     depends_on:
