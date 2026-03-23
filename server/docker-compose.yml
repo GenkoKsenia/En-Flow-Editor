@@ -1,5 +1,3 @@
-version: '3.8'
-
 networks:
   app-network:
     driver: bridge
@@ -21,6 +19,12 @@ services:
       - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${SA_PASSWORD}\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     networks:
       - app-network
     restart: unless-stopped
@@ -38,6 +42,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d EN_domain"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - app-network
     restart: unless-stopped
@@ -49,8 +59,8 @@ services:
       dockerfile: Dockerfile
     container_name: aspnet-backend
     environment:
-      # Подключение к MS SQL (по имени сервиса)
-      - ConnectionStrings__DefaultConnection=Server=mssql-server,1433;Database=redactor;User Id=sa;Password=Qwerty!2345;TrustServerCertificate=True;Encrypt=True
+      # Подключение к MS SQL (по имени сервиса) - пароль совпадает с SA_PASSWORD
+      - ConnectionStrings__DefaultConnection=Server=mssql-server,1433;Database=redactor;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;Encrypt=True
       # URL для вызова FastAPI (по имени сервиса)
       - FastApi__BaseUrl=http://fastapi-backend:8000
       - ASPNETCORE_ENVIRONMENT=Development
@@ -59,8 +69,10 @@ services:
     networks:
       - app-network
     depends_on:
-      - mssql-server
-      - fastapi-backend
+      mssql-server:
+        condition: service_healthy
+      fastapi-backend:
+        condition: service_started
     restart: unless-stopped
 
   # FastAPI бэкенд
@@ -70,11 +82,16 @@ services:
       dockerfile: Dockerfile
     container_name: fastapi-backend
     environment:
-      - DATABASE_URL=postgresql://postgres:1@postgres-db:5432/EN_domain
+      - DB_HOST=postgres-db
+      - DB_PORT=5432
+      - DB_NAME=EN_domain
+      - DB_USER=postgres
+      - DB_PASSWORD=1
     ports:
       - "8000:8000"                   # Хост:Контейнер
     networks:
       - app-network
     depends_on:
-      - postgres-db
+      postgres-db:
+        condition: service_healthy
     restart: unless-stopped

@@ -4,4 +4,3 @@ asyncpg==0.30.0
 pydantic==2.10.4
 pydantic-core==2.27.2
 python-dotenv==1.0.1
-aioodbc==3.0.0
