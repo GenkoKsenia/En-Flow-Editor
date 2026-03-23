@@ -11,6 +11,7 @@ Docker Compose теперь лежит в корне проекта: `./docker-c
 Docker-файлы вынесены в:
 - `./docker/asp-backend`
 - `./docker/fastapi-backend`
+- `./docker/vue-frontend`
 
 Запуск из корня проекта:
 
@@ -19,6 +20,7 @@ docker compose up -d --build
 ```
 
 Сервисы:
+- Vue Frontend (Vite dev): `http://localhost:5173`
 - ASP.NET Backend: `http://localhost:5000/swagger`
 - FastAPI Backend: `http://localhost:8000/docs`
 - MS SQL Server: `localhost:1433`
