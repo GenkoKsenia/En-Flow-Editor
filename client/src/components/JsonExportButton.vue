@@ -1,6 +1,6 @@
 <template>
-  <button class="save-btn" type="button" @click="exportJson" aria-label="Скачать JSON">
-    Скачать JSON
+  <button class="save-btn" type="button" @click="exportJson" :aria-label="buttonLabel">
+    {{ buttonLabel }}
   </button>
 </template>
 
@@ -78,9 +78,15 @@ const props = defineProps<{
   styles?: ExportStyles
   comments?: ExportComment[]
   fileName?: string
+  label?: string
+}>()
+
+const emit = defineEmits<{
+  exported: []
 }>()
 
 const fileName = computed(() => props.fileName ?? 'diagram.json')
+const buttonLabel = computed(() => props.label ?? 'Скачать JSON')
 
 import * as DEFAULTS from '../constants'
 
@@ -318,5 +324,6 @@ function exportJson(): void {
   link.download = fileName.value
   link.click()
   URL.revokeObjectURL(url)
+  emit('exported')
 }
 </script>

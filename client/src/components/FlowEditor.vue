@@ -63,14 +63,47 @@
               </span>
               <span class="team-label">Команда</span>
             </button>
-            <JsonExportButton
-              class="save-btn"
-              :nodes="nodes"
-              :edges="edges"
-              :data-flows="dataFlows"
-              :comments="comments"
-            />
-            <button class="save-btn" @click="exportAsPng">Сохранить PNG</button>
+            <div class="version-wrap" ref="versionMenuRef">
+              <button class="team-button version-button" type="button" @click.stop="toggleVersionMenu" aria-label="Версии">
+                <History :size="16" />
+                <span class="team-label">Версии</span>
+              </button>
+              <div v-if="isVersionMenuOpen" class="version-menu" @click.stop>
+                <input v-model="currentVersionLabel" class="version-current-input" type="text" />
+                <button class="version-pin-btn" type="button" @click="pinCurrentVersion">Зафиксировать версию</button>
+                <div class="version-list">
+                  <button
+                    v-for="version in versionHistory"
+                    :key="version.id"
+                    class="version-item"
+                    type="button"
+                    @click="openVersion(version.id)"
+                  >
+                    <div class="version-item-meta">
+                      <div class="version-item-title">{{ version.label }}</div>
+                      <div class="version-item-date">{{ version.date }}</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="download-wrap" ref="downloadMenuRef">
+              <button class="save-btn download-toggle" type="button" @click.stop="toggleDownloadMenu">
+                Скачать
+              </button>
+              <div v-if="isDownloadMenuOpen" class="download-menu" @click.stop>
+                <JsonExportButton
+                  class="download-item"
+                  :nodes="nodes"
+                  :edges="edges"
+                  :data-flows="dataFlows"
+                  :comments="comments"
+                  label="JSON"
+                  @exported="closeDownloadMenu"
+                />
+                <button class="download-item" type="button" @click="downloadPngFromMenu">PNG</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -215,8 +248,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeMount } from 'vue'
-import { Database, GitBranch, Globe, MessageSquare, Square, SquareDashed, UserRound, X } from 'lucide-vue-next'
+import { ref, computed, watch, onBeforeMount, onMounted, onBeforeUnmount } from 'vue'
+import { Database, GitBranch, Globe, History, MessageSquare, Square, SquareDashed, UserRound, X } from 'lucide-vue-next'
 import GraphNode from './GraphNode.vue'
 import GraphEdge from './GraphEdge.vue'
 import ArrowDefinitions from './ArrowDefinitions.vue'
@@ -925,6 +958,25 @@ const showDragHandles = computed((): boolean => {
   return selectedEdgeId.value !== null
 })
 
+type VersionRecord = {
+  id: string
+  label: string
+  date: string
+}
+
+const isDownloadMenuOpen = ref(false)
+const downloadMenuRef = ref<HTMLElement | null>(null)
+const isVersionMenuOpen = ref(false)
+const versionMenuRef = ref<HTMLElement | null>(null)
+const versionHistory = ref<VersionRecord[]>([
+  { id: 'v5.2', label: 'Версия 5.2 - Согласовано с ИБ', date: '22.04.2025' },
+  { id: 'v4.3', label: 'Версия 4.3 - Согласовано с ИБ', date: '22.04.2025' },
+  { id: 'v4.2', label: 'Версия 4.2 - Согласовано с ИБ', date: '22.04.2025' },
+  { id: 'v3.1', label: 'Версия 3.1 - Согласовано с ИБ', date: '22.04.2025' },
+  { id: 'v2.2', label: 'Версия 2.2 - Согласовано с ИБ', date: '22.04.2025' }
+])
+const currentVersionLabel = ref('Версия 5.3 - Финальная версия')
+
 // Computed свойство для показа подсказок
 const showConnectionHints = computed((): boolean => {
   return isConnectionMode.value
@@ -1325,6 +1377,74 @@ async function exportAsPng(): Promise<void> {
     }
     img.src = svgDataUrl
   })
+}
+
+function toggleDownloadMenu(): void {
+  closeVersionMenu()
+  isDownloadMenuOpen.value = !isDownloadMenuOpen.value
+}
+
+function closeDownloadMenu(): void {
+  isDownloadMenuOpen.value = false
+}
+
+async function downloadPngFromMenu(): Promise<void> {
+  await exportAsPng()
+  closeDownloadMenu()
+}
+
+function toggleVersionMenu(): void {
+  closeDownloadMenu()
+  isVersionMenuOpen.value = !isVersionMenuOpen.value
+}
+
+function closeVersionMenu(): void {
+  isVersionMenuOpen.value = false
+}
+
+function formatVersionDate(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}.${month}.${year}`
+}
+
+function pinCurrentVersion(): void {
+  const now = new Date()
+  const current = currentVersionLabel.value
+  const match = current.match(/Версия\s+(\d+)\.(\d+)/)
+  let major = 1
+  let minor = 0
+
+  if (match) {
+    major = Number(match[1]) || 1
+    minor = (Number(match[2]) || 0) + 1
+  }
+
+  const nextLabel = `Версия ${major}.${minor} - Финальная версия`
+  versionHistory.value.unshift({
+    id: `v${major}.${minor}-${now.getTime()}`,
+    label: currentVersionLabel.value,
+    date: formatVersionDate(now)
+  })
+  currentVersionLabel.value = nextLabel
+}
+
+function openVersion(versionId: string): void {
+  const version = versionHistory.value.find(item => item.id === versionId)
+  if (!version) return
+  currentVersionLabel.value = version.label
+  closeVersionMenu()
+}
+
+function onDocumentMouseDown(event: MouseEvent): void {
+  const target = event.target as globalThis.Node | null
+  if (isDownloadMenuOpen.value && downloadMenuRef.value && target && !downloadMenuRef.value.contains(target)) {
+    closeDownloadMenu()
+  }
+  if (isVersionMenuOpen.value && versionMenuRef.value && target && !versionMenuRef.value.contains(target)) {
+    closeVersionMenu()
+  }
 }
 
 // Методы
@@ -2515,6 +2635,14 @@ function getChildrenCount(nodeId: string): number {
   return nodes.value.filter(n => n.parentId === nodeId).length
 }
 
+onMounted(() => {
+  document.addEventListener('mousedown', onDocumentMouseDown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocumentMouseDown)
+})
+
 
 
 </script>
@@ -2647,6 +2775,59 @@ function getChildrenCount(nodeId: string): number {
   color: #ffffff !important;
 }
 
+.download-wrap {
+  position: relative;
+}
+
+.download-toggle {
+  min-width: 98px;
+}
+
+.download-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 120px;
+  border: 1px solid #d8dce3;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  z-index: 12001;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.download-item {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #066664;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #066664;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.download-item:hover {
+  background: #e6f4f1;
+}
+
+.download-menu :deep(.save-btn) {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #066664 !important;
+  border-radius: 4px;
+  background: #ffffff !important;
+  color: #066664 !important;
+  font-size: 13px;
+}
+
+.download-menu :deep(.save-btn:hover) {
+  background: #e6f4f1 !important;
+}
+
 .toolbar button:hover {
   background: #e6f4f1;
 }
@@ -2704,6 +2885,92 @@ function getChildrenCount(nodeId: string): number {
 
 .team-label {
   color: #111 !important;
+}
+
+.version-wrap {
+  position: relative;
+}
+
+.version-button {
+  min-width: 102px;
+}
+
+.version-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 304px;
+  background: #ffffff;
+  border: 1px solid #9599a3;
+  border-radius: 4px;
+  padding: 8px; 
+  z-index: 12002;
+}
+
+.version-current-input {
+  background: #ececef;
+  border: 1px solid #c3c7cf;
+  border-radius: 4px;
+  padding: 8px 10px;
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.2;
+  color: #2f3440;
+  margin-bottom: 8px;
+}
+
+.version-pin-btn {
+  border: 1px solid #066664;
+  background: #066664;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-item {
+  width: 100%;
+  border: 1px solid #a6abb4;
+  background: #f0f1f4;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  color: #2f3440;
+  cursor: pointer;
+}
+
+.version-item:hover {
+  background: #e6e8ed;
+}
+
+.version-item-meta {
+  min-width: 0;
+  text-align: left;
+}
+
+.version-item-title {
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.version-item-date {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #4d5460;
 }
 
 .team-avatars {
