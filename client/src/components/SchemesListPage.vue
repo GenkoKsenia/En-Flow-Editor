@@ -30,109 +30,127 @@
         >
           <Star :size="18" :fill="showFavoritesOnly ? 'currentColor' : 'none'" />
         </button>
-        <button class="create-btn" type="button" @click="$emit('create')">СОЗДАТЬ</button>
+        <button class="create-btn" type="button" @click="openCreateModal">СОЗДАТЬ</button>
       </div>
+      <div v-if="deleteError" class="inline-error">{{ deleteError }}</div>
 
       <div class="cards-grid">
-        <article
-          v-for="scheme in filteredSchemes"
-          :key="scheme.id"
-          class="scheme-card"
-          @click="$emit('open', scheme.id)"
-        >
-          <button
-            class="star-btn"
-            :class="{ active: scheme.favorite }"
-            type="button"
-            aria-label="Избранное"
-            @click.stop="toggleFavorite(scheme.id)"
+        <div v-if="isLoading" class="status-card">Загрузка схем...</div>
+        <div v-else-if="loadError" class="status-card status-card_error">
+          <span>{{ loadError }}</span>
+          <button class="mini-btn" type="button" @click="refetch">Повторить</button>
+        </div>
+        <div v-else-if="filteredSchemes.length === 0" class="status-card">
+          Схемы не найдены
+        </div>
+        <template v-else>
+          <article
+            v-for="scheme in filteredSchemes"
+            :key="scheme.id"
+            class="scheme-card"
+            @click="$emit('open', scheme.id)"
           >
-            <Star :size="16" :fill="scheme.favorite ? 'currentColor' : 'none'" />
-          </button>
+            <button
+              class="star-btn"
+              :class="{ active: scheme.favorite }"
+              type="button"
+              aria-label="Избранное"
+              @click.stop="toggleFavorite(scheme.id)"
+            >
+              <Star :size="16" :fill="scheme.favorite ? 'currentColor' : 'none'" />
+            </button>
 
-          <div class="preview">
-            <div class="preview-placeholder">Превью схемы</div>
-          </div>
+            <div class="preview">
+              <div class="preview-placeholder">Превью схемы</div>
+            </div>
 
-          <div class="card-footer">
-            <template v-if="editingSchemeId === scheme.id">
-              <div class="rename-inline" @click.stop>
-                <input
-                  v-model="renameDraft"
-                  class="rename-input"
-                  type="text"
-                  maxlength="120"
-                  @keydown.enter.stop.prevent="saveRename(scheme.id)"
-                  @keydown.esc.stop.prevent="cancelRename"
-                />
-                <div class="rename-actions">
-                  <button
-                    class="mini-btn primary"
-                    type="button"
-                    :disabled="!renameDraft.trim()"
-                    @click.stop="saveRename(scheme.id)"
-                  >
-                    Сохранить
-                  </button>
-                  <button class="mini-btn" type="button" @click.stop="cancelRename">Отмена</button>
-                </div>
-              </div>
-            </template>
-
-            <template v-else>
-              <div class="meta">
-                <div class="name">{{ scheme.name }}</div>
-                <div class="time">Изменено {{ formatUpdatedAt(scheme.updatedAt) }}</div>
-              </div>
-
-              <div class="menu-wrap">
-                <button
-                  class="menu-btn"
-                  type="button"
-                  aria-label="Меню"
-                  @click.stop="toggleMenu(scheme.id)"
-                >
-                  <Ellipsis :size="16" />
-                </button>
-                <div v-if="openedMenuId === scheme.id" class="menu-dropdown" @click.stop>
-                  <button class="menu-item" type="button" @click.stop="startRename(scheme.id)">
-                    <Pencil :size="14" />
-                    <span>Переименовать</span>
-                  </button>
-                  <button class="menu-item delete" type="button" @click.stop="startDeleteConfirm(scheme.id)">
-                    <Trash2 :size="14" />
-                    <span>Удалить</span>
-                  </button>
-                </div>
-                <div v-if="deletingSchemeId === scheme.id" class="delete-confirm" @click.stop>
-                  <div class="delete-confirm-text">Удалить схему?</div>
-                  <div class="delete-confirm-actions">
-                    <button class="mini-btn danger" type="button" @click.stop="confirmDelete(scheme.id)">Удалить</button>
-                    <button class="mini-btn" type="button" @click.stop="cancelDelete">Отмена</button>
+            <div class="card-footer">
+              <template v-if="editingSchemeId === scheme.id">
+                <div class="rename-inline" @click.stop>
+                  <input
+                    v-model="renameDraft"
+                    class="rename-input"
+                    type="text"
+                    maxlength="120"
+                    @keydown.enter.stop.prevent="saveRename(scheme.id)"
+                    @keydown.esc.stop.prevent="cancelRename"
+                  />
+                  <div class="rename-actions">
+                    <button
+                      class="mini-btn primary"
+                      type="button"
+                      :disabled="!renameDraft.trim()"
+                      @click.stop="saveRename(scheme.id)"
+                    >
+                      Сохранить
+                    </button>
+                    <button class="mini-btn" type="button" @click.stop="cancelRename">Отмена</button>
                   </div>
                 </div>
-              </div>
-            </template>
-          </div>
-        </article>
+              </template>
+
+              <template v-else>
+                <div class="meta">
+                  <div class="name">{{ scheme.name }}</div>
+                  <div class="time">Изменено {{ formatUpdatedAt(scheme.updatedAt) }}</div>
+                </div>
+
+                <div class="menu-wrap">
+                  <button
+                    class="menu-btn"
+                    type="button"
+                    aria-label="Меню"
+                    @click.stop="toggleMenu(scheme.id)"
+                  >
+                    <Ellipsis :size="16" />
+                  </button>
+                  <div v-if="openedMenuId === scheme.id" class="menu-dropdown" @click.stop>
+                    <button class="menu-item" type="button" @click.stop="startRename(scheme.id)">
+                      <Pencil :size="14" />
+                      <span>Переименовать</span>
+                    </button>
+                    <button class="menu-item delete" type="button" @click.stop="startDeleteConfirm(scheme.id)">
+                      <Trash2 :size="14" />
+                      <span>Удалить</span>
+                    </button>
+                  </div>
+                  <div v-if="deletingSchemeId === scheme.id" class="delete-confirm" @click.stop>
+                    <div class="delete-confirm-text">Удалить схему?</div>
+                    <div class="delete-confirm-actions">
+                      <button
+                        class="mini-btn danger"
+                        type="button"
+                        :disabled="isDeleting"
+                        @click.stop="confirmDelete(scheme.id)"
+                      >
+                        {{ isDeleting ? 'Удаление...' : 'Удалить' }}
+                      </button>
+                      <button class="mini-btn" type="button" :disabled="isDeleting" @click.stop="cancelDelete">Отмена</button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </article>
+        </template>
       </div>
     </div>
+    <CreateSchemeModal
+      :open="isCreateModalOpen"
+      @close="closeCreateModal"
+      @created="handleSchemeCreated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ArrowDown, ArrowUp, Ellipsis, Pencil, Star, Trash2 } from 'lucide-vue-next'
-
-type SchemeCard = {
-  id: string
-  name: string
-  updatedAt: string
-  favorite: boolean
-}
+import { deleteScheme } from '@/api/schemes'
+import { useSchemesList } from '@/composables/useSchemesList'
+import CreateSchemeModal from './CreateSchemeModal.vue'
 
 defineEmits<{
-  create: []
   open: [schemeId: string]
 }>()
 
@@ -144,15 +162,10 @@ const openedMenuId = ref<string | null>(null)
 const editingSchemeId = ref<string | null>(null)
 const renameDraft = ref('')
 const deletingSchemeId = ref<string | null>(null)
-
-const schemes = ref<SchemeCard[]>([
-  { id: 'scheme-1', name: 'Схема потоков данных1', updatedAt: '2026-03-10T12:00:00.000Z', favorite: true },
-  { id: 'scheme-2', name: 'Схема потоков данных1', updatedAt: '2026-03-14T08:30:00.000Z', favorite: false },
-  { id: 'scheme-3', name: 'Схема потоков данных', updatedAt: '2026-03-01T10:15:00.000Z', favorite: false },
-  { id: 'scheme-4', name: 'Схема потоков данных', updatedAt: '2026-03-12T16:40:00.000Z', favorite: false },
-  { id: 'scheme-5', name: 'Схема потоков данных', updatedAt: '2026-02-27T07:10:00.000Z', favorite: false },
-  { id: 'scheme-6', name: 'Схема потоков данных', updatedAt: '2026-03-15T06:05:00.000Z', favorite: false }
-])
+const isCreateModalOpen = ref(false)
+const isDeleting = ref(false)
+const deleteError = ref('')
+const { data: schemes, error, isLoading, refetch } = useSchemesList()
 
 const filteredSchemes = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -170,7 +183,7 @@ const filteredSchemes = computed(() => {
     })
   } else {
     list = [...list].sort((a, b) => {
-      const byTime = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+      const byTime = getUpdatedAtTimestamp(a.updatedAt) - getUpdatedAtTimestamp(b.updatedAt)
       if (byTime !== 0) return sortDirection.value === 'asc' ? byTime : -byTime
       const byName = a.name.localeCompare(b.name, 'ru')
       if (byName !== 0) return byName
@@ -181,6 +194,8 @@ const filteredSchemes = computed(() => {
   return list
 })
 
+const loadError = computed(() => error.value?.message ?? '')
+
 function toggleSortDirection(): void {
   sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
 }
@@ -189,9 +204,18 @@ function toggleFavoritesFilter(): void {
   showFavoritesOnly.value = !showFavoritesOnly.value
 }
 
-function formatUpdatedAt(isoDate: string): string {
+function getUpdatedAtTimestamp(isoDate: string | null): number {
+  if (!isoDate) return Number.NEGATIVE_INFINITY
+
   const timestamp = new Date(isoDate).getTime()
-  if (Number.isNaN(timestamp)) return '-'
+  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp
+}
+
+function formatUpdatedAt(isoDate: string | null): string {
+  if (!isoDate) return '-'
+
+  const timestamp = getUpdatedAtTimestamp(isoDate)
+  if (!Number.isFinite(timestamp)) return '-'
 
   const diffMs = timestamp - Date.now()
   const absDiff = Math.abs(diffMs)
@@ -209,6 +233,18 @@ function toggleFavorite(id: string): void {
   const item = schemes.value.find(s => s.id === id)
   if (!item) return
   item.favorite = !item.favorite
+}
+
+function openCreateModal(): void {
+  isCreateModalOpen.value = true
+}
+
+function closeCreateModal(): void {
+  isCreateModalOpen.value = false
+}
+
+async function handleSchemeCreated(): Promise<void> {
+  await refetch()
 }
 
 function toggleMenu(id: string): void {
@@ -242,22 +278,39 @@ function cancelRename(): void {
 }
 
 function startDeleteConfirm(id: string): void {
+  deleteError.value = ''
   openedMenuId.value = null
   deletingSchemeId.value = id
 }
 
 function cancelDelete(): void {
+  if (isDeleting.value) return
   deletingSchemeId.value = null
 }
 
-function confirmDelete(id: string): void {
-  schemes.value = schemes.value.filter(item => item.id !== id)
-  if (editingSchemeId.value === id) {
-    editingSchemeId.value = null
-    renameDraft.value = ''
+async function confirmDelete(id: string): Promise<void> {
+  if (isDeleting.value) return
+
+  isDeleting.value = true
+  deleteError.value = ''
+
+  try {
+    await deleteScheme(id)
+    schemes.value = schemes.value.filter(item => item.id !== id)
+
+    if (editingSchemeId.value === id) {
+      editingSchemeId.value = null
+      renameDraft.value = ''
+    }
+
+    deletingSchemeId.value = null
+    openedMenuId.value = null
+  } catch (deleteCause) {
+    console.error('Не удалось удалить схему', deleteCause)
+    deleteError.value = 'Не удалось удалить схему'
+  } finally {
+    isDeleting.value = false
   }
-  deletingSchemeId.value = null
-  openedMenuId.value = null
 }
 </script>
 
@@ -280,6 +333,16 @@ function confirmDelete(id: string): void {
   gap: 10px;
   align-items: center;
   margin-bottom: 22px;
+}
+
+.inline-error {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #e0b4b0;
+  border-radius: 4px;
+  background: #fff;
+  color: #8f2f28;
+  font-size: 13px;
 }
 
 .search-input,
@@ -348,6 +411,28 @@ function confirmDelete(id: string): void {
   grid-template-columns: repeat(auto-fit, 400px);
   justify-content: center;
   gap: 20px;
+}
+
+.status-card {
+  width: min(100%, 400px);
+  min-height: 120px;
+  margin: 0 auto;
+  border: 1px solid #cfd4dc;
+  border-radius: 4px;
+  background: #fff;
+  color: #4e5460;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+}
+
+.status-card_error {
+  border-color: #e0b4b0;
+  color: #8f2f28;
 }
 
 .scheme-card {

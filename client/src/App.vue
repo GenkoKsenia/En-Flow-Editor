@@ -26,7 +26,6 @@
     <main class="main">
       <SchemesListPage
         v-if="currentView === 'schemes'"
-        @create="openEditor"
         @open="openEditor"
       />
       <FlowEditor v-else />

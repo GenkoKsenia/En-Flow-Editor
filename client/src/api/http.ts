@@ -1,15 +1,9 @@
 import axios from 'axios'
-import Cookies from 'js-cookie'
 
-const http = axios.create({
-  baseURL: '/',
+export const http = axios.create({
+  baseURL: 'https://localhost:7018/api',
   withCredentials: true,
 })
 
-const csrfToken = Cookies.get('csrftoken')
 
-if (csrfToken) {
-  http.defaults.headers.common['X-CSRFToken'] = csrfToken
-}
 
-export default http

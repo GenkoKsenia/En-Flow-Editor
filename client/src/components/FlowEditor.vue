@@ -260,7 +260,8 @@ import CommentBubble from './CommentBubble.vue'
 import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment, NodeLineStyle, DataFlow } from '../types'
 import * as DEFAULTS from '../constants'
 
-import http from '@/api/http'
+import { getSchemeById } from '@/api/schemes'
+import { updateVersion } from '@/api/versions'
 
 type CommentTarget = 'node' | 'edge' | 'canvas'
 type Comment = {
@@ -333,23 +334,18 @@ async function onSetCode() {
   console.log("dataToSend", dataToSend);
 
   
-  await http.put("/api/Version/put/18",
-    dataToSend, 
-    {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    }
-  );
+  await updateVersion(18, dataToSend)
   
 }
 
 async function onGetCode() {
-  const r = await http.get("/api/Scheme/12");
-  console.log("полученные данные", r.data);
+  const scheme = await getSchemeById(12)
+  console.log("полученные данные", scheme);
 
-  //code.value = r.data.versions[0].code;
-  diagramJson.value = JSON.stringify(r.data.versions[0].code, null, 2);
+  const latestVersion = scheme.versions[0]
+  if (!latestVersion) return
+
+  diagramJson.value = JSON.stringify(latestVersion.code, null, 2);
 }
 
 // Состояние
