@@ -248,7 +248,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeMount, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Database, GitBranch, Globe, History, MessageSquare, Square, SquareDashed, UserRound, X } from 'lucide-vue-next'
 import GraphNode from './GraphNode.vue'
 import GraphEdge from './GraphEdge.vue'
@@ -260,8 +260,7 @@ import CommentBubble from './CommentBubble.vue'
 import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment, NodeLineStyle, DataFlow } from '../types'
 import * as DEFAULTS from '../constants'
 
-import axios from "axios"
-import Cookies from 'js-cookie';
+import http from '@/api/http'
 
 type CommentTarget = 'node' | 'edge' | 'canvas'
 type Comment = {
@@ -321,10 +320,6 @@ function decodeTargetId(raw: string | null | undefined, fallbackType?: CommentTa
   return { type: 'canvas', id: null, normalized: 'canvas' }
 }
 
-onBeforeMount(() => {
-  axios.defaults.headers.common['X-CSRFToken'] = Cookies.get("csrftoken");
-})
-
 async function onSetCode() {
 
   let dataToSend;
@@ -338,10 +333,9 @@ async function onSetCode() {
   console.log("dataToSend", dataToSend);
 
   
-  await axios.put("https://localhost:7018/api/Version/put/18", 
+  await http.put("/api/Version/put/18",
     dataToSend, 
     {
-      withCredentials: true,
       headers: {
         'Content-Type': 'application/json'
       }
@@ -351,12 +345,7 @@ async function onSetCode() {
 }
 
 async function onGetCode() {
-  const r = await axios.get(
-    "https://localhost:7018/api/Scheme/12", 
-    {
-      withCredentials: true
-    }
-  );
+  const r = await http.get("/api/Scheme/12");
   console.log("полученные данные", r.data);
 
   //code.value = r.data.versions[0].code;
