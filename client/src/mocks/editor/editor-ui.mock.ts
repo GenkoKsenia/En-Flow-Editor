@@ -1,4 +1,4 @@
-import type { TeamMember, VersionRecord } from '@/models'
+import type { TeamMember, VersionRecord } from '@/domains/editor-document'
 
 export const MOCK_CURRENT_VERSION_LABEL = 'Версия 5.3 - Финальная версия'
 export const MOCK_SHARE_LINK = 'https://example.com/share/en-flow'
