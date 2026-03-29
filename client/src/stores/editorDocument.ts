@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 
 import * as DEFAULTS from '@/constants'
 import { findFirstValidBreakpoint } from '@/api/editor-document'
+import { MOCK_CURRENT_USER_NAME } from '@/mocks'
+import { createEmptyEditorDocument } from '@/lib/editor/document/createEmptyEditorDocument'
 import { getSchemeById } from '@/api/schemes'
 import { updateVersion } from '@/api/versions'
 import type {
@@ -43,50 +45,6 @@ import {
   isHorizontalPassThroughEdge,
   isVerticalPassThroughEdge,
 } from '@/lib/editor/graph'
-
-function createDefaultNode(id: string, x: number, y: number, text: string, width: number, height: number): Node {
-  return {
-    id,
-    position: { x, y },
-    text,
-    width,
-    height,
-    passThroughEdges: [],
-    color: DEFAULTS.DEFAULT_NODE_COLOR,
-    borderColor: DEFAULTS.DEFAULT_BORDER_COLOR,
-    borderWidth: DEFAULTS.DEFAULT_BORDER_WIDTH,
-    borderRadius: DEFAULTS.DEFAULT_BORDER_RADIUS,
-    borderStyle: 'solid',
-  }
-}
-
-function createDefaultDocument() {
-  const nodes: Node[] = [
-    createDefaultNode('node-1', 50, 50, 'Начальный узел', 150, 60),
-    createDefaultNode('node-2', 300, 150, 'Процесс', 120, 60),
-  ]
-
-  const edges: Edge[] = [
-    {
-      id: 'e1',
-      sourceNodeId: 'node-1',
-      targetNodeId: 'node-2',
-      sourceSide: 'right',
-      targetSide: 'left',
-      color: DEFAULTS.DEFAULT_EDGE_COLOR,
-      width: DEFAULTS.DEFAULT_EDGE_WIDTH,
-      lineStyle: 'solid',
-      markerType: 'triangle',
-    },
-  ]
-
-  return {
-    nodes,
-    edges,
-    dataFlows: [] as DataFlow[],
-    comments: [] as EditorComment[],
-  }
-}
 
 function normalizeNodeId(id: unknown): string | null {
   if (id === null || id === undefined) return null
@@ -168,11 +126,11 @@ function normalizeDataFlow(flow: EditorDataFlowDto, fallbackStart?: string): Dat
 }
 
 function getDefaultAuthor(): string {
-  return 'User'
+  return MOCK_CURRENT_USER_NAME
 }
 
 export const useEditorDocumentStore = defineStore('editorDocument', () => {
-  const defaultDocument = createDefaultDocument()
+  const defaultDocument = createEmptyEditorDocument()
 
   const schemeId = ref<string | null>(null)
   const currentVersionId = ref<string | null>(null)
@@ -636,7 +594,7 @@ export const useEditorDocumentStore = defineStore('editorDocument', () => {
   }
 
   function resetDocument(): void {
-    const defaults = createDefaultDocument()
+    const defaults = createEmptyEditorDocument()
     currentVersionId.value = null
     nodes.value = defaults.nodes
     edges.value = defaults.edges

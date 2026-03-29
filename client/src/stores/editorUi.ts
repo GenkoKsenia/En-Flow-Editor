@@ -1,6 +1,12 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import {
+  createMockTeamMembers,
+  createMockVersionHistory,
+  MOCK_CURRENT_VERSION_LABEL,
+  MOCK_SHARE_LINK,
+} from '@/mocks'
 import type { ConnectionSide, SelectedObject, TeamMember, VersionRecord } from '@/models'
 import { useEditorDocumentStore } from './editorDocument'
 
@@ -21,21 +27,11 @@ export const useEditorUiStore = defineStore('editorUi', () => {
   const isCommentMode = ref(false)
   const isDownloadMenuOpen = ref(false)
   const isVersionMenuOpen = ref(false)
-  const versionHistory = ref<VersionRecord[]>([
-    { id: 'v5.2', label: 'Версия 5.2 - Согласовано с ИБ', date: '22.04.2025' },
-    { id: 'v4.3', label: 'Версия 4.3 - Согласовано с ИБ', date: '22.04.2025' },
-    { id: 'v4.2', label: 'Версия 4.2 - Согласовано с ИБ', date: '22.04.2025' },
-    { id: 'v3.1', label: 'Версия 3.1 - Согласовано с ИБ', date: '22.04.2025' },
-    { id: 'v2.2', label: 'Версия 2.2 - Согласовано с ИБ', date: '22.04.2025' },
-  ])
-  const currentVersionLabel = ref('Версия 5.3 - Финальная версия')
+  const versionHistory = ref<VersionRecord[]>(createMockVersionHistory())
+  const currentVersionLabel = ref(MOCK_CURRENT_VERSION_LABEL)
   const showTeamModal = ref(false)
-  const teamMembers = ref<TeamMember[]>([
-    { initials: 'OP', name: 'Иванов И.И.', email: 'ivanov@mail.ru', role: 'Редактор' },
-    { initials: 'OP', name: 'Петров П.П.', email: 'petrov@mail.ru', role: 'Чтение' },
-    { initials: 'OP', name: 'Сидоров С.С.', email: 'sidorov@mail.ru', role: 'Админ' },
-  ])
-  const shareLink = ref('https://example.com/share/en-flow')
+  const teamMembers = ref<TeamMember[]>(createMockTeamMembers())
+  const shareLink = ref(MOCK_SHARE_LINK)
   const zoom = ref(1)
 
   const MIN_ZOOM = 0.25

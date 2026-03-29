@@ -1,6 +1,7 @@
 import { storeToRefs } from 'pinia'
 import type { Ref } from 'vue'
 
+import { MOCK_CURRENT_USER_NAME } from '@/mocks'
 import { useEditorDocumentStore, useEditorUiStore } from '@/stores'
 import type { CommentTarget, EditorComment, Edge, Node, Position } from '@/models'
 type NodeRect = {
@@ -57,7 +58,7 @@ export function useFlowEditorComments({
       targetId: encodeTargetId('node', nodeId),
       offset: { x: rect.width + 12, y: 0 },
       text: '',
-      author: 'User',
+      author: MOCK_CURRENT_USER_NAME,
       createdAt: new Date().toLocaleString('ru-RU'),
     })
   }
@@ -71,7 +72,7 @@ export function useFlowEditorComments({
       targetId: encodeTargetId('edge', edgeId),
       offset: { x: 12, y: -12 },
       text: '',
-      author: 'User',
+      author: MOCK_CURRENT_USER_NAME,
       createdAt: new Date().toLocaleString('ru-RU'),
     })
   }
@@ -89,7 +90,7 @@ export function useFlowEditorComments({
         y: (event.clientY - rect.top) / scale,
       },
       text: '',
-      author: 'User',
+      author: MOCK_CURRENT_USER_NAME,
       createdAt: new Date().toLocaleString('ru-RU'),
     })
   }
