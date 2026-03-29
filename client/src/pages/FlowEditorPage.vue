@@ -21,20 +21,20 @@
         <div class="toolbar">
           <div class="toolbar-group icon-group">
             <button class="icon-btn" type="button" @click="addNode" title="Процесс" aria-label="Процесс">
-              <img src="/icon/process.png" alt="Процесс">
+              <Square class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" @click="startConnectionMode" :class="{ active: isConnectionMode }"
               title="Поток данных" aria-label="Связь">
-              <img src="/icon/connection.png" alt="Связь">
+              <GitBranch class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" title="Внешняя система" aria-label="Внешняя система">
-              <img src="/icon/external-system.png" alt="Внешняя система">
+              <Globe class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" title="Пользователь" aria-label="Пользователь">
-              <img src="/icon/user.png" alt="Пользователь">
+              <UserRound class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" title="Хранилище данных" aria-label="Хранилище данных">
-              <img src="/icon/data-store.png" alt="Хранилище данных">
+              <Database class="toolbar-icon" />
             </button>
             <button
               class="icon-btn"
@@ -44,10 +44,10 @@
               title="Комментарий"
               aria-label="Комментарий"
             >
-              <img src="/icon/comment.png" alt="Комментарий">
+              <MessageSquare class="toolbar-icon" />
             </button>
             <button class="icon-btn" type="button" @click="addBoundary" title="Граница системы" aria-label="Граница системы">
-              <img src="/icon/boundary.png" alt="Граница системы">
+              <SquareDashed class="toolbar-icon" />
             </button>
           </div>
           <div class="toolbar-right">
@@ -63,14 +63,47 @@
               </span>
               <span class="team-label">Команда</span>
             </button>
-            <JsonExportButton
-              class="save-btn"
-              :nodes="nodes"
-              :edges="edges"
-              :data-flows="dataFlows"
-              :comments="comments"
-            />
-            <button class="save-btn" @click="exportAsPng">Сохранить PNG</button>
+            <div class="version-wrap" ref="versionMenuRef">
+              <button class="team-button version-button" type="button" @click.stop="toggleVersionMenu" aria-label="Версии">
+                <History :size="16" />
+                <span class="team-label">Версии</span>
+              </button>
+              <div v-if="isVersionMenuOpen" class="version-menu" @click.stop>
+                <input v-model="currentVersionLabel" class="version-current-input" type="text" />
+                <button class="version-pin-btn" type="button" @click="pinCurrentVersion">Зафиксировать версию</button>
+                <div class="version-list">
+                  <button
+                    v-for="version in versionHistory"
+                    :key="version.id"
+                    class="version-item"
+                    type="button"
+                    @click="openVersion(version.id)"
+                  >
+                    <div class="version-item-meta">
+                      <div class="version-item-title">{{ version.label }}</div>
+                      <div class="version-item-date">{{ version.date }}</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="download-wrap" ref="downloadMenuRef">
+              <button class="save-btn download-toggle" type="button" @click.stop="toggleDownloadMenu">
+                Скачать
+              </button>
+              <div v-if="isDownloadMenuOpen" class="download-menu" @click.stop>
+                <JsonExportButton
+                  class="download-item"
+                  :nodes="nodes"
+                  :edges="edges"
+                  :data-flows="dataFlows"
+                  :comments="comments"
+                  label="JSON"
+                  @exported="closeDownloadMenu"
+                />
+                <button class="download-item" type="button" @click="downloadPngFromMenu">PNG</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -151,6 +184,7 @@
               :key="comment.id"
               :comment="comment"
               :style-object="getCommentStyle(comment)"
+              @drag-start="startCommentDrag"
               @remove="removeComment"
             />
           </div>
@@ -167,7 +201,9 @@
       <div class="modal-window">
         <div class="modal-header">
           <span>Команда</span>
-          <button class="close-btn" @click="showTeamModal = false" aria-label="Закрыть">×</button>
+          <button class="close-btn" @click="showTeamModal = false" aria-label="Закрыть">
+            <X :size="16" />
+          </button>
         </div>
         <div class="modal-body">
           <div class="team-section">
@@ -212,19 +248,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeMount } from 'vue'
-import GraphNode from './GraphNode.vue'
-import GraphEdge from './GraphEdge.vue'
-import ArrowDefinitions from './ArrowDefinitions.vue'
-import CodeEditor from './CodeEditor.vue'
-import PropertiesPanel from './PropertiesPanel.vue'
-import JsonExportButton from './JsonExportButton.vue'
-import CommentBubble from './CommentBubble.vue'
-import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment, NodeLineStyle, DataFlow } from '../types'
-import * as DEFAULTS from '../constants'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { Database, GitBranch, Globe, History, MessageSquare, Square, SquareDashed, UserRound, X } from 'lucide-vue-next'
+import GraphNode from '@/components/GraphNode.vue'
+import GraphEdge from '@/components/GraphEdge.vue'
+import ArrowDefinitions from '@/components/ArrowDefinitions.vue'
+import CodeEditor from '@/components/CodeEditor.vue'
+import PropertiesPanel from '@/components/PropertiesPanel.vue'
+import JsonExportButton from '@/components/JsonExportButton.vue'
+import CommentBubble from '@/components/CommentBubble.vue'
+import type { Node, Edge, ConnectionSide, EdgeGeometry, Position, Segment, NodeLineStyle, DataFlow } from '@/types'
+import * as DEFAULTS from '@/constants'
 
-import axios from "axios"
-import Cookies from 'js-cookie';
+import { getSchemeById } from '@/api/schemes'
+import { updateVersion } from '@/api/versions'
+
+const props = defineProps<{
+  schemeId?: string | null
+}>()
 
 type CommentTarget = 'node' | 'edge' | 'canvas'
 type Comment = {
@@ -284,11 +325,12 @@ function decodeTargetId(raw: string | null | undefined, fallbackType?: CommentTa
   return { type: 'canvas', id: null, normalized: 'canvas' }
 }
 
-onBeforeMount(() => {
-  axios.defaults.headers.common['X-CSRFToken'] = Cookies.get("csrftoken");
-})
-
 async function onSetCode() {
+  if (!currentVersionId.value) {
+    await onGetCode()
+  }
+
+  if (!currentVersionId.value) return
 
   let dataToSend;
   if (typeof diagramJson.value === 'string') {
@@ -301,32 +343,32 @@ async function onSetCode() {
   console.log("dataToSend", dataToSend);
 
   
-  await axios.put("https://localhost:7018/api/Version/put/18", 
-    dataToSend, 
-    {
-      withCredentials: true,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    }
-  );
+  await updateVersion(currentVersionId.value, dataToSend)
   
 }
 
 async function onGetCode() {
-  const r = await axios.get(
-    "https://localhost:7018/api/Scheme/12", 
-    {
-      withCredentials: true
-    }
-  );
-  console.log("полученные данные", r.data);
+  if (!props.schemeId) {
+    currentVersionId.value = null
+    return
+  }
 
-  //code.value = r.data.versions[0].code;
-  diagramJson.value = JSON.stringify(r.data.versions[0].code, null, 2);
+  const scheme = await getSchemeById(props.schemeId)
+  console.log("полученные данные", scheme);
+
+  const latestVersion = scheme.versions[0]
+  if (!latestVersion) {
+    currentVersionId.value = null
+    return
+  }
+
+  currentVersionId.value = latestVersion.id
+
+  diagramJson.value = JSON.stringify(latestVersion.code, null, 2);
 }
 
 // Состояние
+const currentVersionId = ref<string | null>(null)
 const nodes = ref<Node[]>([
   {
     id: 'node-1',
@@ -567,6 +609,14 @@ function updateDiagramJson(): void {
 }
 
 watch([nodes, edges, dataFlows, comments], updateDiagramJson, { deep: true, immediate: true })
+
+watch(
+  () => props.schemeId,
+  () => {
+    void onGetCode()
+  },
+  { immediate: true },
+)
 
 function debounceApplyFromEditor(): void {
   if (applyTimeout) {
@@ -920,6 +970,25 @@ const isConnectionTarget = computed(() => (nodeId: string) => {
 const showDragHandles = computed((): boolean => {
   return selectedEdgeId.value !== null
 })
+
+type VersionRecord = {
+  id: string
+  label: string
+  date: string
+}
+
+const isDownloadMenuOpen = ref(false)
+const downloadMenuRef = ref<HTMLElement | null>(null)
+const isVersionMenuOpen = ref(false)
+const versionMenuRef = ref<HTMLElement | null>(null)
+const versionHistory = ref<VersionRecord[]>([
+  { id: 'v5.2', label: 'Версия 5.2 - Согласовано с ИБ', date: '22.04.2025' },
+  { id: 'v4.3', label: 'Версия 4.3 - Согласовано с ИБ', date: '22.04.2025' },
+  { id: 'v4.2', label: 'Версия 4.2 - Согласовано с ИБ', date: '22.04.2025' },
+  { id: 'v3.1', label: 'Версия 3.1 - Согласовано с ИБ', date: '22.04.2025' },
+  { id: 'v2.2', label: 'Версия 2.2 - Согласовано с ИБ', date: '22.04.2025' }
+])
+const currentVersionLabel = ref('Версия 5.3 - Финальная версия')
 
 // Computed свойство для показа подсказок
 const showConnectionHints = computed((): boolean => {
@@ -1323,6 +1392,74 @@ async function exportAsPng(): Promise<void> {
   })
 }
 
+function toggleDownloadMenu(): void {
+  closeVersionMenu()
+  isDownloadMenuOpen.value = !isDownloadMenuOpen.value
+}
+
+function closeDownloadMenu(): void {
+  isDownloadMenuOpen.value = false
+}
+
+async function downloadPngFromMenu(): Promise<void> {
+  await exportAsPng()
+  closeDownloadMenu()
+}
+
+function toggleVersionMenu(): void {
+  closeDownloadMenu()
+  isVersionMenuOpen.value = !isVersionMenuOpen.value
+}
+
+function closeVersionMenu(): void {
+  isVersionMenuOpen.value = false
+}
+
+function formatVersionDate(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}.${month}.${year}`
+}
+
+function pinCurrentVersion(): void {
+  const now = new Date()
+  const current = currentVersionLabel.value
+  const match = current.match(/Версия\s+(\d+)\.(\d+)/)
+  let major = 1
+  let minor = 0
+
+  if (match) {
+    major = Number(match[1]) || 1
+    minor = (Number(match[2]) || 0) + 1
+  }
+
+  const nextLabel = `Версия ${major}.${minor} - Финальная версия`
+  versionHistory.value.unshift({
+    id: `v${major}.${minor}-${now.getTime()}`,
+    label: currentVersionLabel.value,
+    date: formatVersionDate(now)
+  })
+  currentVersionLabel.value = nextLabel
+}
+
+function openVersion(versionId: string): void {
+  const version = versionHistory.value.find(item => item.id === versionId)
+  if (!version) return
+  currentVersionLabel.value = version.label
+  closeVersionMenu()
+}
+
+function onDocumentMouseDown(event: MouseEvent): void {
+  const target = event.target as globalThis.Node | null
+  if (isDownloadMenuOpen.value && downloadMenuRef.value && target && !downloadMenuRef.value.contains(target)) {
+    closeDownloadMenu()
+  }
+  if (isVersionMenuOpen.value && versionMenuRef.value && target && !versionMenuRef.value.contains(target)) {
+    closeVersionMenu()
+  }
+}
+
 // Методы
 function addNode(): void {
   const newNode: Node = {
@@ -1485,6 +1622,35 @@ function removeComment(commentId: string): void {
   comments.value = comments.value.filter(c => c.id !== commentId)
 }
 
+function startCommentDrag(commentId: string, event: MouseEvent): void {
+  const comment = comments.value.find(c => c.id === commentId)
+  if (!comment) return
+
+  const startMouseX = event.clientX
+  const startMouseY = event.clientY
+  const startOffsetX = comment.offset.x
+  const startOffsetY = comment.offset.y
+  const scale = zoom.value || 1
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const deltaX = (moveEvent.clientX - startMouseX) / scale
+    const deltaY = (moveEvent.clientY - startMouseY) / scale
+    comment.offset.x = roundCoord(startOffsetX + deltaX)
+    comment.offset.y = roundCoord(startOffsetY + deltaY)
+  }
+
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+
+  event.preventDefault()
+  event.stopPropagation()
+}
+
 // Включаем режим создания связи
 function startConnectionMode(): void {
   isConnectionMode.value = true
@@ -1565,19 +1731,29 @@ function createConnection(
 
 // Обработчик клика по холсту
 function onCanvasClick(event: MouseEvent): void {
+  const target = event.target as Element | null
+
   if (isCommentMode.value) {
+    if (
+      target?.closest('.node') ||
+      target?.closest('.edge') ||
+      target?.closest('.comment-bubble') ||
+      target?.closest('.canvas-zoom-controls')
+    ) {
+      return
+    }
     addCommentOnCanvas(event)
     return
   }
 
   // Если клик по пустому месту в режиме соединения - сбрасываем режим
-  if (isConnectionMode.value && !(event.target as Element).closest('.node')) {
+  if (isConnectionMode.value && !target?.closest('.node')) {
     resetConnectionMode()
   }
 
   // Если клик по пустому месту - сбрасываем выделение
-  if (!(event.target as Element).closest('.node') &&
-    !(event.target as Element).closest('.edge')) {
+  if (!target?.closest('.node') &&
+    !target?.closest('.edge')) {
     clearSelection()
   }
 }
@@ -2472,6 +2648,14 @@ function getChildrenCount(nodeId: string): number {
   return nodes.value.filter(n => n.parentId === nodeId).length
 }
 
+onMounted(() => {
+  document.addEventListener('mousedown', onDocumentMouseDown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocumentMouseDown)
+})
+
 
 
 </script>
@@ -2569,10 +2753,14 @@ function getChildrenCount(nodeId: string): number {
   justify-content: center;
 }
 
-.icon-btn img {
-  width: 16px;
-  height: 16px;
-  filter: invert(19%) sepia(59%) saturate(808%) hue-rotate(130deg) brightness(94%) contrast(96%);
+.toolbar-icon {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px;
+  min-height: 20px;
+  flex: 0 0 20px;
+  display: block;
+  stroke-width: 2;
 }
 
 .team-button {
@@ -2598,6 +2786,59 @@ function getChildrenCount(nodeId: string): number {
 .save-btn:hover {
   background: #044746 !important;
   color: #ffffff !important;
+}
+
+.download-wrap {
+  position: relative;
+}
+
+.download-toggle {
+  min-width: 98px;
+}
+
+.download-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 120px;
+  border: 1px solid #d8dce3;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  z-index: 12001;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.download-item {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #066664;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #066664;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.download-item:hover {
+  background: #e6f4f1;
+}
+
+.download-menu :deep(.save-btn) {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #066664 !important;
+  border-radius: 4px;
+  background: #ffffff !important;
+  color: #066664 !important;
+  font-size: 13px;
+}
+
+.download-menu :deep(.save-btn:hover) {
+  background: #e6f4f1 !important;
 }
 
 .toolbar button:hover {
@@ -2657,6 +2898,92 @@ function getChildrenCount(nodeId: string): number {
 
 .team-label {
   color: #111 !important;
+}
+
+.version-wrap {
+  position: relative;
+}
+
+.version-button {
+  min-width: 102px;
+}
+
+.version-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 304px;
+  background: #ffffff;
+  border: 1px solid #9599a3;
+  border-radius: 4px;
+  padding: 8px; 
+  z-index: 12002;
+}
+
+.version-current-input {
+  background: #ececef;
+  border: 1px solid #c3c7cf;
+  border-radius: 4px;
+  padding: 8px 10px;
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.2;
+  color: #2f3440;
+  margin-bottom: 8px;
+}
+
+.version-pin-btn {
+  border: 1px solid #066664;
+  background: #066664;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-item {
+  width: 100%;
+  border: 1px solid #a6abb4;
+  background: #f0f1f4;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  color: #2f3440;
+  cursor: pointer;
+}
+
+.version-item:hover {
+  background: #e6e8ed;
+}
+
+.version-item-meta {
+  min-width: 0;
+  text-align: left;
+}
+
+.version-item-title {
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.version-item-date {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #4d5460;
 }
 
 .team-avatars {
