@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 
-import type { Node, Position } from '@/types'
+import type { Node, Position } from '@/models'
 
 type UseFlowEditorPngExportOptions = {
   canvasContent: Ref<HTMLElement | null>

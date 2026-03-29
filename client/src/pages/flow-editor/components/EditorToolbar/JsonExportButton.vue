@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ConnectionSide, Edge, Node, Position, Segment, NodeLineStyle, DataFlow } from '@/types'
+import type { ConnectionSide, DataFlow, Edge, Node, NodeLineStyle, Position, Segment } from '@/models'
 import UiButton from '@/components/ui/UiButton.vue'
 
 type ExportBlock = {

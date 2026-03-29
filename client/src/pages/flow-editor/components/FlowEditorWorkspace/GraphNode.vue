@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { Node, ConnectionSide, Position } from '@/types'
+import type { ConnectionSide, Node, Position } from '@/models'
 
 interface Props {
   node: Node

@@ -1,10 +1,8 @@
 import { storeToRefs } from 'pinia'
 import type { Ref } from 'vue'
 
-import { useEditorDocumentStore, useEditorUiStore, type EditorComment } from '@/stores'
-import type { Node, Edge, Position } from '@/types'
-
-type CommentTarget = 'node' | 'edge' | 'canvas'
+import { useEditorDocumentStore, useEditorUiStore } from '@/stores'
+import type { CommentTarget, EditorComment, Edge, Node, Position } from '@/models'
 type NodeRect = {
   left: number
   top: number

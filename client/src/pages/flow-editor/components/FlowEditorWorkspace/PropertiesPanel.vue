@@ -277,8 +277,7 @@ import { computed } from 'vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
-import type { Node, Edge, LineStyle, DataFlow } from '@/types'
-import type { SelectedObject } from '@/stores'
+import type { DataFlow, Edge, LineStyle, Node, SelectedObject } from '@/models'
 
 interface Props {
   selectedObject?: SelectedObject | null

@@ -1,19 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import type { ConnectionSide, Edge, EdgeGeometry, Node } from '@/models'
+import type { ConnectionSide, SelectedObject, TeamMember, VersionRecord } from '@/models'
 import { useEditorDocumentStore } from './editorDocument'
-
-export type SelectedObject =
-  | { type: 'node'; data: Node }
-  | { type: 'edge'; data: Edge; geometry?: EdgeGeometry }
-  | null
-
-type VersionRecord = {
-  id: string
-  label: string
-  date: string
-}
 
 export const useEditorUiStore = defineStore('editorUi', () => {
   const documentStore = useEditorDocumentStore()
@@ -41,7 +30,7 @@ export const useEditorUiStore = defineStore('editorUi', () => {
   ])
   const currentVersionLabel = ref('Версия 5.3 - Финальная версия')
   const showTeamModal = ref(false)
-  const teamMembers = ref([
+  const teamMembers = ref<TeamMember[]>([
     { initials: 'OP', name: 'Иванов И.И.', email: 'ivanov@mail.ru', role: 'Редактор' },
     { initials: 'OP', name: 'Петров П.П.', email: 'petrov@mail.ru', role: 'Чтение' },
     { initials: 'OP', name: 'Сидоров С.С.', email: 'sidorov@mail.ru', role: 'Админ' },

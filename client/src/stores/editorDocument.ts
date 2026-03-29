@@ -2,12 +2,23 @@ import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import * as DEFAULTS from '@/constants'
+import { findFirstValidBreakpoint } from '@/api/editor-document'
 import { getSchemeById } from '@/api/schemes'
 import { updateVersion } from '@/api/versions'
 import type {
+  EditorBlockDto,
+  EditorConnectionDto,
+  EditorDataFlowDto,
+  EditorDocumentDto,
+  EditorDocumentPositionDto,
+  EditorStylesDto,
+} from '@/api/editor-document'
+import type {
+  CommentTarget,
   ConnectionSide,
   DataFlow,
   Edge,
+  EditorComment,
   Node,
   NodeLineStyle,
   Position,
@@ -32,78 +43,6 @@ import {
   isHorizontalPassThroughEdge,
   isVerticalPassThroughEdge,
 } from '@/lib/editor/graph'
-
-type CommentTarget = 'node' | 'edge' | 'canvas'
-
-export interface EditorComment {
-  id: string
-  targetId: string | null
-  offset: Position
-  text: string
-  author: string
-  createdAt: string
-}
-
-type SchemaPosition = { x: number; y: number }
-type SchemaBlock = {
-  id: string
-  name: string
-  information?: unknown
-  position?: SchemaPosition
-  width?: number
-  height?: number
-  parentId?: string | null
-}
-type SchemaConnection = {
-  id: string
-  startBlock?: string | null
-  endBlock?: string | null
-  startSide?: ConnectionSide | null
-  endSide?: ConnectionSide | null
-  label?: string | null
-  dataKeys?: unknown
-  through?: unknown
-  breakpoints?: unknown
-}
-type SchemaDataFlow = {
-  dataKey?: unknown
-  dataName?: unknown
-  startBlock?: unknown
-  finishBlocks?: unknown
-}
-type SchemaComment = {
-  id?: string
-  targetId?: string | null
-  targetType?: CommentTarget
-  offset?: { x?: number; y?: number }
-  text?: string
-  author?: string
-  createdAt?: string
-}
-type SchemaStyles = {
-  blocks?: Array<{
-    element_id?: string
-    color?: string
-    border_color?: string
-    border_width?: number
-    border_radius?: number
-    border_style?: string
-  }>
-  connections?: Array<{
-    element_id?: string
-    color?: string
-    width?: number
-    type?: string
-  }>
-} | null
-
-type ParsedDocument = {
-  blocks?: SchemaBlock[]
-  dataFlows?: SchemaDataFlow[]
-  connections?: SchemaConnection[]
-  styles?: SchemaStyles
-  comments?: SchemaComment[]
-}
 
 function createDefaultNode(id: string, x: number, y: number, text: string, width: number, height: number): Node {
   return {
@@ -205,7 +144,7 @@ function normalizeInformation(info: unknown): string[] {
   return []
 }
 
-function normalizeDataFlow(flow: SchemaDataFlow, fallbackStart?: string): DataFlow | null {
+function normalizeDataFlow(flow: EditorDataFlowDto, fallbackStart?: string): DataFlow | null {
   const keyRaw = (flow as any)?.dataKey ?? (flow as any)?.id ?? (flow as any)?.key
   if (!keyRaw) return null
 
@@ -287,7 +226,7 @@ export const useEditorDocumentStore = defineStore('editorDocument', () => {
     }
   }
 
-  function extractBreakpoints(edge: Edge): SchemaPosition[] {
+  function extractBreakpoints(edge: Edge): EditorDocumentPositionDto[] {
     if (typeof edge.breakpointX === 'number' && typeof edge.breakpointY === 'number') {
       return [{ x: edge.breakpointX, y: edge.breakpointY }]
     }
@@ -498,10 +437,10 @@ export const useEditorDocumentStore = defineStore('editorDocument', () => {
     return candidate
   }
 
-  function applyParsedDiagram(parsed: ParsedDocument): void {
+  function applyParsedDiagram(parsed: EditorDocumentDto): void {
     const parsedBlocks = Array.isArray(parsed.blocks) ? parsed.blocks : []
     const parsedConnections = Array.isArray(parsed.connections) ? parsed.connections : []
-    const parsedStyles: SchemaStyles = parsed.styles ?? null
+    const parsedStyles: EditorStylesDto | null = parsed.styles ?? null
     const parsedDataFlows = Array.isArray(parsed.dataFlows) ? parsed.dataFlows : []
     const parsedComments = Array.isArray(parsed.comments) ? parsed.comments : []
     const blockStyles: Record<string, { color?: string; border_color?: string; border_width?: number; border_radius?: number; border_style?: string }> = {}
@@ -604,9 +543,7 @@ export const useEditorDocumentStore = defineStore('editorDocument', () => {
         if (!startId || !endId) return null
 
         const style = connectionStyles[String(connection.id)]
-        const breakpoint = Array.isArray(connection.breakpoints)
-          ? (connection.breakpoints as SchemaPosition[]).find(point => typeof point?.x === 'number' && typeof point?.y === 'number')
-          : null
+        const breakpoint = findFirstValidBreakpoint(connection.breakpoints)
         const labelRaw = (connection.label ?? '').trim()
         const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels)
         existingEdgeLabels.push(label)
@@ -685,7 +622,7 @@ export const useEditorDocumentStore = defineStore('editorDocument', () => {
   function applyJson(raw: string): void {
     jsonError.value = null
     try {
-      const parsed = JSON.parse(raw) as ParsedDocument
+      const parsed = JSON.parse(raw) as EditorDocumentDto
       applyParsedDiagram(parsed)
     } catch (error) {
       jsonError.value = error instanceof Error ? error.message : 'Не удалось разобрать JSON'
@@ -754,16 +691,16 @@ export const useEditorDocumentStore = defineStore('editorDocument', () => {
 
   function applyRemoteChanges(changes: SchemeHubCodeRequest): void {
     const current = serializeDocument()
-    const nextStyles = (changes.styles ?? {}) as NonNullable<SchemaStyles>
-    const merged: ParsedDocument = {
-      blocks: Array.isArray(changes.blocks) ? changes.blocks as SchemaBlock[] : current.blocks,
-      dataFlows: Array.isArray(changes.dataFlows) ? changes.dataFlows as SchemaDataFlow[] : current.dataFlows,
-      connections: Array.isArray(changes.connections) ? changes.connections as SchemaConnection[] : current.connections,
+    const nextStyles = (changes.styles ?? {}) as EditorStylesDto
+    const merged: EditorDocumentDto = {
+      blocks: Array.isArray(changes.blocks) ? changes.blocks as EditorBlockDto[] : current.blocks,
+      dataFlows: Array.isArray(changes.dataFlows) ? changes.dataFlows as EditorDataFlowDto[] : current.dataFlows,
+      connections: Array.isArray(changes.connections) ? changes.connections as EditorConnectionDto[] : current.connections,
       comments: current.comments,
       styles: {
         ...(current.styles ?? {}),
         ...nextStyles,
-      } as SchemaStyles,
+      },
     }
 
     applyParsedDiagram(merged)

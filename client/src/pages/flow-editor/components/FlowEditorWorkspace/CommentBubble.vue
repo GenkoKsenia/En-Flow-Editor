@@ -18,24 +18,10 @@
 
 <script setup lang="ts">
 import { X } from 'lucide-vue-next'
-import type { Position } from '@/types'
-
-type CommentTarget = 'node' | 'edge' | 'canvas'
-
-interface Comment {
-  id: string
-  /**
-   * Encoded target: node:<id>, edge:<id> или canvas
-   */
-  targetId: string | null
-  offset: Position
-  text: string
-  author: string
-  createdAt: string
-}
+import type { EditorComment } from '@/models'
 
 interface Props {
-  comment: Comment
+  comment: EditorComment
   styleObject?: Record<string, string>
 }
 

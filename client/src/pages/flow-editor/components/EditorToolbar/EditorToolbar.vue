@@ -113,22 +113,7 @@ import { Database, GitBranch, Globe, History, MessageSquare, Square, SquareDashe
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import JsonExportButton from './JsonExportButton.vue'
-import type { DataFlow, Edge, Node, Position } from '@/models'
-
-type EditorComment = {
-  id: string
-  targetId: string | null
-  offset: Position
-  text: string
-  author: string
-  createdAt: string
-}
-
-type VersionRecord = {
-  id: string
-  label: string
-  date: string
-}
+import type { DataFlow, Edge, EditorComment, Node, VersionRecord } from '@/models'
 
 defineProps<{
   nodesCount: number

@@ -2,7 +2,7 @@ import { computed, type ComputedRef } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import { useEditorDocumentStore, useEditorUiStore } from '@/stores'
-import type { ConnectionSide } from '@/types'
+import type { ConnectionSide } from '@/models'
 
 type UseFlowEditorConnectionsOptions = {
   nodeSendableData: ComputedRef<Record<string, string[]>>

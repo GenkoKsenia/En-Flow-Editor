@@ -1,5 +1,5 @@
 import { useEditorDocumentStore, useEditorUiStore } from '@/stores'
-import type { DataFlow, Edge, Node } from '@/types'
+import type { DataFlow, Edge, Node } from '@/models'
 
 export function useFlowEditorActions() {
   const documentStore = useEditorDocumentStore()

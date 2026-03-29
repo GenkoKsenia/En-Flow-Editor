@@ -63,7 +63,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Edge, Node, ConnectionSide, Position, Segment, EdgeGeometry } from '@/types'
+import type { ConnectionSide, Edge, EdgeGeometry, Node, Position, Segment } from '@/models'
 
 interface Props {
   edge: Edge

@@ -8,7 +8,7 @@ import { useFlowGraphView } from '@/composables/useFlowGraphView'
 import { useNodeDrag } from '@/composables/useNodeDrag'
 import { clampBreakpointX, clampBreakpointY } from '@/lib/editor/layout'
 import { useEditorDocumentStore, useEditorUiStore } from '@/stores'
-import type { Edge, Node } from '@/types'
+import type { Edge, Node } from '@/models'
 
 import { useFlowEditorActions } from './useFlowEditorActions'
 import { useFlowEditorComments } from './useFlowEditorComments'
