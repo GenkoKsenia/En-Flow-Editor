@@ -36,7 +36,7 @@ import { ref, watch } from 'vue'
 
 import { createScheme } from '@/api/schemes'
 
-import BaseModal from './BaseModal.vue'
+import BaseModal from './ui/BaseModal.vue'
 
 const props = defineProps<{
   open: boolean
