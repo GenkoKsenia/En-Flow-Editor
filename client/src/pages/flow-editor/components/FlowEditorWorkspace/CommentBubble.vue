@@ -18,7 +18,7 @@
 
 <script setup lang="ts">
 import { X } from 'lucide-vue-next'
-import type { Position } from '../types'
+import type { Position } from '@/types'
 
 type CommentTarget = 'node' | 'edge' | 'canvas'
 

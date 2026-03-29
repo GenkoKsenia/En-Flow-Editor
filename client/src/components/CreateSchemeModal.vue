@@ -2,11 +2,11 @@
   <BaseModal :open="open" title="Создать схему" width="440px" @close="onClose">
     <form class="create-form" @submit.prevent="submit">
       <label class="field-label" for="scheme-name">Название схемы</label>
-      <input
+      <UiInput
         id="scheme-name"
         v-model="schemeName"
-        class="name-input"
         type="text"
+        block
         maxlength="120"
         placeholder="Введите название"
         :disabled="isSubmitting"
@@ -16,17 +16,17 @@
     </form>
 
     <template #footer>
-      <button class="action-btn secondary" type="button" :disabled="isSubmitting" @click="onClose">
+      <UiButton variant="neutral" size="sm" :disabled="isSubmitting" @click="onClose">
         Отмена
-      </button>
-      <button
-        class="action-btn primary"
-        type="button"
+      </UiButton>
+      <UiButton
+        variant="primary"
+        size="sm"
         :disabled="isSubmitting || !schemeName.trim()"
         @click="submit"
       >
         {{ isSubmitting ? 'Создание...' : 'Создать' }}
-      </button>
+      </UiButton>
     </template>
   </BaseModal>
 </template>
@@ -36,6 +36,8 @@ import { ref, watch } from 'vue'
 
 import { createScheme } from '@/api/schemes'
 
+import UiButton from './ui/UiButton.vue'
+import UiInput from './ui/UiInput.vue'
 import BaseModal from './ui/BaseModal.vue'
 
 const props = defineProps<{
@@ -99,20 +101,6 @@ async function submit(): Promise<void> {
   color: #39414d;
 }
 
-.name-input {
-  width: 100%;
-  height: 38px;
-  border: 1px solid #cfd4dc;
-  border-radius: 6px;
-  padding: 0 12px;
-  font-size: 14px;
-  color: #2f3440;
-}
-
-.name-input:disabled {
-  background: #f4f5f7;
-}
-
 .submit-error {
   padding: 10px 12px;
   border: 1px solid #e0b4b0;
@@ -122,29 +110,7 @@ async function submit(): Promise<void> {
   font-size: 13px;
 }
 
-.action-btn {
+:deep(.ui-button) {
   min-width: 110px;
-  height: 34px;
-  border-radius: 6px;
-  padding: 0 14px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.action-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.action-btn.secondary {
-  border: 1px solid #d1d6de;
-  background: #fff;
-  color: #4e5460;
-}
-
-.action-btn.primary {
-  border: none;
-  background: #006b65;
-  color: #fff;
 }
 </style>

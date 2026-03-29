@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import AppLayout from '@/components/layouts/AppLayout.vue'
-import FlowEditorPage from '@/pages/FlowEditorPage.vue'
+import FlowEditorPage from '@/pages/flow-editor/index.vue'
 import SchemesListPage from '@/pages/schemes-list/index.vue'
 
 const router = createRouter({
@@ -24,9 +24,6 @@ const router = createRouter({
           path: 'schemes/:schemeId',
           name: 'scheme-editor',
           component: FlowEditorPage,
-          props: (route) => ({
-            schemeId: String(route.params.schemeId),
-          }),
         },
       ],
     },

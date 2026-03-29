@@ -17,25 +17,26 @@
     <div class="card-footer">
       <template v-if="isEditing">
         <div class="rename-inline" @click.stop>
-          <input
-            :value="renameDraft"
-            class="rename-input"
+          <UiInput
+            :model-value="renameDraft"
             type="text"
+            size="sm"
+            block
             maxlength="120"
-            @input="onRenameInput"
+            @update:model-value="$emit('update:renameDraft', String($event))"
             @keydown.enter.stop.prevent="$emit('save-rename', scheme.id)"
             @keydown.esc.stop.prevent="$emit('cancel-rename')"
           />
           <div class="rename-actions">
-            <button
-              class="mini-btn primary"
-              type="button"
+            <UiButton
+              size="sm"
+              variant="outline"
               :disabled="!renameDraft.trim()"
               @click.stop="$emit('save-rename', scheme.id)"
             >
               Сохранить
-            </button>
-            <button class="mini-btn" type="button" @click.stop="$emit('cancel-rename')">Отмена</button>
+            </UiButton>
+            <UiButton size="sm" variant="neutral" @click.stop="$emit('cancel-rename')">Отмена</UiButton>
           </div>
         </div>
       </template>
@@ -68,22 +69,22 @@
           <div v-if="isDeleteConfirmOpen" class="delete-confirm" @click.stop>
             <div class="delete-confirm-text">Удалить схему?</div>
             <div class="delete-confirm-actions">
-              <button
-                class="mini-btn danger"
-                type="button"
+              <UiButton
+                size="sm"
+                variant="danger-outline"
                 :disabled="isDeleting"
                 @click.stop="$emit('confirm-delete', scheme.id)"
               >
                 {{ isDeleting ? 'Удаление...' : 'Удалить' }}
-              </button>
-              <button
-                class="mini-btn"
-                type="button"
+              </UiButton>
+              <UiButton
+                size="sm"
+                variant="neutral"
                 :disabled="isDeleting"
                 @click.stop="$emit('cancel-delete')"
               >
                 Отмена
-              </button>
+              </UiButton>
             </div>
           </div>
         </div>
@@ -95,6 +96,8 @@
 <script setup lang="ts">
 import { Ellipsis, Pencil, Star, Trash2 } from 'lucide-vue-next'
 
+import UiButton from '@/components/ui/UiButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import type { SchemeCard } from '@/models'
 
 defineProps<{
@@ -118,10 +121,6 @@ const emit = defineEmits<{
   'confirm-delete': [schemeId: string]
   'cancel-delete': []
 }>()
-
-function onRenameInput(event: Event): void {
-  emit('update:renameDraft', (event.target as HTMLInputElement).value)
-}
 
 function formatUpdatedAt(isoDate: string | null): string {
   if (!isoDate) return '-'
@@ -209,44 +208,9 @@ function formatUpdatedAt(isoDate: string | null): string {
   gap: 8px;
 }
 
-.rename-input {
-  width: 100%;
-  height: 30px;
-  border: 1px solid #cfd4dc;
-  border-radius: 4px;
-  padding: 0 8px;
-  font-size: 13px;
-  color: #2f3440;
-}
-
 .rename-actions {
   display: flex;
   gap: 6px;
-}
-
-.mini-btn {
-  border: 1px solid #d1d6de;
-  background: #fff;
-  color: #4e5460;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.mini-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.mini-btn.primary {
-  border-color: #066664;
-  color: #066664;
-}
-
-.mini-btn.danger {
-  border-color: #b43b33;
-  color: #b43b33;
 }
 
 .meta {
