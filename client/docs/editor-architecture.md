@@ -1,524 +1,343 @@
 # Архитектура фронтенда
 
-## Зачем это нужно
+## Назначение документа
 
-Сейчас проект уже вышел из стадии, где можно спокойно жить с папками вида:
+Этот документ описывает текущую структуру клиентской части и правила, по которым мы раскладываем код.
 
-- `api/`
-- `models/`
-- `stores/`
-- `lib/`
-- `composables/`
+Цель:
 
-в отрыве от предметной области.
+- быстро объяснить новым участникам проекта, где что лежит;
+- зафиксировать границы между domain, presentation и shared;
+- уменьшить хаос при дальнейшем развитии редактора;
+- дать единые правила, куда добавлять новый код.
 
-На практике это приводит к тому, что код одной сущности размазывается по всему `src`, а дальше становится тяжело понять:
+Документ описывает **текущее состояние проекта** и принятые архитектурные решения. Это не миграционный лог и не список временных задач.
 
-- что относится к домену;
-- что относится к presentation;
-- что является общим shared-слоем;
-- где лежит временный мок;
-- где DTO, а где внутренняя модель приложения.
+## Верхнеуровневая структура
 
-Наша цель:
-
-- разделить код не только по техническим папкам, но и по ответственности;
-- держать `components` вне доменов;
-- не тащить UI-логику в domain-слой;
-- сделать структуру, в которой по пути файла сразу понятно, что это за код.
-
-## Базовая модель слоев
-
-Мы фиксируем три верхнеуровневых слоя:
-
-1. `domains/`
-2. `presentation/` и `components/`
-3. `shared/`
-
-### 1. `domains/`
-
-Это предметная логика.
-
-Сюда относится все, что описывает сущность или подсистему:
-
-- models;
-- DTO;
-- store;
-- api;
-- mappers;
-- mocks;
-- pure business helpers;
-- правила и инварианты данных.
-
-Важно:
-
-- домен не равен компоненту;
-- домен не должен знать про DOM;
-- домен не должен знать про `MouseEvent`, `HTMLElement`, `ref` на canvas и прочую UI-механику.
-
-### 2. `presentation/` и `components/`
-
-Это presentation layer.
-
-Сюда относится все, что отвечает за:
-
-- композицию экрана;
-- рендер;
-- обработку DOM-событий;
-- page-level orchestration;
-- wiring между store/composables и шаблоном.
-
-Важно:
-
-- page-level composables тоже могут быть presentation;
-- не каждый `composable` является доменом;
-- не каждый `lib` является доменом.
-
-Если код работает с:
-
-- `MouseEvent`;
-- `WheelEvent`;
-- `HTMLElement`;
-- `SVGElement`;
-- canvas refs;
-- router navigation;
-- layout рендера;
-
-то это почти наверняка presentation, а не domain.
-
-### 3. `shared/`
-
-Это общий слой, который не принадлежит конкретному домену и не является page presentation.
-
-Сюда относятся:
-
-- `presentation/ui`;
-- `presentation/layouts`;
-- базовый `http` клиент;
-- очень общие composables вроде `useAsyncData`;
-- общие типы/утилиты, если они реально не привязаны к одному домену.
-
-## Главное правило
-
-Код мы классифицируем не по имени папки и не по типу файла, а по ответственности.
-
-### Это domain
-
-- хранит business state;
-- описывает сущности;
-- меняет документ;
-- сериализует и десериализует данные;
-- инкапсулирует правила редактора;
-- работает с transport contract;
-- используется в нескольких presentation-местах как предметная логика.
-
-### Это presentation
-
-- связывает стор и шаблон;
-- обрабатывает клики и drag;
-- знает про canvas;
-- знает про меню, панель, модалку, тулбар;
-- обслуживает конкретную страницу;
-- подготавливает данные для рендера.
-
-### Это shared
-
-- не привязано к одному домену;
-- не является бизнес-логикой;
-- не зависит от одной страницы;
-- можно переиспользовать без знания предметной области.
-
-## Что не считаем доменом
-
-Не являются доменами:
-
-- `FlowEditorWorkspace.vue`
-- `GraphNode.vue`
-- `GraphEdge.vue`
-- `PropertiesPanel.vue`
-- `TeamModal.vue`
-- `SchemeCardItem.vue`
-- page-level composables для drag/canvas/menu orchestration
-
-Даже если внутри них много кода, это все равно presentation.
-
-## Целевые домены проекта
-
-На текущем этапе проект естественно делится на такие домены:
-
-### 1. `schemes`
-
-Сюда логично собрать:
-
-- список схем;
-- получение схемы;
-- создание схемы;
-- удаление схемы;
-- модели `Scheme`, `SchemeCard`, `SchemeVersion`;
-- DTO и mapper.
-
-### 2. `editor-document`
-
-Это основной домен редактора.
-
-Сюда логично собрать:
-
-- документ схемы;
-- JSON DTO документа;
-- store документа;
-- правила построения/нормализации документа;
-- сохранение версии;
-- операции над узлами, ребрами, data flows и comments;
-- document mocks.
-
-### 3. `collaboration`
-
-Сюда логично собрать:
-
-- realtime API;
-- SignalR clients;
-- realtime events/types;
-- store совместной работы;
-- lock state;
-- join/leave/connect/disconnect.
-
-### 4. `graph`
-
-Это базовый shared-domain или поддомен.
-
-Сюда относятся:
-
-- `Node`
-- `Edge`
-- `DataFlow`
-- `ConnectionSide`
-- geometry types
-
-Этот кусок либо остается как отдельный shared domain, либо потом станет вложенной частью `editor-document`.
-
-Пока можно оставить отдельно.
-
-## Что сейчас уже есть в проекте
-
-### Presentation
-
-Это уже presentation и должно остаться вне доменов:
-
-- `src/presentation/pages/schemes-list/*`
-- `src/presentation/pages/flow-editor/*`
-- `src/presentation/pages/flow-editor/components/*`
-- `src/presentation/pages/flow-editor/composables/*`
-
-Также presentation-композаблами сейчас являются:
-
-- `src/presentation/pages/flow-editor/composables/useNodeDrag.ts`
-- `src/presentation/pages/flow-editor/composables/useBreakpointDrag.ts`
-- `src/presentation/pages/flow-editor/composables/useCommentDrag.ts`
-- `src/presentation/pages/flow-editor/composables/useEditorDiagnostics.ts`
-- `src/presentation/pages/flow-editor/composables/useFlowGraphView.ts`
-
-Это не домен, потому что они обслуживают текущую страницу и ее визуальное поведение.
-
-### Shared
-
-Это уже shared и не должно переезжать в домены:
-
-- `src/presentation/ui/*`
-- `src/presentation/layouts/*`
-- `src/shared/api/http.ts`
-- `src/shared/composables/useAsyncData.ts`
-
-### Domain-кандидаты
-
-Это уже сейчас выглядит как материал для доменов:
-
-- `src/api/schemes/*`
-- `src/models/schemes/*`
-- `src/composables/useScheme.ts`
-- `src/composables/useSchemesList.ts`
-
-- `src/api/editor-document/*`
-- `src/models/editor/*`
-- `src/stores/editorDocument.ts`
-- `src/lib/editor/document/*`
-
-- `src/api/realtime/*`
-- `src/stores/editorCollaboration.ts`
-
-- `src/models/graph/*`
-- `src/lib/editor/graph/*`
-- `src/lib/editor/layout/*`
-- `src/lib/editor/validation/*`
-
-### Пограничные места
-
-Это места, где сейчас особенно легко ошибиться:
-
-#### `src/lib/editor/*`
-
-Не весь `lib/editor` одинаковый.
-
-Нужно различать:
-
-- pure document/business helpers;
-- graph/layout/validation rules;
-- presentation-facing helpers.
-
-Если helper знает только про данные документа, это domain.
-
-Если helper знает про DOM, canvas или страницу, это presentation.
-
-#### `src/composables/*`
-
-Не все composables нужно переносить в домены.
-
-Например:
-
-- `useAsyncData` это shared;
-- `useSchemesList` ближе к domain-facing composable;
-- `useNodeDrag` это presentation;
-- `useFlowEditorRoute` это presentation;
-- `useFlowEditorComments` сейчас presentation-controller над editor domain.
-
-## Целевая структура
-
-Ниже не финальный вид на один день, а направление миграции.
+Сейчас фронтенд делится на 5 верхнеуровневых частей:
 
 ```text
 src/
   domains/
-    schemes/
-      api/
-      models/
-      mappers/
-      composables/
-      mocks/
-    editor-document/
-      api/
-      models/
-      store/
-      lib/
-      mocks/
-    collaboration/
-      api/
-      models/
-      store/
-    graph/
-      models/
-      lib/
-
   presentation/
-    pages/
-      schemes-list/
-        index.vue
-        components/
-        composables/
-      flow-editor/
-        index.vue
-        components/
-        composables/
-        store/
-
-  components/
-    ui/
-    layouts/
-
   shared/
-    api/
-    composables/
-    lib/
+  mocks/
+  router/
 ```
 
-## Как это маппится на текущие папки
+Также в корне `src` остаются:
 
-### Будущий `domains/schemes`
+- `App.vue`
+- `main.ts`
+- `constants.ts`
 
-Сюда по смыслу должны уйти:
+## Слои и их ответственность
 
-- `src/api/schemes/*`
-- `src/models/schemes/*`
-- `src/composables/useScheme.ts`
-- `src/composables/useSchemesList.ts`
+### `domains/`
 
-### Будущий `domains/editor-document`
+Это предметная логика приложения.
 
-Сюда по смыслу должны уйти:
+Сюда относится:
 
-- `src/api/editor-document/*`
-- `src/models/editor/*`
-- `src/stores/editorDocument.ts`
-- `src/lib/editor/document/*`
+- модели предметной области;
+- DTO и transport-типы;
+- API-клиенты домена;
+- store домена;
+- use-cases;
+- pure business helpers;
+- мапперы.
 
-Часть `layout/validation/graph` тоже, скорее всего, относится сюда, но переносить их нужно уже после дополнительной сортировки.
+Доменный код:
 
-### Будущий `domains/collaboration`
+- не должен знать про DOM;
+- не должен зависеть от Vue-компонентов;
+- не должен знать про `MouseEvent`, `HTMLElement`, canvas refs и визуальную компоновку страницы.
 
-Сюда по смыслу должны уйти:
+### `presentation/`
 
-- `src/api/realtime/*`
-- `src/stores/editorCollaboration.ts`
+Это слой отображения и page orchestration.
 
-### Будущий `domains/graph`
+Сюда относится:
 
-Сюда по смыслу должны уйти:
+- route-level страницы;
+- page-only компоненты;
+- page-level composables;
+- presentation-store конкретной страницы;
+- shared UI primitives и layouts.
 
-- `src/models/graph/*`
-- часть `src/lib/editor/graph/*`
-- часть `src/lib/editor/layout/*`
-- часть `src/lib/editor/validation/*`
+Presentation-код:
 
-Но этот перенос не стоит делать первым, потому что тут выше риск ошибиться с границей между pure graph logic и editor-specific rules.
+- собирает экран;
+- связывает store/composables с шаблоном;
+- обрабатывает DOM-события;
+- знает про canvas, drag, menus, focus, refs, router navigation.
 
-### Что остается в presentation
+### `shared/`
 
-Остается в presentation:
+Это общий технический слой.
 
-- все `presentation/pages/*`
-- все page-level `components/*`
-- все page-level composables под `presentation/pages/flow-editor/composables`
-- глобальные drag/view composables, пока они завязаны на страницу и DOM
+Сюда относятся только по-настоящему общие вещи, которые:
 
-## Порядок миграции
+- не являются бизнес-логикой домена;
+- не принадлежат одной странице;
+- могут переиспользоваться без знания конкретной предметной области.
 
-Чтобы не взорвать проект, идем маленькими партиями.
+Текущие примеры:
 
-### Партия 1. Зафиксировать архитектурные правила
+- базовый HTTP-клиент;
+- generic composables вроде `useAsyncData`.
 
-Это текущий шаг.
+### `mocks/`
 
-Результат:
+Это временные данные для еще не реализованных или частично реализованных частей системы.
 
-- понятно, что считаем доменом;
-- понятно, что presentation не уезжает в домены;
-- понятно, что `composables` и `lib` могут относиться к разным слоям.
+Правило:
 
-### Партия 2. Начать с самых очевидных доменов
+- если что-то реально работает через backend, моков для этого быть не должно;
+- моки должны быть явными и легко удаляемыми.
 
-Первыми кандидатами на физический перенос:
+Текущее состояние:
 
-- `schemes`
-- `editor-document`
+- в `src/mocks/editor` лежат только editor UI mock-данные, которые пока не пришли к реальному backend-контракту.
 
-Потому что у них уже есть:
+## Текущая карта проекта
 
-- models;
-- api;
-- store или composables;
-- четкая предметная граница.
+### `src/domains/schemes`
 
-### Партия 3. Разобрать `graph`
+Домен списка и сущности схемы.
 
-После этого уже разделять:
+Содержит:
 
-- что в `graph` является общим;
-- что в `editor-document` является документной бизнес-логикой;
-- что вообще не domain, а presentation helper.
+- `api/` — REST-запросы схем;
+- `models/` — `Scheme`, `SchemeCard`, `SchemeVersion`;
+- `mappers/` — преобразование DTO в domain models;
+- `composables/` — доменно-ориентированные composables для чтения схем.
 
-### Партия 4. Разобрать `shared`
+Задачи домена:
 
-Отдельно собрать:
+- загрузка списка схем;
+- загрузка схемы по id;
+- создание схемы;
+- удаление схемы.
 
-- shared composables;
-- shared lib;
-- shared api utilities.
+### `src/domains/editor-document`
 
-## Что делаем дальше практически
+Главный домен редактора.
 
-Следующий технический шаг лучше делать не по всему проекту сразу, а по одному домену.
+Содержит:
 
-Лучший кандидат:
+- `api/` — DTO JSON-документа и API сохранения версии;
+- `models/` — editor-specific модели;
+- `lib/` — pure document helpers;
+- `use-cases/` — сценарии и бизнес-операции документа;
+- `store/` — `editorDocument.store` как state-first фасад.
 
-### `schemes`
+Задачи домена:
 
-Почему:
+- хранение состояния документа;
+- сериализация/десериализация JSON-документа;
+- загрузка версии схемы;
+- сохранение версии;
+- операции над узлами, ребрами, data flows и comments;
+- parent/child orchestration документа.
 
-- маленький и понятный;
-- уже почти собран;
-- не тянет за собой тяжёлый editor;
-- можно быстро проверить жизнеспособность новой структуры.
+### `src/domains/collaboration`
 
-После этого уже переносить:
+Домен realtime-взаимодействия.
 
-### `editor-document`
+Содержит:
 
-Но там делать отдельными партиями:
+- `api/` — SignalR hub clients и transport-типы;
+- `store/` — состояние подключения и realtime lifecycle.
 
-- `models`
-- `api`
-- `store`
-- `lib`
-- `mocks`
+Задачи домена:
 
-## Короткие правила на каждый день
+- подключение к realtime;
+- join/leave схемы;
+- lock/unlock сценарии;
+- прием и проброс realtime-обновлений в `editor-document`.
 
-Чтобы дальше держать структуру чистой:
+### `src/domains/graph`
 
-1. Компоненты не являются доменом.
-2. Page-level composables чаще всего presentation.
-3. DTO живут рядом с доменом, а не в общем хаосе.
-4. Моки должны лежать рядом с тем, что они подменяют.
-5. Store должен хранить состояние и сценарии, а не превращаться в склад типов и pure helpers.
-6. Если код знает про DOM, это почти всегда не domain.
-7. Если код описывает сущность, инварианты и операции над ней, это domain.
+Базовый общий домен графовых сущностей.
 
-## Статус
+Содержит:
 
-На текущий момент архитектурно уже сделано полезное:
+- `models/` — `Node`, `Edge`, `DataFlow`, `ConnectionSide`, geometry types.
 
-- домен `schemes` уже физически перенесен в `src/domains/schemes`;
-- `schemes` теперь хранит рядом:
-  - `api/`
-  - `models/`
-  - `mappers/`
-  - `composables/`
-- presentation-слой больше не импортирует `schemes` из старых `src/api` и `src/composables`;
-- домен `editor-document` уже получил свой каркас в `src/domains/editor-document`;
-- в `editor-document` уже физически перенесены:
-  - `models/`
-  - `api/`
-- `editorDocument` store уже физически перенесен в `src/domains/editor-document/store`;
-- document-specific helpers уже физически перенесены в `src/domains/editor-document/lib`;
-- layout-helpers, которые обслуживают структуру документа и parent/child поведение, уже перенесены в `src/domains/editor-document/lib`;
-- graph-helpers, которые обслуживают pass-through и построение связей документа, уже перенесены в `src/domains/editor-document/lib`;
-- validation-helpers, которые обслуживают диагностику и проверку документа, уже перенесены в `src/domains/editor-document/lib`;
-- `updateVersion` API уже перенесен в `src/domains/editor-document/api`;
-- домен `collaboration` уже физически создан в `src/domains/collaboration`;
-- realtime API и `editorCollaboration` store уже перенесены в `src/domains/collaboration`;
-- collaboration transport-типы уже разложены по одному файлу на тип в `src/domains/collaboration/api/types`;
-- `editorUi` уже вынесен из общего `stores` и живет как presentation-store в `src/presentation/pages/flow-editor/store`;
-- `graph`-модели уже физически перенесены в `src/domains/graph/models`;
-- route pages уже физически перенесены в `src/presentation/pages`;
-- `flow-editor` page-owned components, composables и store уже живут в `src/presentation/pages/flow-editor`;
-- `schemes-list` page-owned components и `CreateSchemeModal` уже живут в `src/presentation/pages/schemes-list`;
-- editor-specific типы больше не живут в старых `src/models/editor`;
-- DTO документа больше не живут в старых `src/api/editor-document`;
-- старый `src/lib/editor/document` больше не используется;
-- старый `src/lib/editor/layout` больше не используется;
-- старый `src/lib/editor/graph` больше не используется;
-- старый `src/lib/editor/validation` больше не используется;
-- старый `src/api/realtime` больше не используется;
-- старый `src/stores/editorCollaboration.ts` больше не используется;
-- старая папка `src/models/graph` больше не используется;
-- `flow-editor` выделен как presentation-страница;
-- page-only components лежат рядом со страницей;
-- editor types начали выноситься из store;
-- mocks стали явнее;
-- часть pure helpers уже вынесена из `editorDocument`.
+Задачи домена:
 
-Следующий шаг после этого документа:
+- быть общим источником графовых типов;
+- не тащить в себя document use-cases или presentation logic.
 
-- продолжить физический перенос следующего домена в `src/domains`.
+### `src/presentation`
 
-Следующий лучший кандидат:
+Слой отображения приложения.
 
-- `editor-document/store`
+Содержит:
 
-Следующая маленькая партия внутри `editor-document`:
+- `layouts/` — каркас приложения;
+- `ui/` — базовые UI primitives;
+- `pages/flow-editor` — presentation editor-страницы;
+- `pages/schemes-list` — presentation списка схем.
 
-- смотреть, что из `lib/editor/layout`, `graph`, `validation` относится к `editor-document`, а что к отдельному `graph` domain;
-- смотреть, что из `lib/editor/graph` и `lib/editor/validation` относится к `editor-document`, а что к отдельному `graph` domain;
-- потом тем же способом перенести `editorCollaboration`.
+#### `presentation/pages/flow-editor`
 
-Следующий лучший кандидат:
+Содержит:
 
-- дочистить корневой `src/models` и `src/stores` до роли временных compatibility-barrel
+- `index.vue` — route container;
+- `components/` — page-only компоненты редактора;
+- `composables/` — page-level orchestration;
+- `store/` — `editorUi.store`, относящийся только к presentation этого экрана.
+
+Роль слоя:
+
+- собрать экран редактора;
+- связать `editorDocument`, `editorCollaboration` и `editorUi`;
+- обрабатывать DOM/canvas сценарии;
+- не хранить бизнес-логику документа внутри компонентов.
+
+#### `presentation/pages/schemes-list`
+
+Содержит:
+
+- route-level страницу списка схем;
+- dumb components списка;
+- page-owned modal для создания схемы.
+
+### `src/shared`
+
+Содержит:
+
+- `api/http.ts` — общий Axios client;
+- `composables/useAsyncData.ts` — generic async composable.
+
+## Принципы работы со store
+
+### `editorDocument.store`
+
+Это **доменный store**, но его роль — не хранить всю реализацию в одном файле.
+
+Правило:
+
+- store хранит состояние;
+- store отдает computed;
+- store предоставляет публичные действия;
+- тяжелая реализация живет в `use-cases`.
+
+То есть:
+
+- store отвечает за **состояние и фасад домена**;
+- `use-cases` отвечают за **реализацию сценариев**.
+
+### `editorCollaboration.store`
+
+Это отдельный доменный store realtime-слоя.
+
+Его роль:
+
+- lifecycle соединения;
+- подписки;
+- координация realtime событий.
+
+Он не должен разрастаться в store документа.
+
+### `editorUi.store`
+
+Это **presentation-store** конкретной страницы редактора.
+
+Его роль:
+
+- selection;
+- zoom;
+- mode flags;
+- menu state;
+- page-level UI state.
+
+Он не должен хранить предметную логику документа.
+
+## Правила размещения нового кода
+
+### Когда код идет в `domains`
+
+Код кладем в домен, если он:
+
+- описывает сущность;
+- меняет документ или состояние предметной области;
+- сериализует или десериализует данные;
+- работает с transport-контрактом;
+- является бизнес-правилом;
+- нужен более чем одному presentation-месту как логика предметной области.
+
+### Когда код идет в `presentation`
+
+Код кладем в presentation, если он:
+
+- строит экран;
+- wiring между store и шаблоном;
+- работает с DOM;
+- обрабатывает `click`, `wheel`, `mousemove`, `mouseup`;
+- знает про canvas refs;
+- нужен только текущей странице.
+
+### Когда код идет в `shared`
+
+Код кладем в shared, если он:
+
+- не принадлежит одному домену;
+- не является presentation одной страницы;
+- реально переиспользуется как технический building block.
+
+### Когда код идет в `mocks`
+
+Код кладем в mocks, если:
+
+- backend-контракт еще не готов;
+- поведение временно эмулируется;
+- мок легко удалить или заменить реальным источником.
+
+Если мок относится только к одному домену или одной странице, его нужно со временем переносить ближе к этой области, а не превращать `src/mocks` в общую свалку.
+
+## Что не делать
+
+Не нужно:
+
+- складывать бизнес-логику в Vue-компоненты;
+- складывать DOM-логику в домены;
+- делать “общую” папку только потому, что не хочется выбирать место;
+- держать DTO, models и UI types вперемешку;
+- использовать store как склад helper-функций;
+- держать legacy compatibility-barrel без реальных потребителей.
+
+## Текущее направление развития
+
+Архитектурно база уже собрана:
+
+- домены выделены;
+- presentation выделен;
+- shared выделен;
+- editor-document переведен на state-first store + use-cases;
+- editorUi отделен как presentation-store;
+- realtime изолирован в collaboration domain.
+
+Следующие приоритеты:
+
+1. Продолжать упрощать `editor-document` use-cases и внутренние зависимости.
+2. Дочищать `mocks`, чтобы они лежали ближе к своим областям ответственности.
+3. Постепенно усиливать типизацию realtime transport-слоя и backend-контрактов.
+4. Следить, чтобы новые фичи сразу попадали в правильный слой, а не создавали новые “временные” папки.
+
+## Краткая памятка для команды
+
+Перед созданием нового файла нужно ответить на 3 вопроса:
+
+1. Это бизнес-логика, UI orchestration или shared utility?
+2. Этот код знает про DOM или только про данные?
+3. Этот код принадлежит конкретному домену, конкретной странице или всем сразу?
+
+Если ответы неочевидны:
+
+- код про данные и инварианты — скорее `domains`;
+- код про экран и интеракции — скорее `presentation`;
+- код про общий технический инструмент — скорее `shared`.

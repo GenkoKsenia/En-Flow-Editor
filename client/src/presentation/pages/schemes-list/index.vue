@@ -115,9 +115,11 @@ function getUpdatedAtTimestamp(isoDate: string | null): number {
 }
 
 function toggleFavorite(id: string): void {
-  const item = schemes.value.find(s => s.id === id)
-  if (!item) return
-  item.favorite = !item.favorite
+  schemes.value = schemes.value.map(item => (
+    item.id === id
+      ? { ...item, favorite: !item.favorite }
+      : item
+  ))
 }
 
 function openScheme(schemeId: string): void {
