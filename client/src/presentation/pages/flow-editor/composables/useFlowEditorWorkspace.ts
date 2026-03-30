@@ -30,6 +30,8 @@ export function useFlowEditorWorkspace(
   const { nodes, edges, dataFlows } = storeToRefs(diagramStore)
   const { comments } = storeToRefs(commentsStore)
   const {
+    selectedNodeIds,
+    selectedEdgeIds,
     selectedObject,
     selectedNodeId,
     selectedEdgeId,
@@ -39,6 +41,8 @@ export function useFlowEditorWorkspace(
     potentialParentId,
     isConnectionMode,
     isCommentMode,
+    isMarqueeSelecting,
+    marqueeRect,
     isDownloadMenuOpen,
     isVersionMenuOpen,
     versionHistory,
@@ -95,6 +99,9 @@ export function useFlowEditorWorkspace(
 
   const { onNodeMouseDown } = useNodeDrag({
     nodes,
+    edges,
+    selectedNodeIds,
+    selectedEdgeIds,
     zoom,
     isConnectionMode,
     isCommentMode,
@@ -133,6 +140,85 @@ export function useFlowEditorWorkspace(
     clampYValue,
   })
 
+  function getCanvasPoint(event: MouseEvent): { x: number; y: number } | null {
+    if (!canvasContent.value) return null
+
+    const rect = canvasContent.value.getBoundingClientRect()
+    const styles = window.getComputedStyle(canvasContent.value)
+    const paddingLeft = Number.parseFloat(styles.paddingLeft || '0') || 0
+    const paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0
+    const scale = zoom.value || 1
+
+    return {
+      x: (event.clientX - rect.left) / scale - paddingLeft,
+      y: (event.clientY - rect.top) / scale - paddingTop,
+    }
+  }
+
+  function rectsIntersect(
+    first: { x: number; y: number; width: number; height: number },
+    second: { left: number; top: number; width: number; height: number },
+  ): boolean {
+    return !(
+      first.x + first.width < second.left ||
+      second.left + second.width < first.x ||
+      first.y + first.height < second.top ||
+      second.top + second.height < first.y
+    )
+  }
+
+  function onCanvasMouseDown(event: MouseEvent): void {
+    if (isConnectionMode.value || isCommentMode.value) return
+
+    const target = event.target as Element | null
+    if (
+      target?.closest('.node') ||
+      target?.closest('.edge') ||
+      target?.closest('.comment-bubble') ||
+      target?.closest('.canvas-zoom-controls') ||
+      target?.closest('.properties-panel')
+    ) {
+      return
+    }
+
+    const start = getCanvasPoint(event)
+    if (!start) return
+
+    uiStore.startMarquee(start)
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const point = getCanvasPoint(moveEvent)
+      if (!point) return
+      uiStore.updateMarquee(point)
+    }
+
+    const onMouseUp = () => {
+      const rect = uiStore.finishMarquee()
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+
+      if (!rect || (rect.width < 4 && rect.height < 4)) {
+        return
+      }
+
+      const selectedNodes = nodes.value
+        .filter(node => rectsIntersect(rect, getNodeRect(node)))
+        .map(node => node.id)
+      const selectedNodeSet = new Set(selectedNodes)
+      const selectedEdges = edges.value
+        .filter(edge => selectedNodeSet.has(edge.sourceNodeId) && selectedNodeSet.has(edge.targetNodeId))
+        .map(edge => edge.id)
+
+      uiStore.setSelection(selectedNodes, selectedEdges)
+      uiStore.suppressSelectionClickOnce()
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+
+    event.preventDefault()
+  }
+
   const lockedNodeOwners = computed<Record<string, string | null>>(() =>
     Object.fromEntries(
       nodes.value.map(node => [node.id, collaborationStore.getElementLockOwner('block', node.id)]),
@@ -170,8 +256,12 @@ export function useFlowEditorWorkspace(
     dataFlows,
     comments,
     selectedObject,
+    selectedNodeIds,
+    selectedEdgeIds,
     selectedNodeId,
     selectedEdgeId,
+    isMarqueeSelecting,
+    marqueeRect,
     lockedNodeOwners,
     lockedEdgeOwners,
     isSelectedObjectLockedByOther,
@@ -224,6 +314,7 @@ export function useFlowEditorWorkspace(
     deleteNode: actions.deleteNode,
     deleteEdge: actions.deleteEdge,
     clearSelection: actions.clearSelection,
+    onCanvasMouseDown,
     onCanvasClick: connections.onCanvasClick,
     onCanvasWheel: viewport.onCanvasWheel,
     onEdgeClick: connections.onEdgeClick,

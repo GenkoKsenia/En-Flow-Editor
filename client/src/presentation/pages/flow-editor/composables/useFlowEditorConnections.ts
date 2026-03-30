@@ -52,6 +52,8 @@ export function useFlowEditorConnections({
     connectionStartNode,
     connectionStartSide,
     hoveredNodeSide,
+    selectedNodeIds,
+    selectedEdgeIds,
   } = storeToRefs(uiStore)
 
   const isConnectionSource = computed(() => (nodeId: string) =>
@@ -113,6 +115,8 @@ export function useFlowEditorConnections({
   async function onNodeClick(nodeId: string, event: MouseEvent): Promise<void> {
     event.stopPropagation()
 
+    if (uiStore.consumeSelectionClickSuppression()) return
+
     if (isCommentMode.value) {
       if (addCommentForNode(nodeId)) {
         uiStore.stopCommentMode()
@@ -122,6 +126,10 @@ export function useFlowEditorConnections({
 
     if (!isConnectionMode.value) {
       if (!nodes.value.some(node => node.id === nodeId)) return
+      if (selectedNodeIds.value.length > 1 && selectedNodeIds.value.includes(nodeId)) {
+        return
+      }
+
       if (uiStore.selectedNodeId === nodeId) {
         const locked = await documentStore.beginNodeEdit(nodeId)
         if (!locked) return
@@ -152,6 +160,8 @@ export function useFlowEditorConnections({
   async function onEdgeClick(edgeId: string, event: MouseEvent): Promise<void> {
     event.stopPropagation()
 
+    if (uiStore.consumeSelectionClickSuppression()) return
+
     if (isCommentMode.value) {
       if (addCommentForEdge(edgeId)) {
         uiStore.stopCommentMode()
@@ -160,6 +170,10 @@ export function useFlowEditorConnections({
     }
 
     if (!edges.value.some(edge => edge.id === edgeId)) return
+    if (selectedEdgeIds.value.length > 1 && selectedEdgeIds.value.includes(edgeId)) {
+      return
+    }
+
     if (uiStore.selectedEdgeId === edgeId) {
       const locked = await documentStore.beginEdgeEdit(edgeId)
       if (!locked) return
@@ -174,6 +188,8 @@ export function useFlowEditorConnections({
   }
 
   function onCanvasClick(event: MouseEvent): void {
+    if (uiStore.consumeSelectionClickSuppression()) return
+
     const target = event.target as Element | null
 
     if (isCommentMode.value) {

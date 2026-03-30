@@ -518,6 +518,7 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   height: 100%;
   pointer-events: none;
   overflow: visible;
+  transform: translate(var(--drag-dx, 0px), var(--drag-dy, 0px));
 }
 
 .edge path {

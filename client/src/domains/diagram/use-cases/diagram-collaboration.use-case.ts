@@ -273,6 +273,43 @@ export function createDiagramCollaborationUseCases(
     await endEdit('connection', edgeId)
   }
 
+  async function beginGroupEdit(nodeIds: string[], edgeIds: string[]): Promise<boolean> {
+    const uniqueNodeIds = Array.from(new Set(nodeIds))
+    const uniqueEdgeIds = Array.from(new Set(edgeIds))
+    const acquiredNodes: string[] = []
+    const acquiredEdges: string[] = []
+
+    for (const nodeId of uniqueNodeIds) {
+      const locked = await beginNodeEdit(nodeId)
+      if (!locked) {
+        await endGroupEdit(acquiredNodes, acquiredEdges)
+        return false
+      }
+      acquiredNodes.push(nodeId)
+    }
+
+    for (const edgeId of uniqueEdgeIds) {
+      const locked = await beginEdgeEdit(edgeId)
+      if (!locked) {
+        await endGroupEdit(acquiredNodes, acquiredEdges)
+        return false
+      }
+      acquiredEdges.push(edgeId)
+    }
+
+    return true
+  }
+
+  async function endGroupEdit(nodeIds: string[], edgeIds: string[]): Promise<void> {
+    for (const edgeId of Array.from(new Set(edgeIds))) {
+      await endEdgeEdit(edgeId)
+    }
+
+    for (const nodeId of Array.from(new Set(nodeIds))) {
+      await endNodeEdit(nodeId)
+    }
+  }
+
   async function finishNodeCreate(node: DiagramNodeSnapshot): Promise<void> {
     const actionType = getActionTypeEnum().Create
     const block = getBlock(node.id)
@@ -456,6 +493,27 @@ export function createDiagramCollaborationUseCases(
     })
   }
 
+  async function finishGroupMove(nodeIds: string[], edgeIds: string[]): Promise<void> {
+    const actionType = getActionTypeEnum().Update
+    const uniqueNodeIds = Array.from(new Set(nodeIds))
+    const uniqueEdgeIds = Array.from(new Set(edgeIds))
+    const blockChanges = uniqueNodeIds
+      .map(nodeId => getBlock(nodeId))
+      .filter((block): block is EditorBlockDto => block !== null)
+      .map(block => createBlockChange(actionType, block))
+    const connectionChanges = uniqueEdgeIds
+      .map(edgeId => getConnection(edgeId))
+      .filter((connection): connection is EditorConnectionDto => connection !== null)
+      .map(connection => createConnectionChange(actionType, connection))
+
+    if (!blockChanges.length && !connectionChanges.length) return
+
+    await sendPatch({
+      blocks: blockChanges.length ? blockChanges : undefined,
+      connections: connectionChanges.length ? connectionChanges : undefined,
+    })
+  }
+
   return {
     connectCollaboration,
     disconnectCollaboration,
@@ -469,6 +527,9 @@ export function createDiagramCollaborationUseCases(
     finishEdgeCreate,
     finishEdgeUpdate,
     finishEdgeDelete,
+    beginGroupEdit,
+    endGroupEdit,
+    finishGroupMove,
     finishDataFlowsUpdate,
     flushPendingUpdatesOnRequest,
     handleNewVersionCreated,

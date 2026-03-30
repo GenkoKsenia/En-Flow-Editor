@@ -29,6 +29,7 @@
     />
 
     <PropertiesPanel
+      v-if="selectedObject"
       :selected-object="selectedObject"
       :edges="edges"
       :nodes="nodes"
@@ -48,18 +49,31 @@
       ref="canvas"
       class="canvas"
       :style="canvasGridStyle"
+      @mousedown="onCanvasMouseDown"
       @click="onCanvasClick"
       @wheel.prevent="onCanvasWheel"
     >
       <div ref="canvasContent" class="canvas-content" :style="canvasTransformStyle">
+        <div
+          v-if="isMarqueeSelecting && marqueeRect"
+          class="marquee-selection"
+          :style="{
+            left: `${marqueeRect.x}px`,
+            top: `${marqueeRect.y}px`,
+            width: `${marqueeRect.width}px`,
+            height: `${marqueeRect.height}px`,
+          }"
+        />
+
         <ArrowDefinitions />
 
         <GraphEdge
           v-for="edge in edges"
           :key="edge.id"
           :edge="edge"
+          :data-edge-id="edge.id"
           :nodes="nodes"
-          :is-selected="selectedEdgeId === edge.id"
+          :is-selected="selectedEdgeIds.includes(edge.id)"
           :show-drag-handle="showDragHandles"
           :get-connection-position="getConnectionPosition"
           :force-three-segments="edgeRequiresPassThrough[edge.id]"
@@ -78,10 +92,10 @@
           :key="node.id"
           :node="node"
           :data-node-id="node.id"
-          :selected="selectedNodeId === node.id"
+          :selected="selectedNodeIds.includes(node.id)"
           :is-connection-source="isConnectionSource(node.id)"
           :is-connection-target="isConnectionTarget(node.id)"
-          :is-dragging="isDragging && selectedNodeId === node.id"
+          :is-dragging="isDragging && selectedNodeIds.includes(node.id)"
           :show-connection-hints="showConnectionHints"
           :children-count="getChildrenCount(node.id)"
           :is-potential-parent="potentialParentId === node.id"
@@ -141,8 +155,12 @@ const {
   dataFlows,
   comments,
   selectedObject,
+  selectedNodeIds,
+  selectedEdgeIds,
   selectedNodeId,
   selectedEdgeId,
+  isMarqueeSelecting,
+  marqueeRect,
   lockedNodeOwners,
   lockedEdgeOwners,
   isSelectedObjectLockedByOther,
@@ -195,6 +213,7 @@ const {
   deleteNode,
   deleteEdge,
   clearSelection,
+  onCanvasMouseDown,
   onCanvasClick,
   onCanvasWheel,
   onEdgeClick,
@@ -244,6 +263,14 @@ const { onDownloadPng } = useFlowEditorPngExport({
   height: max-content;
   transform-origin: 0 0;
   padding: 24px;
+}
+
+.marquee-selection {
+  position: absolute;
+  border: 1px solid #066664;
+  background: rgba(6, 102, 100, 0.12);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .canvas-zoom-controls {

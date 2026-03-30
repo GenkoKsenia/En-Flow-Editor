@@ -14,13 +14,12 @@ export function useFlowEditorActions() {
   }
 
   function releaseSelectionLock(): void {
-    if (uiStore.selectedNodeId) {
-      void diagramStore.endNodeEdit(uiStore.selectedNodeId)
-    }
-
-    if (uiStore.selectedEdgeId) {
-      void diagramStore.endEdgeEdit(uiStore.selectedEdgeId)
-    }
+    uiStore.selectedNodeIds.forEach(nodeId => {
+      void diagramStore.endNodeEdit(nodeId)
+    })
+    uiStore.selectedEdgeIds.forEach(edgeId => {
+      void diagramStore.endEdgeEdit(edgeId)
+    })
   }
 
   function addNode(): void {
@@ -87,7 +86,7 @@ export function useFlowEditorActions() {
 
   function updateDataFlows(newFlows: DataFlow[]): void {
     void (async () => {
-      if (uiStore.selectedNodeId) {
+      if (uiStore.selectedNodeIds.length === 1 && uiStore.selectedNodeId) {
         const locked = await diagramStore.beginNodeEdit(uiStore.selectedNodeId)
         if (!locked) return
       }

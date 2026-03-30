@@ -8,18 +8,30 @@ import {
   MOCK_SHARE_LINK,
 } from '@/mocks'
 import type { SelectedObject, TeamMember, VersionRecord } from '@/domains/diagram'
-import type { ConnectionSide } from '@/domains/graph'
+import type { ConnectionSide, Position } from '@/domains/graph'
 import { useDiagramStore } from '@/domains/diagram'
+
+type MarqueeRect = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 export const useEditorUiStore = defineStore('editorUi', () => {
   const diagramStore = useDiagramStore()
 
-  const selectedNodeId = ref<string | null>(null)
-  const selectedEdgeId = ref<string | null>(null)
+  const selectedNodeIds = ref<string[]>([])
+  const selectedEdgeIds = ref<string[]>([])
   const isDragging = ref(false)
   const isDraggingBreakpoint = ref(false)
   const draggingEdgeId = ref<string | null>(null)
   const potentialParentId = ref<string | null>(null)
+  const isMarqueeSelecting = ref(false)
+  const marqueeStart = ref<Position | null>(null)
+  const marqueeCurrent = ref<Position | null>(null)
+  const marqueeRect = ref<MarqueeRect | null>(null)
+  const suppressSelectionClick = ref(false)
   const isConnectionMode = ref(false)
   const connectionStartNode = ref<string | null>(null)
   const connectionStartSide = ref<ConnectionSide | null>(null)
@@ -39,14 +51,24 @@ export const useEditorUiStore = defineStore('editorUi', () => {
   const MAX_ZOOM = 2
   const ZOOM_STEP = 0.1
   const BASE_GRID_SIZE = 20
+  const selectedNodeId = computed(() =>
+    selectedNodeIds.value.length === 1 && selectedEdgeIds.value.length === 0
+      ? selectedNodeIds.value[0]
+      : null,
+  )
+  const selectedEdgeId = computed(() =>
+    selectedEdgeIds.value.length === 1 && selectedNodeIds.value.length === 0
+      ? selectedEdgeIds.value[0]
+      : null,
+  )
 
   const selectedObject = computed<SelectedObject>(() => {
-    if (selectedNodeId.value) {
+    if (selectedNodeIds.value.length === 1 && selectedEdgeIds.value.length === 0 && selectedNodeId.value) {
       const node = diagramStore.nodes.find(item => item.id === selectedNodeId.value)
       if (node) return { type: 'node', data: node }
     }
 
-    if (selectedEdgeId.value) {
+    if (selectedEdgeIds.value.length === 1 && selectedNodeIds.value.length === 0 && selectedEdgeId.value) {
       const edge = diagramStore.edges.find(item => item.id === selectedEdgeId.value)
       if (edge) return { type: 'edge', data: edge }
     }
@@ -54,7 +76,7 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     return null
   })
 
-  const showDragHandles = computed(() => selectedEdgeId.value !== null)
+  const showDragHandles = computed(() => selectedEdgeIds.value.length === 1 && selectedNodeIds.value.length === 0)
   const showConnectionHints = computed(() => isConnectionMode.value)
   const zoomPercent = computed(() => Math.round(zoom.value * 100))
   const canvasTransformStyle = computed(() => ({
@@ -67,18 +89,31 @@ export const useEditorUiStore = defineStore('editorUi', () => {
   })
 
   function clearSelection(): void {
-    selectedNodeId.value = null
-    selectedEdgeId.value = null
+    selectedNodeIds.value = []
+    selectedEdgeIds.value = []
   }
 
   function selectNode(nodeId: string): void {
-    selectedNodeId.value = nodeId
-    selectedEdgeId.value = null
+    selectedNodeIds.value = [nodeId]
+    selectedEdgeIds.value = []
   }
 
   function selectEdge(edgeId: string): void {
-    selectedEdgeId.value = edgeId
-    selectedNodeId.value = null
+    selectedEdgeIds.value = [edgeId]
+    selectedNodeIds.value = []
+  }
+
+  function setSelectedNodes(nodeIds: string[]): void {
+    selectedNodeIds.value = Array.from(new Set(nodeIds))
+  }
+
+  function setSelectedEdges(edgeIds: string[]): void {
+    selectedEdgeIds.value = Array.from(new Set(edgeIds))
+  }
+
+  function setSelection(nodeIds: string[], edgeIds: string[]): void {
+    selectedNodeIds.value = Array.from(new Set(nodeIds))
+    selectedEdgeIds.value = Array.from(new Set(edgeIds))
   }
 
   function setDragging(value: boolean): void {
@@ -95,6 +130,56 @@ export const useEditorUiStore = defineStore('editorUi', () => {
 
   function setPotentialParentId(nodeId: string | null): void {
     potentialParentId.value = nodeId
+  }
+
+  function startMarquee(point: Position): void {
+    isMarqueeSelecting.value = true
+    marqueeStart.value = point
+    marqueeCurrent.value = point
+    marqueeRect.value = {
+      x: point.x,
+      y: point.y,
+      width: 0,
+      height: 0,
+    }
+  }
+
+  function updateMarquee(point: Position): void {
+    if (!marqueeStart.value) return
+
+    marqueeCurrent.value = point
+    marqueeRect.value = {
+      x: Math.min(marqueeStart.value.x, point.x),
+      y: Math.min(marqueeStart.value.y, point.y),
+      width: Math.abs(point.x - marqueeStart.value.x),
+      height: Math.abs(point.y - marqueeStart.value.y),
+    }
+  }
+
+  function finishMarquee(): MarqueeRect | null {
+    const rect = marqueeRect.value
+    isMarqueeSelecting.value = false
+    marqueeStart.value = null
+    marqueeCurrent.value = null
+    marqueeRect.value = null
+    return rect
+  }
+
+  function cancelMarquee(): void {
+    isMarqueeSelecting.value = false
+    marqueeStart.value = null
+    marqueeCurrent.value = null
+    marqueeRect.value = null
+  }
+
+  function suppressSelectionClickOnce(): void {
+    suppressSelectionClick.value = true
+  }
+
+  function consumeSelectionClickSuppression(): boolean {
+    if (!suppressSelectionClick.value) return false
+    suppressSelectionClick.value = false
+    return true
   }
 
   function startConnectionMode(): void {
@@ -200,10 +285,14 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     isDraggingBreakpoint.value = false
     draggingEdgeId.value = null
     potentialParentId.value = null
+    cancelMarquee()
+    suppressSelectionClick.value = false
     zoom.value = 1
   }
 
   return {
+    selectedNodeIds,
+    selectedEdgeIds,
     selectedNodeId,
     selectedEdgeId,
     selectedObject,
@@ -211,6 +300,10 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     isDraggingBreakpoint,
     draggingEdgeId,
     potentialParentId,
+    isMarqueeSelecting,
+    marqueeStart,
+    marqueeCurrent,
+    marqueeRect,
     isConnectionMode,
     connectionStartNode,
     connectionStartSide,
@@ -233,10 +326,19 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     clearSelection,
     selectNode,
     selectEdge,
+    setSelectedNodes,
+    setSelectedEdges,
+    setSelection,
     setDragging,
     setDraggingBreakpoint,
     setDraggingEdgeId,
     setPotentialParentId,
+    startMarquee,
+    updateMarquee,
+    finishMarquee,
+    cancelMarquee,
+    suppressSelectionClickOnce,
+    consumeSelectionClickSuppression,
     startConnectionMode,
     resetConnectionMode,
     setConnectionStart,
