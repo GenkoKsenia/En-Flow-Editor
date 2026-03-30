@@ -16,7 +16,10 @@ import type {
   SchemeHubDataFlowChange,
   SchemeHubNewVersionCreatedEvent,
 } from '../api'
-import type { useDiagramCollaborationStore } from '../store/diagramCollaboration.store'
+import type {
+  DiagramOwnedLockScope,
+  useDiagramCollaborationStore,
+} from '../store/diagramCollaboration.store'
 
 import type { DiagramContext } from './diagram.context'
 
@@ -35,6 +38,31 @@ type DiagramEdgeSnapshot = Pick<Edge, 'id'>
 type DiagramNodeSnapshot = Pick<Node, 'id'>
 
 type DiagramCollaborationStore = ReturnType<typeof useDiagramCollaborationStore>
+
+function normalizeLockScope(scope: DiagramOwnedLockScope): DiagramOwnedLockScope {
+  return {
+    kind: scope.kind,
+    nodes: Array.from(new Set(scope.nodes)).sort(),
+    edges: Array.from(new Set(scope.edges)).sort(),
+  }
+}
+
+function areLockScopesEqual(
+  first: DiagramOwnedLockScope | null,
+  second: DiagramOwnedLockScope | null,
+): boolean {
+  if (first === second) return true
+  if (!first || !second) return false
+
+  const normalizedFirst = normalizeLockScope(first)
+  const normalizedSecond = normalizeLockScope(second)
+
+  return normalizedFirst.kind === normalizedSecond.kind
+    && normalizedFirst.nodes.length === normalizedSecond.nodes.length
+    && normalizedFirst.edges.length === normalizedSecond.edges.length
+    && normalizedFirst.nodes.every((value, index) => value === normalizedSecond.nodes[index])
+    && normalizedFirst.edges.every((value, index) => value === normalizedSecond.edges[index])
+}
 
 function cloneRequest(request: SchemeHubCodeRequest): SchemeHubCodeRequest {
   return {
@@ -69,6 +97,22 @@ export function createDiagramCollaborationUseCases(
   function getNumericSchemeId(): number | null {
     const value = Number(context.schemeId.value)
     return Number.isFinite(value) ? value : null
+  }
+
+  function createSingleScope(elementType: DiagramEditableElementType, elementId: string): DiagramOwnedLockScope {
+    return normalizeLockScope({
+      kind: 'single',
+      nodes: elementType === 'block' ? [elementId] : [],
+      edges: elementType === 'connection' ? [elementId] : [],
+    })
+  }
+
+  function createGroupScope(nodeIds: string[], edgeIds: string[]): DiagramOwnedLockScope {
+    return normalizeLockScope({
+      kind: 'group',
+      nodes: nodeIds,
+      edges: edgeIds,
+    })
   }
 
   function getSnapshot(): DiagramDto {
@@ -245,16 +289,48 @@ export function createDiagramCollaborationUseCases(
     collaborationStore = null
   }
 
+  async function releaseActiveOwnedLockScope(): Promise<void> {
+    const schemeId = getNumericSchemeId()
+    if (!schemeId || !collaborationStore) return
+
+    await collaborationStore.releaseActiveOwnedLockScope(schemeId)
+    collaborationStore.clearActiveOwnedLockScope()
+  }
+
   async function beginEdit(elementType: DiagramEditableElementType, elementId: string): Promise<boolean> {
     const schemeId = getNumericSchemeId()
     if (!schemeId || !collaborationStore) return true
-    return await collaborationStore.acquireElementLock(schemeId, elementType, elementId)
+
+    const nextScope = createSingleScope(elementType, elementId)
+    const currentScope = collaborationStore.getActiveOwnedLockScope()
+
+    if (areLockScopesEqual(currentScope, nextScope)) {
+      return await collaborationStore.acquireElementLock(schemeId, elementType, elementId)
+    }
+
+    if (currentScope) {
+      await collaborationStore.releaseActiveOwnedLockScope(schemeId)
+      collaborationStore.clearActiveOwnedLockScope()
+    }
+
+    const locked = await collaborationStore.acquireElementLock(schemeId, elementType, elementId)
+    if (locked) {
+      collaborationStore.setActiveOwnedLockScope(nextScope)
+    }
+
+    return locked
   }
 
   async function endEdit(elementType: DiagramEditableElementType, elementId: string): Promise<void> {
     const schemeId = getNumericSchemeId()
     if (!schemeId || !collaborationStore) return
+
     await collaborationStore.releaseElementLock(schemeId, elementType, elementId)
+
+    const scope = createSingleScope(elementType, elementId)
+    if (areLockScopesEqual(collaborationStore.getActiveOwnedLockScope(), scope)) {
+      collaborationStore.clearActiveOwnedLockScope()
+    }
   }
 
   async function beginNodeEdit(nodeId: string): Promise<boolean> {
@@ -274,39 +350,70 @@ export function createDiagramCollaborationUseCases(
   }
 
   async function beginGroupEdit(nodeIds: string[], edgeIds: string[]): Promise<boolean> {
-    const uniqueNodeIds = Array.from(new Set(nodeIds))
-    const uniqueEdgeIds = Array.from(new Set(edgeIds))
+    const schemeId = getNumericSchemeId()
+    if (!schemeId || !collaborationStore) return true
+
+    const nextScope = createGroupScope(nodeIds, edgeIds)
+    const currentScope = collaborationStore.getActiveOwnedLockScope()
+    if (areLockScopesEqual(currentScope, nextScope)) {
+      return true
+    }
+
+    if (currentScope) {
+      await collaborationStore.releaseActiveOwnedLockScope(schemeId)
+      collaborationStore.clearActiveOwnedLockScope()
+    }
+
+    const uniqueNodeIds = nextScope.nodes
+    const uniqueEdgeIds = nextScope.edges
     const acquiredNodes: string[] = []
     const acquiredEdges: string[] = []
 
     for (const nodeId of uniqueNodeIds) {
-      const locked = await beginNodeEdit(nodeId)
+      const locked = await collaborationStore.acquireElementLock(schemeId, 'block', nodeId)
       if (!locked) {
-        await endGroupEdit(acquiredNodes, acquiredEdges)
+        for (const edgeId of acquiredEdges) {
+          await collaborationStore.releaseElementLock(schemeId, 'connection', edgeId)
+        }
+        for (const acquiredNodeId of acquiredNodes) {
+          await collaborationStore.releaseElementLock(schemeId, 'block', acquiredNodeId)
+        }
         return false
       }
       acquiredNodes.push(nodeId)
     }
 
     for (const edgeId of uniqueEdgeIds) {
-      const locked = await beginEdgeEdit(edgeId)
+      const locked = await collaborationStore.acquireElementLock(schemeId, 'connection', edgeId)
       if (!locked) {
-        await endGroupEdit(acquiredNodes, acquiredEdges)
+        for (const acquiredEdgeId of acquiredEdges) {
+          await collaborationStore.releaseElementLock(schemeId, 'connection', acquiredEdgeId)
+        }
+        for (const acquiredNodeId of acquiredNodes) {
+          await collaborationStore.releaseElementLock(schemeId, 'block', acquiredNodeId)
+        }
         return false
       }
       acquiredEdges.push(edgeId)
     }
 
+    collaborationStore.setActiveOwnedLockScope(nextScope)
     return true
   }
 
   async function endGroupEdit(nodeIds: string[], edgeIds: string[]): Promise<void> {
+    const scope = createGroupScope(nodeIds, edgeIds)
+
     for (const edgeId of Array.from(new Set(edgeIds))) {
       await endEdgeEdit(edgeId)
     }
 
     for (const nodeId of Array.from(new Set(nodeIds))) {
       await endNodeEdit(nodeId)
+    }
+
+    if (collaborationStore && areLockScopesEqual(collaborationStore.getActiveOwnedLockScope(), scope)) {
+      collaborationStore.clearActiveOwnedLockScope()
     }
   }
 
@@ -521,6 +628,7 @@ export function createDiagramCollaborationUseCases(
     beginEdgeEdit,
     endNodeEdit,
     endEdgeEdit,
+    releaseActiveOwnedLockScope,
     finishNodeCreate,
     finishNodeUpdate,
     finishNodeDelete,

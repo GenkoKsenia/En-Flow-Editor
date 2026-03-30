@@ -1,3 +1,4 @@
+import { watch } from 'vue'
 import { useDiagramStore } from '@/domains/diagram'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import type { DataFlow, Edge, Node } from '@/domains/graph'
@@ -13,13 +14,8 @@ export function useFlowEditorActions() {
     }))
   }
 
-  function releaseSelectionLock(): void {
-    uiStore.selectedNodeIds.forEach(nodeId => {
-      void diagramStore.endNodeEdit(nodeId)
-    })
-    uiStore.selectedEdgeIds.forEach(edgeId => {
-      void diagramStore.endEdgeEdit(edgeId)
-    })
+  async function releaseSelectionLock(): Promise<void> {
+    await diagramStore.releaseActiveOwnedLockScope()
   }
 
   function addNode(): void {
@@ -37,8 +33,8 @@ export function useFlowEditorActions() {
     void diagramStore.finishEdgeCreate(createdEdge)
   }
 
-  function clearSelection(): void {
-    releaseSelectionLock()
+  async function clearSelection(): Promise<void> {
+    await releaseSelectionLock()
     uiStore.clearSelection()
   }
 
@@ -127,6 +123,16 @@ export function useFlowEditorActions() {
     void diagramStore.endEdgeEdit(edge.id)
     uiStore.clearSelection()
   }
+
+  watch(
+    () => [uiStore.selectedNodeIds.length, uiStore.selectedEdgeIds.length] as const,
+    ([nodeCount, edgeCount], [previousNodeCount, previousEdgeCount]) => {
+      if (nodeCount !== 0 || edgeCount !== 0) return
+      if (previousNodeCount === 0 && previousEdgeCount === 0) return
+
+      void releaseSelectionLock()
+    },
+  )
 
   return {
     addNode,

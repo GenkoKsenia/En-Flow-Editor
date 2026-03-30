@@ -174,6 +174,7 @@ export function useFlowEditorWorkspace(
     if (
       target?.closest('.node') ||
       target?.closest('.edge') ||
+      target?.closest('.lock-badge') ||
       target?.closest('.comment-bubble') ||
       target?.closest('.canvas-zoom-controls') ||
       target?.closest('.properties-panel')
@@ -184,6 +185,7 @@ export function useFlowEditorWorkspace(
     const start = getCanvasPoint(event)
     if (!start) return
 
+    void actions.clearSelection()
     uiStore.startMarquee(start)
 
     const onMouseMove = (moveEvent: MouseEvent) => {

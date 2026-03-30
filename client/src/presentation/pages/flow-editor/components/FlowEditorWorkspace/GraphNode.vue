@@ -14,7 +14,8 @@
       'data-flow-error': hasDataError,
       'missing-target': hasMissingTarget,
       'forbidden-outgoing': hasForbiddenOutgoing,
-      locked: isLocked,
+      'locked-self': lockState === 'self',
+      'locked-other': lockState === 'other',
       [nodeBorderClass]: true
     }"
     :title="tooltipText"
@@ -23,6 +24,10 @@
     @mousemove="onMouseMove"
     @mouseleave="onMouseLeave"
   >
+    <div v-if="lockBadgeLabel" class="lock-badge" :class="`lock-badge--${lockState}`">
+      {{ lockBadgeLabel }}
+    </div>
+
     <div class="node-title">
       {{ node.text }}
     </div>
@@ -57,7 +62,6 @@ interface Props {
   hasForbiddenOutgoing?: boolean
   errorMessage?: string | null
   warningMessage?: string | null
-  isLocked?: boolean
   lockedBy?: string | null
 }
 
@@ -76,7 +80,6 @@ const props = withDefaults(defineProps<Props>(), {
   hasForbiddenOutgoing: false,
   errorMessage: null,
   warningMessage: null,
-  isLocked: false,
   lockedBy: null,
 })
 
@@ -109,6 +112,18 @@ function getAbsolutePosition(node: Node, nodes: Node[]): Position {
 const nodeDepth = computed(() => calculateNodeDepth(props.node, props.allNodes))
 const hasChildren = computed(() => props.childrenCount > 0)
 const nodeBorderClass = computed(() => `border-style-${props.node.borderStyle ?? 'solid'}`)
+const lockState = computed<'self' | 'other' | null>(() => {
+  if (props.lockedBy === 'self') return 'self'
+  if (props.lockedBy) return 'other'
+  return null
+})
+const lockBadgeLabel = computed(() => {
+  if (lockState.value === 'self') return 'Вы'
+  if (lockState.value === 'other') {
+    return props.lockedBy === 'locked' ? 'Занято' : props.lockedBy
+  }
+  return null
+})
 
 const nodeStyle = computed(() => {
   // Вычисляем абсолютную позицию для отображения
@@ -135,11 +150,12 @@ const nodeStyle = computed(() => {
 const tooltipText = computed<string | undefined>(() => {
   if (props.errorMessage) return props.errorMessage
   if (props.warningMessage) return props.warningMessage
-  if (props.isLocked) {
+  if (lockState.value === 'other') {
     return props.lockedBy && props.lockedBy !== 'locked'
       ? `Занято: ${props.lockedBy}`
       : 'Занято другим пользователем'
   }
+  if (lockState.value === 'self') return 'Заблокировано вами'
   return undefined
 })
 
@@ -241,6 +257,30 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   text-align: center;
   font-size: 14px;
   transition: box-shadow 0.2s ease, transform 0s;
+}
+
+.lock-badge {
+  position: absolute;
+  top: -12px;
+  right: -10px;
+  max-width: 110px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18);
+}
+
+.lock-badge--self {
+  background: #0b6bcb;
+}
+
+.lock-badge--other {
+  background: #d9485f;
 }
 
 .node.border-style-solid {
@@ -356,7 +396,18 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.55);
 }
 
-.node.locked {
-  opacity: 0.7;
+.node.locked-self {
+  --border-color: #0b6bcb;
+  box-shadow:
+    0 0 0 3px rgba(11, 107, 203, 0.25),
+    0 4px 14px rgba(11, 107, 203, 0.18);
+}
+
+.node.locked-other {
+  --border-color: #d9485f;
+  box-shadow:
+    0 0 0 3px rgba(217, 72, 95, 0.25),
+    0 4px 14px rgba(217, 72, 95, 0.18);
+  cursor: not-allowed;
 }
 </style>

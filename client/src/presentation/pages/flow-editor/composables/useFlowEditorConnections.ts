@@ -11,7 +11,7 @@ type UseFlowEditorConnectionsOptions = {
   addCommentForEdge: (edgeId: string) => boolean
   addCommentOnCanvas: (event: MouseEvent) => boolean
   createEdge: (edge: Edge) => void
-  clearSelection: () => void
+  clearSelection: () => Promise<void> | void
 }
 
 function buildEdgeLabel(
@@ -137,7 +137,7 @@ export function useFlowEditorConnections({
         return
       }
 
-      clearSelection()
+      await clearSelection()
       const locked = await documentStore.beginNodeEdit(nodeId)
       if (!locked) return
       uiStore.selectNode(nodeId)
@@ -181,7 +181,7 @@ export function useFlowEditorConnections({
       return
     }
 
-    clearSelection()
+    await clearSelection()
     const locked = await documentStore.beginEdgeEdit(edgeId)
     if (!locked) return
     uiStore.selectEdge(edgeId)
@@ -196,6 +196,7 @@ export function useFlowEditorConnections({
       if (
         target?.closest('.node') ||
         target?.closest('.edge') ||
+        target?.closest('.lock-badge') ||
         target?.closest('.comment-bubble') ||
         target?.closest('.canvas-zoom-controls')
       ) return
@@ -210,8 +211,8 @@ export function useFlowEditorConnections({
       resetConnectionMode()
     }
 
-    if (!target?.closest('.node') && !target?.closest('.edge')) {
-      clearSelection()
+    if (!target?.closest('.node') && !target?.closest('.edge') && !target?.closest('.lock-badge')) {
+      void clearSelection()
     }
   }
 

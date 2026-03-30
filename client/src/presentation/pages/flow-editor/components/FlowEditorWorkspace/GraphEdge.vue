@@ -1,5 +1,12 @@
 <template>
-  <svg class="edge" :class="{ locked: isLocked }" :style="{ zIndex: edgeZIndex }">
+  <svg
+    class="edge"
+    :class="{
+      'locked-self': lockState === 'self',
+      'locked-other': lockState === 'other',
+    }"
+    :style="{ zIndex: edgeZIndex }"
+  >
     <!-- Основной путь стрелки -->
     <!-- Увеличенная зона клика по стрелке (прозрачный дублирующий путь) -->
     <path
@@ -20,7 +27,12 @@
       :stroke-linecap="strokeLinecap"
       :marker-end="markerUrl || undefined"
       @mousedown="onPathMouseDown"
-      :class="{ selected: isSelected, 'pass-through-error': hasPassThroughError, locked: isLocked }"
+      :class="{
+        selected: isSelected,
+        'pass-through-error': hasPassThroughError,
+        'locked-self': lockState === 'self',
+        'locked-other': lockState === 'other',
+      }"
     >
       <title v-if="edgeTitle">{{ edgeTitle }}</title>
     </path>
@@ -58,6 +70,19 @@
     >
       {{ edgeLabel }}
     </text>
+
+    <text
+      v-if="lockBadgeLabel && labelPosition"
+      :x="labelPosition.x"
+      :y="(labelPosition.y ?? 0) - 18"
+      class="edge-lock-label"
+      :class="`edge-lock-label--${lockState}`"
+      text-anchor="middle"
+      dominant-baseline="middle"
+      pointer-events="none"
+    >
+      {{ lockBadgeLabel }}
+    </text>
   </svg>
 </template>
 
@@ -77,7 +102,6 @@ interface Props {
   isPassThrough?: boolean
   errorMessage?: string | null
   warningMessage?: string | null
-  isLocked?: boolean
   lockedBy?: string | null
 }
 
@@ -91,7 +115,6 @@ const props = withDefaults(defineProps<Props>(), {
   isPassThrough: false,
   errorMessage: null,
   warningMessage: null,
-  isLocked: false,
   lockedBy: null,
 })
 
@@ -100,14 +123,28 @@ const emit = defineEmits<{
   'breakpoint-drag-start': [edgeId: string, event: MouseEvent] 
 }>()
 
+const lockState = computed<'self' | 'other' | null>(() => {
+  if (props.lockedBy === 'self') return 'self'
+  if (props.lockedBy) return 'other'
+  return null
+})
+const lockBadgeLabel = computed(() => {
+  if (lockState.value === 'self') return 'Вы'
+  if (lockState.value === 'other') {
+    return props.lockedBy === 'locked' ? 'Занято' : props.lockedBy
+  }
+  return null
+})
+
 const edgeTitle = computed(() => {
   if (props.errorMessage) return props.errorMessage
   if (props.warningMessage) return props.warningMessage
-  if (props.isLocked) {
+  if (lockState.value === 'other') {
     return props.lockedBy && props.lockedBy !== 'locked'
       ? `Занято: ${props.lockedBy}`
       : 'Занято другим пользователем'
   }
+  if (lockState.value === 'self') return 'Заблокировано вами'
   return props.edge.label?.trim() ?? ''
 })
 const edgeLabel = computed(() => {
@@ -540,6 +577,18 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   stroke-width: 3;
 }
 
+.edge path.locked-self {
+  stroke: #0b6bcb;
+  filter: drop-shadow(0 0 4px rgba(11, 107, 203, 0.38));
+}
+
+.edge path.locked-other,
+.edge.locked-other .drag-handle {
+  stroke: #d9485f;
+  cursor: not-allowed;
+  filter: drop-shadow(0 0 4px rgba(217, 72, 95, 0.38));
+}
+
 .drag-handle {
   pointer-events: all;
   cursor: col-resize;
@@ -558,7 +607,19 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   stroke-width: 2px;
 }
 
-.edge.locked {
-  opacity: 0.7;
+.edge-lock-label {
+  font-size: 11px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 3px;
+}
+
+.edge-lock-label--self {
+  fill: #0b6bcb;
+}
+
+.edge-lock-label--other {
+  fill: #d9485f;
 }
 </style>

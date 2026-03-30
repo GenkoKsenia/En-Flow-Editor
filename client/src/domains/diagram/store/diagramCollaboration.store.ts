@@ -15,6 +15,11 @@ type LockRequest = {
   resolve: (value: boolean) => void
   timeoutId: number
 }
+export type DiagramOwnedLockScope = {
+  kind: 'single' | 'group'
+  nodes: string[]
+  edges: string[]
+}
 
 export const useDiagramCollaborationStore = defineStore('diagramCollaboration', () => {
   const client = createSchemeHubClient()
@@ -22,6 +27,7 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
   const connectionStatus = ref<ConnectionStatus>('idle')
   const joinedSchemeId = ref<number | null>(null)
   const lockedElements = ref<Record<string, string>>({})
+  const activeOwnedLockScope = ref<DiagramOwnedLockScope | null>(null)
   const lastRemoteEvent = ref<string | null>(null)
   const reconnectState = ref<string | null>(null)
   const lastError = ref<string | null>(null)
@@ -36,6 +42,28 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
 
   function lockKey(elementType: string, elementId: string): string {
     return `${elementType}:${elementId}`
+  }
+
+  function normalizeOwnedLockScope(scope: DiagramOwnedLockScope): DiagramOwnedLockScope {
+    return {
+      kind: scope.kind,
+      nodes: Array.from(new Set(scope.nodes)).sort(),
+      edges: Array.from(new Set(scope.edges)).sort(),
+    }
+  }
+
+  function getOwnedLockScopeEntries(scope: DiagramOwnedLockScope): Array<{ elementType: string; elementId: string }> {
+    return [
+      ...scope.edges.map(elementId => ({ elementType: 'connection', elementId })),
+      ...scope.nodes.map(elementId => ({ elementType: 'block', elementId })),
+    ]
+  }
+
+  function clearSelfLockLocally(elementType: string, elementId: string): void {
+    const key = lockKey(elementType, elementId)
+    if (lockedElements.value[key] === 'self') {
+      delete lockedElements.value[key]
+    }
   }
 
   function readString(payload: Record<string, unknown>, pascalKey: string, camelKey: string): string {
@@ -176,6 +204,8 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
       }),
       client.onClose(error => {
         connectionStatus.value = 'idle'
+        activeOwnedLockScope.value = null
+        lockedElements.value = {}
         if (error) {
           lastError.value = error.message
         }
@@ -235,11 +265,13 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
     if (!Number.isFinite(schemeId)) return
 
     try {
+      await releaseActiveOwnedLockScope(schemeId)
       await client.leaveScheme(schemeId)
     } finally {
       if (joinedSchemeId.value === schemeId) {
         joinedSchemeId.value = null
       }
+      activeOwnedLockScope.value = null
       lockedElements.value = {}
       lastRemoteEvent.value = `LeaveScheme:${schemeId}`
     }
@@ -289,7 +321,25 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
 
   async function releaseElementLock(schemeId: number, elementType: string, elementId: string): Promise<void> {
     if (!isLockedBySelf(elementType, elementId)) return
-    await unlockElement(schemeId, elementType, elementId)
+    clearSelfLockLocally(elementType, elementId)
+
+    try {
+      await unlockElement(schemeId, elementType, elementId)
+    } catch (error) {
+      lockedElements.value[lockKey(elementType, elementId)] = 'self'
+      throw error
+    }
+  }
+
+  async function releaseActiveOwnedLockScope(schemeId: number): Promise<void> {
+    const scope = getActiveOwnedLockScope()
+    if (!scope) return
+
+    activeOwnedLockScope.value = null
+
+    for (const entry of getOwnedLockScopeEntries(scope)) {
+      await releaseElementLock(schemeId, entry.elementType, entry.elementId)
+    }
   }
 
   async function submitSchemeUpdates(schemeId: number, changes: SchemeHubCodeRequest): Promise<void> {
@@ -332,6 +382,25 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
     return lockedElements.value[lockKey(elementType, elementId)] ?? null
   }
 
+  function getActiveOwnedLockScope(): DiagramOwnedLockScope | null {
+    const scope = activeOwnedLockScope.value
+    if (!scope) return null
+
+    return {
+      kind: scope.kind,
+      nodes: [...scope.nodes],
+      edges: [...scope.edges],
+    }
+  }
+
+  function setActiveOwnedLockScope(scope: DiagramOwnedLockScope): void {
+    activeOwnedLockScope.value = normalizeOwnedLockScope(scope)
+  }
+
+  function clearActiveOwnedLockScope(): void {
+    activeOwnedLockScope.value = null
+  }
+
   function isLockedBySelf(elementType: string, elementId: string): boolean {
     return getElementLockOwner(elementType, elementId) === 'self'
   }
@@ -345,6 +414,7 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
     connectionStatus,
     joinedSchemeId,
     lockedElements,
+    activeOwnedLockScope,
     lastRemoteEvent,
     reconnectState,
     lastError,
@@ -357,6 +427,7 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
     acquireElementLock,
     unlockElement,
     releaseElementLock,
+    releaseActiveOwnedLockScope,
     submitSchemeUpdates,
     initializeSubscriptions,
     onCodeUpdated,
@@ -364,6 +435,9 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
     onNewVersionCreated,
     onChangesSaved,
     getElementLockOwner,
+    getActiveOwnedLockScope,
+    setActiveOwnedLockScope,
+    clearActiveOwnedLockScope,
     isLockedBySelf,
     isLockedByOther,
   }
