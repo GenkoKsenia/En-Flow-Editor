@@ -5,11 +5,11 @@ import { roundCoord } from '@/domains/editor-document'
 
 type CommentLike = {
   id: string
-  offset: Position
+  position: Position
 }
 
 type CommentStoreApi = {
-  updateComment(commentId: string, updates: { offset: Position }): void
+  updateDraft(commentId: string, updates: { position: Position }): void
 }
 
 type UseCommentDragOptions<TComment extends CommentLike> = {
@@ -29,15 +29,15 @@ export function useCommentDrag<TComment extends CommentLike>({
 
     const startMouseX = event.clientX
     const startMouseY = event.clientY
-    const startOffsetX = comment.offset.x
-    const startOffsetY = comment.offset.y
+    const startOffsetX = comment.position.x
+    const startOffsetY = comment.position.y
     const scale = zoom.value || 1
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = (moveEvent.clientX - startMouseX) / scale
       const deltaY = (moveEvent.clientY - startMouseY) / scale
-      documentStore.updateComment(commentId, {
-        offset: {
+      documentStore.updateDraft(commentId, {
+        position: {
           x: roundCoord(startOffsetX + deltaX),
           y: roundCoord(startOffsetY + deltaY),
         },

@@ -2,8 +2,6 @@ import type { DataFlow, Edge, Node } from '@/domains/graph'
 
 import {
   createEmptyEditorDocument,
-  decodeTargetId,
-  encodeTargetId,
   generateEdgeLabel,
   normalizeBorderStyle,
   normalizeConnectionSide,
@@ -100,14 +98,6 @@ export function createDocumentJsonUseCases(
         breakpoints: extractBreakpoints(edge),
       })),
       styles: buildStyles(),
-      comments: context.comments.value.map(comment => ({
-        id: comment.id,
-        targetId: comment.targetId ?? 'canvas',
-        offset: { x: comment.offset.x, y: comment.offset.y },
-        text: comment.text,
-        author: comment.author,
-        createdAt: comment.createdAt,
-      })),
     }
   }
 
@@ -133,7 +123,6 @@ export function createDocumentJsonUseCases(
     const parsedConnections = Array.isArray(parsed.connections) ? parsed.connections : []
     const parsedStyles: EditorStylesDto | null = parsed.styles ?? null
     const parsedDataFlows = Array.isArray(parsed.dataFlows) ? parsed.dataFlows : []
-    const parsedComments = Array.isArray(parsed.comments) ? parsed.comments : []
     const blockStyles: Record<string, { color?: string; border_color?: string; border_width?: number; border_radius?: number; border_style?: string }> = {}
     const connectionStyles: Record<string, { color?: string; width?: number; type?: string }> = {}
     const nodeIdMap: Record<string, string> = {}
@@ -280,31 +269,7 @@ export function createDocumentJsonUseCases(
       const sanitized = Array.from(new Set(preferred.filter(id => allowed.includes(id))))
       return { ...edge, dataKeys: sanitized }
     })
-    context.comments.value = parsedComments.map((comment, index) => {
-      const fallbackId = typeof comment.targetId === 'string'
-        ? comment.targetId
-        : (comment.targetId != null ? String(comment.targetId) : null)
-      const target = decodeTargetId(
-        typeof comment.targetId === 'string' ? comment.targetId : null,
-        comment.targetType,
-        fallbackId,
-      )
-      const mappedTargetId = target.type === 'node'
-        ? (nodeIdMap[String(target.id)] ?? normalizeNodeId(target.id))
-        : target.id
-
-      return {
-        id: comment.id ?? `comment-${index + 1}`,
-        targetId: encodeTargetId(target.type, mappedTargetId),
-        offset: {
-          x: typeof comment.offset?.x === 'number' ? comment.offset.x : 0,
-          y: typeof comment.offset?.y === 'number' ? comment.offset.y : 0,
-        },
-        text: typeof comment.text === 'string' ? comment.text : '',
-        author: typeof comment.author === 'string' ? comment.author : context.getDefaultAuthor(),
-        createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : new Date().toLocaleString('ru-RU'),
-      }
-    })
+    context.comments.value = []
 
     dependencies.refreshCounters()
     context.lastSerializedJson.value = JSON.stringify(serializeDocument(), null, 2)

@@ -7,9 +7,9 @@ import type { ConnectionSide } from '@/domains/graph'
 
 type UseFlowEditorConnectionsOptions = {
   nodeSendableData: ComputedRef<Record<string, string[]>>
-  addCommentForNode: (nodeId: string) => void
-  addCommentForEdge: (edgeId: string) => void
-  addCommentOnCanvas: (event: MouseEvent) => void
+  addCommentForNode: (nodeId: string) => boolean
+  addCommentForEdge: (edgeId: string) => boolean
+  addCommentOnCanvas: (event: MouseEvent) => boolean
   clearSelection: () => void
 }
 
@@ -97,7 +97,9 @@ export function useFlowEditorConnections({
     event.stopPropagation()
 
     if (isCommentMode.value) {
-      addCommentForNode(nodeId)
+      if (addCommentForNode(nodeId)) {
+        uiStore.stopCommentMode()
+      }
       return
     }
 
@@ -123,7 +125,9 @@ export function useFlowEditorConnections({
     event.stopPropagation()
 
     if (isCommentMode.value) {
-      addCommentForEdge(edgeId)
+      if (addCommentForEdge(edgeId)) {
+        uiStore.stopCommentMode()
+      }
       return
     }
 
@@ -141,7 +145,9 @@ export function useFlowEditorConnections({
         target?.closest('.canvas-zoom-controls')
       ) return
 
-      addCommentOnCanvas(event)
+      if (addCommentOnCanvas(event)) {
+        uiStore.stopCommentMode()
+      }
       return
     }
 

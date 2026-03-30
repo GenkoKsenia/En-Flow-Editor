@@ -129,6 +129,10 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     }
   }
 
+  function stopCommentMode(): void {
+    isCommentMode.value = false
+  }
+
   function toggleDownloadMenu(): void {
     isVersionMenuOpen.value = false
     isDownloadMenuOpen.value = !isDownloadMenuOpen.value
@@ -238,6 +242,7 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     setConnectionStart,
     setHoveredNode,
     toggleCommentMode,
+    stopCommentMode,
     toggleDownloadMenu,
     closeDownloadMenu,
     toggleVersionMenu,

@@ -1,6 +1,7 @@
 import { computed, type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
+import { useCommentsStore } from '@/domains/comments'
 import { clampBreakpointX, clampBreakpointY } from '@/domains/editor-document'
 import { useEditorDocumentStore } from '@/domains/editor-document'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
@@ -23,9 +24,11 @@ export function useFlowEditorWorkspace(
   canvasContent: Ref<HTMLElement | null>,
 ) {
   const documentStore = useEditorDocumentStore()
+  const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
 
-  const { nodes, edges, dataFlows, comments } = storeToRefs(documentStore)
+  const { nodes, edges, dataFlows } = storeToRefs(documentStore)
+  const { comments } = storeToRefs(commentsStore)
   const {
     selectedObject,
     selectedNodeId,
@@ -114,7 +117,7 @@ export function useFlowEditorWorkspace(
   const { startCommentDrag } = useCommentDrag({
     comments,
     zoom,
-    documentStore,
+    documentStore: commentsStore,
   })
 
   const { onBreakpointDragStart } = useBreakpointDrag({
@@ -192,7 +195,9 @@ export function useFlowEditorWorkspace(
     onNodeClick: connections.onNodeClick,
     onNodeHoverSide: connections.onNodeHoverSide,
     startCommentDrag,
-    removeComment: commentsApi.removeComment,
+    updateCommentText: commentsApi.updateCommentText,
+    submitComment: commentsApi.submitComment,
+    removeComment: commentsApi.discardComment,
     zoomIn: viewport.zoomIn,
     zoomOut: viewport.zoomOut,
   }

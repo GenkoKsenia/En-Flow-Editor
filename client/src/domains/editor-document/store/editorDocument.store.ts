@@ -130,7 +130,7 @@ export const useEditorDocumentStore = defineStore('editorDocument', () => {
     jsonBuffer.value = value
   }
 
-  watch([nodes, edges, dataFlows, comments], syncJsonFromState, { deep: true, immediate: true })
+  watch([nodes, edges, dataFlows], syncJsonFromState, { deep: true, immediate: true })
   watch(jsonBuffer, (value, previousValue) => {
     if (isUpdatingFromState.value) return
     if (value === previousValue) return

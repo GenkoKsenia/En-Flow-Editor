@@ -99,7 +99,9 @@
           :comment="comment"
           :style-object="getCommentStyle(comment)"
           @drag-start="startCommentDrag"
-          @remove="removeComment"
+          @update:text="updateCommentText"
+          @save="submitComment"
+          @cancel="removeComment"
         />
       </div>
 
@@ -191,6 +193,8 @@ const {
   onNodeClick,
   onNodeHoverSide,
   startCommentDrag,
+  updateCommentText,
+  submitComment,
   removeComment,
   zoomIn,
   zoomOut,

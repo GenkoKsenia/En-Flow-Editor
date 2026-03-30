@@ -1,10 +1,8 @@
 import { storeToRefs } from 'pinia'
 import type { Ref } from 'vue'
 
-import { decodeTargetId, encodeTargetId } from '@/domains/editor-document'
 import { useEditorDocumentStore } from '@/domains/editor-document'
-import { MOCK_CURRENT_USER_NAME } from '@/mocks'
-import type { EditorComment } from '@/domains/editor-document'
+import { useCommentsStore, type CommentsStoreComment } from '@/domains/comments'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import type { Edge, Node, Position } from '@/domains/graph'
 type NodeRect = {
@@ -26,81 +24,60 @@ export function useFlowEditorComments({
   getEdgeAnchor,
 }: UseFlowEditorCommentsOptions) {
   const documentStore = useEditorDocumentStore()
+  const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
 
   const { nodes, edges } = storeToRefs(documentStore)
   const { zoom } = storeToRefs(uiStore)
 
-  const makeCommentId = () => documentStore.createCommentId()
-
-  function addCommentForNode(nodeId: string): void {
+  function addCommentForNode(nodeId: string): boolean {
     const node = nodes.value.find(item => item.id === nodeId)
-    if (!node) return
+    if (!node) return false
 
     const rect = getNodeRect(node)
-    documentStore.addComment({
-      id: makeCommentId(),
-      targetId: encodeTargetId('node', nodeId),
-      offset: { x: rect.width + 12, y: 0 },
-      text: '',
-      author: MOCK_CURRENT_USER_NAME,
-      createdAt: new Date().toLocaleString('ru-RU'),
-    })
+    commentsStore.startDraft('node', nodeId, { x: rect.width + 12, y: 0 })
+    return true
   }
 
-  function addCommentForEdge(edgeId: string): void {
+  function addCommentForEdge(edgeId: string): boolean {
     const edge = edges.value.find(item => item.id === edgeId)
-    if (!edge) return
+    if (!edge) return false
 
-    documentStore.addComment({
-      id: makeCommentId(),
-      targetId: encodeTargetId('edge', edgeId),
-      offset: { x: 12, y: -12 },
-      text: '',
-      author: MOCK_CURRENT_USER_NAME,
-      createdAt: new Date().toLocaleString('ru-RU'),
-    })
+    commentsStore.startDraft('edge', edgeId, { x: 12, y: -12 })
+    return true
   }
 
-  function addCommentOnCanvas(event: MouseEvent): void {
-    if (!canvasContent.value) return
+  function addCommentOnCanvas(event: MouseEvent): boolean {
+    if (!canvasContent.value) return false
 
     const rect = canvasContent.value.getBoundingClientRect()
     const scale = zoom.value || 1
-    documentStore.addComment({
-      id: makeCommentId(),
-      targetId: encodeTargetId('canvas', null),
-      offset: {
-        x: (event.clientX - rect.left) / scale,
-        y: (event.clientY - rect.top) / scale,
-      },
-      text: '',
-      author: MOCK_CURRENT_USER_NAME,
-      createdAt: new Date().toLocaleString('ru-RU'),
+    commentsStore.startDraft('canvas', null, {
+      x: (event.clientX - rect.left) / scale,
+      y: (event.clientY - rect.top) / scale,
     })
+    return true
   }
 
-  function getCommentStyle(comment: EditorComment): Record<string, string> {
-    let left = comment.offset.x
-    let top = comment.offset.y
+  function getCommentStyle(comment: CommentsStoreComment): Record<string, string> {
+    let left = comment.position.x
+    let top = comment.position.y
 
-    const { type, id } = decodeTargetId(comment.targetId)
-
-    if (type === 'node' && id) {
-      const node = nodes.value.find(item => item.id === id)
+    if (comment.targetType === 'node' && comment.targetId) {
+      const node = nodes.value.find(item => item.id === comment.targetId)
       if (node) {
         const rect = getNodeRect(node)
-        left = rect.left + comment.offset.x
-        top = rect.top + comment.offset.y
+        left = rect.left + comment.position.x
+        top = rect.top + comment.position.y
       }
     }
 
-    if (type === 'edge' && id) {
-      const edge = edges.value.find(item => item.id === id)
+    if (comment.targetType === 'edge' && comment.targetId) {
+      const edge = edges.value.find(item => item.id === comment.targetId)
       if (edge) {
         const anchor = getEdgeAnchor(edge)
-        left = anchor.x + comment.offset.x
-        top = anchor.y + comment.offset.y
+        left = anchor.x + comment.position.x
+        top = anchor.y + comment.position.y
       }
     }
 
@@ -110,13 +87,30 @@ export function useFlowEditorComments({
     }
   }
 
-  const removeComment = (commentId: string) => documentStore.removeComment(commentId)
+  function updateCommentText(commentId: string, text: string): void {
+    commentsStore.updateDraft(commentId, { text })
+  }
+
+  function updateCommentPosition(commentId: string, position: Position): void {
+    commentsStore.updateDraft(commentId, { position })
+  }
+
+  function submitComment(commentId: string): Promise<void> {
+    return commentsStore.submitDraft(commentId)
+  }
+
+  function discardComment(commentId: string): void {
+    commentsStore.discardDraft(commentId)
+  }
 
   return {
     addCommentForNode,
     addCommentForEdge,
     addCommentOnCanvas,
     getCommentStyle,
-    removeComment,
+    updateCommentText,
+    updateCommentPosition,
+    submitComment,
+    discardComment,
   }
 }

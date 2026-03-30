@@ -6,6 +6,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { mapCommentToExportPayload, type CommentsStoreComment } from '@/domains/comments'
 import type { ConnectionSide, DataFlow, Edge, Node, NodeLineStyle, Position, Segment } from '@/domains/graph'
 import UiButton from '@/presentation/ui/UiButton.vue'
 
@@ -77,7 +78,7 @@ const props = defineProps<{
   edges: Edge[]
   dataFlows?: DataFlow[]
   styles?: ExportStyles
-  comments?: ExportComment[]
+  comments?: CommentsStoreComment[]
   fileName?: string
   label?: string
 }>()
@@ -311,7 +312,7 @@ function buildPayload(): ExportPayload {
     dataFlows: props.dataFlows ?? [],
     connections: props.edges.map((edge) => toExportConnection(edge, throughByEdgeId, connectionPositions, props.nodes)),
     styles,
-    comments: props.comments ?? []
+    comments: (props.comments ?? []).map(mapCommentToExportPayload)
   }
 }
 
