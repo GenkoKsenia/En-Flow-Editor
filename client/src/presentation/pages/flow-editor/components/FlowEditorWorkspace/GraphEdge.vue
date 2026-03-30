@@ -1,5 +1,5 @@
 <template>
-  <svg class="edge" :style="{ zIndex: edgeZIndex }">
+  <svg class="edge" :class="{ locked: isLocked }" :style="{ zIndex: edgeZIndex }">
     <!-- Основной путь стрелки -->
     <!-- Увеличенная зона клика по стрелке (прозрачный дублирующий путь) -->
     <path
@@ -20,7 +20,7 @@
       :stroke-linecap="strokeLinecap"
       :marker-end="markerUrl || undefined"
       @mousedown="onPathMouseDown"
-      :class="{ selected: isSelected, 'pass-through-error': hasPassThroughError }"
+      :class="{ selected: isSelected, 'pass-through-error': hasPassThroughError, locked: isLocked }"
     >
       <title v-if="edgeTitle">{{ edgeTitle }}</title>
     </path>
@@ -77,6 +77,8 @@ interface Props {
   isPassThrough?: boolean
   errorMessage?: string | null
   warningMessage?: string | null
+  isLocked?: boolean
+  lockedBy?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -88,7 +90,9 @@ const props = withDefaults(defineProps<Props>(), {
   hasPassThroughError: false,
   isPassThrough: false,
   errorMessage: null,
-  warningMessage: null
+  warningMessage: null,
+  isLocked: false,
+  lockedBy: null,
 })
 
 const emit = defineEmits<{
@@ -99,6 +103,11 @@ const emit = defineEmits<{
 const edgeTitle = computed(() => {
   if (props.errorMessage) return props.errorMessage
   if (props.warningMessage) return props.warningMessage
+  if (props.isLocked) {
+    return props.lockedBy && props.lockedBy !== 'locked'
+      ? `Занято: ${props.lockedBy}`
+      : 'Занято другим пользователем'
+  }
   return props.edge.label?.trim() ?? ''
 })
 const edgeLabel = computed(() => {
@@ -546,5 +555,9 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   paint-order: stroke;
   stroke: white;
   stroke-width: 2px;
+}
+
+.edge.locked {
+  opacity: 0.7;
 }
 </style>

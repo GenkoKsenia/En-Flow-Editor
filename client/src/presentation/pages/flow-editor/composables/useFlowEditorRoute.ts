@@ -2,8 +2,7 @@ import { computed, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { buildCommentTargetKey, type CommentTargetKey, useCommentsStore } from '@/domains/comments'
-import { useEditorDocumentStore } from '@/domains/editor-document'
-import { useEditorCollaborationStore } from '@/domains/collaboration'
+import { useDiagramCollaborationStore, useDiagramStore } from '@/domains/diagram'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 
 function parseSchemeId(rawSchemeId: string | null | undefined): number | null {
@@ -14,10 +13,10 @@ function parseSchemeId(rawSchemeId: string | null | undefined): number | null {
 
 export function useFlowEditorRoute() {
   const route = useRoute()
-  const documentStore = useEditorDocumentStore()
+  const diagramStore = useDiagramStore()
   const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
-  const collaborationStore = useEditorCollaborationStore()
+  const collaborationStore = useDiagramCollaborationStore()
 
   const schemeId = computed(() => {
     const raw = route.params.schemeId
@@ -25,15 +24,20 @@ export function useFlowEditorRoute() {
   })
   const commentTargets = computed<CommentTargetKey[]>(() => [
     'canvas',
-    ...documentStore.nodes.map(node => buildCommentTargetKey('node', node.id)),
-    ...documentStore.edges.map(edge => buildCommentTargetKey('edge', edge.id)),
+    ...diagramStore.nodes.map(node => buildCommentTargetKey('node', node.id)),
+    ...diagramStore.edges.map(edge => buildCommentTargetKey('edge', edge.id)),
   ])
 
   watch(
     schemeId,
     async (nextSchemeId, previousSchemeId) => {
+      if (nextSchemeId !== previousSchemeId) {
+        diagramStore.disconnectCollaboration()
+        diagramStore.connectCollaboration(collaborationStore)
+      }
+
       uiStore.resetForScheme()
-      await documentStore.loadSchemeSnapshot(nextSchemeId)
+      await diagramStore.loadCurrentVersion(nextSchemeId)
 
       const previousNumericId = parseSchemeId(previousSchemeId)
       const nextNumericId = parseSchemeId(nextSchemeId)
@@ -58,6 +62,7 @@ export function useFlowEditorRoute() {
   })
 
   onBeforeUnmount(() => {
+    diagramStore.disconnectCollaboration()
     void collaborationStore.disconnect()
     void commentsStore.reset()
   })

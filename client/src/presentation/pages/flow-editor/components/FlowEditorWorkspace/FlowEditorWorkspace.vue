@@ -34,6 +34,8 @@
       :nodes="nodes"
       :data-sets="nodeSendableData"
       :data-flows="dataFlows"
+      :is-locked="isSelectedObjectLockedByOther"
+      :lock-message="selectedObjectLockMessage"
       @update:node="updateNode"
       @update:edge="updateEdge"
       @update:dataFlows="updateDataFlows"
@@ -65,6 +67,8 @@
           :is-pass-through="edgeRequiresPassThrough[edge.id]"
           :error-message="edgeErrorMessages[edge.id]"
           :warning-message="edgeWarningMessages[edge.id]"
+          :is-locked="lockedEdgeOwners[edge.id] !== null && lockedEdgeOwners[edge.id] !== 'self'"
+          :locked-by="lockedEdgeOwners[edge.id]"
           @edge-click="onEdgeClick"
           @breakpoint-drag-start="onBreakpointDragStart"
         />
@@ -88,6 +92,8 @@
           :has-forbidden-outgoing="nodeForbiddenOutgoing[node.id]"
           :error-message="nodeErrorMessages[node.id]"
           :warning-message="nodeWarningMessages[node.id]"
+          :is-locked="lockedNodeOwners[node.id] !== null && lockedNodeOwners[node.id] !== 'self'"
+          :locked-by="lockedNodeOwners[node.id]"
           @node-mousedown="onNodeMouseDown"
           @node-click="onNodeClick"
           @node-hover-side="onNodeHoverSide"
@@ -137,6 +143,10 @@ const {
   selectedObject,
   selectedNodeId,
   selectedEdgeId,
+  lockedNodeOwners,
+  lockedEdgeOwners,
+  isSelectedObjectLockedByOther,
+  selectedObjectLockMessage,
   isDragging,
   potentialParentId,
   isConnectionMode,

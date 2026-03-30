@@ -3,12 +3,12 @@ import { computed, type Ref } from 'vue'
 import {
   buildOrthogonalEdgeSegments,
   doesSegmentsPassThroughRect,
-} from '@/domains/editor-document'
+} from '@/domains/diagram'
 import {
   getConnectionPoint,
   getConnectionPositionFromMap,
   getNodeChildrenCount,
-} from '@/domains/editor-document'
+} from '@/domains/diagram'
 import type { ConnectionSide, Edge, Node, Position, Segment } from '@/domains/graph'
 
 type NodeRect = {

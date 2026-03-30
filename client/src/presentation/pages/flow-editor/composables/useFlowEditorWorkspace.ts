@@ -2,8 +2,7 @@ import { computed, type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import { useCommentsStore } from '@/domains/comments'
-import { clampBreakpointX, clampBreakpointY } from '@/domains/editor-document'
-import { useEditorDocumentStore } from '@/domains/editor-document'
+import { clampBreakpointX, clampBreakpointY, useDiagramCollaborationStore, useDiagramStore } from '@/domains/diagram'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import type { Edge, Node } from '@/domains/graph'
 
@@ -23,11 +22,12 @@ export function useFlowEditorWorkspace(
   canvas: Ref<HTMLElement | null>,
   canvasContent: Ref<HTMLElement | null>,
 ) {
-  const documentStore = useEditorDocumentStore()
+  const diagramStore = useDiagramStore()
+  const collaborationStore = useDiagramCollaborationStore()
   const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
 
-  const { nodes, edges, dataFlows } = storeToRefs(documentStore)
+  const { nodes, edges, dataFlows } = storeToRefs(diagramStore)
   const { comments } = storeToRefs(commentsStore)
   const {
     selectedObject,
@@ -54,8 +54,8 @@ export function useFlowEditorWorkspace(
   const actions = useFlowEditorActions()
   const viewport = useFlowEditorViewport()
 
-  const getAbsoluteNodePosition = (node: Node) => documentStore.getAbsoluteNodePosition(node)
-  const getNodeRect = (node: Node) => documentStore.getNodeRect(node)
+  const getAbsoluteNodePosition = (node: Node) => diagramStore.getAbsoluteNodePosition(node)
+  const getNodeRect = (node: Node) => diagramStore.getNodeRect(node)
 
   const {
     getConnectionPosition,
@@ -75,7 +75,7 @@ export function useFlowEditorWorkspace(
     dataFlows,
     isDraggingBreakpoint,
     doesEdgePassThroughNode,
-    maintainPassThroughEdges: documentStore.maintainPassThroughEdges,
+    maintainPassThroughEdges: diagramStore.maintainPassThroughEdges,
   })
 
   const commentsApi = useFlowEditorComments({
@@ -89,6 +89,7 @@ export function useFlowEditorWorkspace(
     addCommentForNode: commentsApi.addCommentForNode,
     addCommentForEdge: commentsApi.addCommentForEdge,
     addCommentOnCanvas: commentsApi.addCommentOnCanvas,
+    createEdge: actions.createEdge,
     clearSelection: actions.clearSelection,
   })
 
@@ -97,7 +98,7 @@ export function useFlowEditorWorkspace(
     zoom,
     isConnectionMode,
     isCommentMode,
-    documentStore,
+    documentStore: diagramStore,
     uiStore,
     containerPadding: CONTAINER_PADDING,
   })
@@ -127,8 +128,40 @@ export function useFlowEditorWorkspace(
     zoom,
     canvas: computed(() => canvas.value),
     uiStore,
+    diagramStore,
     clampXValue,
     clampYValue,
+  })
+
+  const lockedNodeOwners = computed<Record<string, string | null>>(() =>
+    Object.fromEntries(
+      nodes.value.map(node => [node.id, collaborationStore.getElementLockOwner('block', node.id)]),
+    ),
+  )
+  const lockedEdgeOwners = computed<Record<string, string | null>>(() =>
+    Object.fromEntries(
+      edges.value.map(edge => [edge.id, collaborationStore.getElementLockOwner('connection', edge.id)]),
+    ),
+  )
+  const selectedObjectLockOwner = computed(() => {
+    if (selectedNodeId.value) {
+      return collaborationStore.getElementLockOwner('block', selectedNodeId.value)
+    }
+
+    if (selectedEdgeId.value) {
+      return collaborationStore.getElementLockOwner('connection', selectedEdgeId.value)
+    }
+
+    return null
+  })
+  const isSelectedObjectLockedByOther = computed(() =>
+    selectedObjectLockOwner.value !== null && selectedObjectLockOwner.value !== 'self',
+  )
+  const selectedObjectLockMessage = computed(() => {
+    if (!isSelectedObjectLockedByOther.value) return null
+    return selectedObjectLockOwner.value === 'locked'
+      ? 'Элемент занят другим пользователем'
+      : `Элемент занят: ${selectedObjectLockOwner.value}`
   })
 
   return {
@@ -139,6 +172,10 @@ export function useFlowEditorWorkspace(
     selectedObject,
     selectedNodeId,
     selectedEdgeId,
+    lockedNodeOwners,
+    lockedEdgeOwners,
+    isSelectedObjectLockedByOther,
+    selectedObjectLockMessage,
     isDragging,
     potentialParentId,
     isConnectionMode,

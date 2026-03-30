@@ -7,12 +7,12 @@ import {
   MOCK_CURRENT_VERSION_LABEL,
   MOCK_SHARE_LINK,
 } from '@/mocks'
-import type { SelectedObject, TeamMember, VersionRecord } from '@/domains/editor-document'
+import type { SelectedObject, TeamMember, VersionRecord } from '@/domains/diagram'
 import type { ConnectionSide } from '@/domains/graph'
-import { useEditorDocumentStore } from '@/domains/editor-document'
+import { useDiagramStore } from '@/domains/diagram'
 
 export const useEditorUiStore = defineStore('editorUi', () => {
-  const documentStore = useEditorDocumentStore()
+  const diagramStore = useDiagramStore()
 
   const selectedNodeId = ref<string | null>(null)
   const selectedEdgeId = ref<string | null>(null)
@@ -42,12 +42,12 @@ export const useEditorUiStore = defineStore('editorUi', () => {
 
   const selectedObject = computed<SelectedObject>(() => {
     if (selectedNodeId.value) {
-      const node = documentStore.nodes.find(item => item.id === selectedNodeId.value)
+      const node = diagramStore.nodes.find(item => item.id === selectedNodeId.value)
       if (node) return { type: 'node', data: node }
     }
 
     if (selectedEdgeId.value) {
-      const edge = documentStore.edges.find(item => item.id === selectedEdgeId.value)
+      const edge = diagramStore.edges.find(item => item.id === selectedEdgeId.value)
       if (edge) return { type: 'edge', data: edge }
     }
 

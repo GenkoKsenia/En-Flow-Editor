@@ -1,11 +1,13 @@
 import type { Ref } from 'vue'
 
 import type { Node } from '@/domains/graph'
-import { roundCoord } from '@/domains/editor-document'
+import { roundCoord } from '@/domains/diagram'
 
-type EditorDocumentDragApi = {
+type DiagramDragApi = {
   getAbsoluteNodePosition(node: Node): { x: number; y: number }
   getDescendantNodes(nodeId: string): Node[]
+  beginNodeEdit(nodeId: string): Promise<boolean>
+  endNodeEdit(nodeId: string): Promise<void>
   findPotentialParentId(
     draggedNodeId: string,
     x: number,
@@ -20,6 +22,7 @@ type EditorDocumentDragApi = {
     newAbsoluteY: number,
     padding?: number,
   ): void
+  finishNodeUpdate(nodeId: string, options?: { affectedEdgeIds?: string[] }): Promise<void>
 }
 
 type EditorUiDragApi = {
@@ -33,7 +36,7 @@ type UseNodeDragOptions = {
   zoom: Ref<number>
   isConnectionMode: Ref<boolean>
   isCommentMode: Ref<boolean>
-  documentStore: EditorDocumentDragApi
+  documentStore: DiagramDragApi
   uiStore: EditorUiDragApi
   containerPadding?: number
 }
@@ -47,7 +50,7 @@ export function useNodeDrag({
   uiStore,
   containerPadding = 24,
 }: UseNodeDragOptions) {
-  function startDrag(nodeId: string, event: MouseEvent): void {
+  async function startDrag(nodeId: string, event: MouseEvent): Promise<void> {
     if (isConnectionMode.value) {
       event.preventDefault()
       return
@@ -55,6 +58,13 @@ export function useNodeDrag({
 
     const node = nodes.value.find(item => item.id === nodeId)
     if (!node) return
+
+    const locked = await documentStore.beginNodeEdit(nodeId)
+    if (!locked) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
 
     uiStore.setDragging(true)
     uiStore.selectNode(nodeId)
@@ -125,6 +135,8 @@ export function useNodeDrag({
       document.removeEventListener('mouseup', onMouseUp)
 
       documentStore.finalizeNodeDrag(nodeId, potentialParentId, newAbsoluteX, newAbsoluteY, containerPadding)
+      void documentStore.finishNodeUpdate(nodeId, { affectedEdgeIds: [...(node.passThroughEdges ?? [])] })
+      void documentStore.endNodeEdit(nodeId)
     }
 
     document.addEventListener('mousemove', onMouseMove)
@@ -140,7 +152,7 @@ export function useNodeDrag({
       return
     }
 
-    startDrag(nodeId, event)
+    void startDrag(nodeId, event)
   }
 
   return {

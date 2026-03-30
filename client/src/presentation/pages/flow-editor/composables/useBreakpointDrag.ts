@@ -1,11 +1,17 @@
 import type { Ref } from 'vue'
 
 import type { Edge } from '@/domains/graph'
-import { roundCoord } from '@/domains/editor-document'
+import { roundCoord } from '@/domains/diagram'
 
 type UiBreakpointApi = {
   setDraggingBreakpoint(value: boolean): void
   setDraggingEdgeId(edgeId: string | null): void
+}
+
+type DiagramBreakpointApi = {
+  beginEdgeEdit(edgeId: string): Promise<boolean>
+  endEdgeEdit(edgeId: string): Promise<void>
+  finishEdgeUpdate(edgeId: string): Promise<void>
 }
 
 type UseBreakpointDragOptions = {
@@ -15,6 +21,7 @@ type UseBreakpointDragOptions = {
   zoom: Ref<number>
   canvas: Ref<HTMLElement | null>
   uiStore: UiBreakpointApi
+  diagramStore: DiagramBreakpointApi
   clampXValue: (edge: Edge, x: number) => number
   clampYValue: (edge: Edge, y: number) => number
 }
@@ -26,15 +33,28 @@ export function useBreakpointDrag({
   zoom,
   canvas,
   uiStore,
+  diagramStore,
   clampXValue,
   clampYValue,
 }: UseBreakpointDragOptions) {
-  function onBreakpointDragStart(edgeId: string, event: MouseEvent): void {
+  async function onBreakpointDragStart(edgeId: string, event: MouseEvent): Promise<void> {
+    const locked = await diagramStore.beginEdgeEdit(edgeId)
+    if (!locked) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+
     uiStore.setDraggingBreakpoint(true)
     uiStore.setDraggingEdgeId(edgeId)
 
     const edge = edges.value.find(item => item.id === edgeId)
-    if (!edge) return
+    if (!edge) {
+      uiStore.setDraggingBreakpoint(false)
+      uiStore.setDraggingEdgeId(null)
+      void diagramStore.endEdgeEdit(edgeId)
+      return
+    }
     edge.breakpointLocked = true
 
     const { sourceSide, targetSide } = edge
@@ -76,6 +96,8 @@ export function useBreakpointDrag({
       uiStore.setDraggingEdgeId(null)
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
+      void diagramStore.finishEdgeUpdate(edgeId)
+      void diagramStore.endEdgeEdit(edgeId)
     }
 
     document.addEventListener('mousemove', onMouseMove)

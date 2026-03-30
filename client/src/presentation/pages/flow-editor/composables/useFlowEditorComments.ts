@@ -1,7 +1,7 @@
 import { storeToRefs } from 'pinia'
 import type { Ref } from 'vue'
 
-import { useEditorDocumentStore } from '@/domains/editor-document'
+import { useDiagramStore } from '@/domains/diagram'
 import { useCommentsStore, type CommentsStoreComment } from '@/domains/comments'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import type { Edge, Node, Position } from '@/domains/graph'
@@ -23,7 +23,7 @@ export function useFlowEditorComments({
   getNodeRect,
   getEdgeAnchor,
 }: UseFlowEditorCommentsOptions) {
-  const documentStore = useEditorDocumentStore()
+  const documentStore = useDiagramStore()
   const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
 

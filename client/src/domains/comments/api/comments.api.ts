@@ -1,9 +1,5 @@
-import {
-  createCommentsHubClient,
-  type CommentDto,
-  type CommentHubRequest,
-  type CommentsHubClient,
-} from '@/domains/collaboration'
+import { createCommentsHubClient, type CommentsHubClient } from './commentsHub'
+import type { CommentDto, CommentHubRequest } from './types'
 
 export type { CommentDto, CommentHubRequest, CommentsHubClient }
 

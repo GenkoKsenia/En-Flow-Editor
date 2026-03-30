@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 
 import type { Position } from '@/domains/graph'
-import { roundCoord } from '@/domains/editor-document'
+import { roundCoord } from '@/domains/diagram'
 
 type CommentLike = {
   id: string

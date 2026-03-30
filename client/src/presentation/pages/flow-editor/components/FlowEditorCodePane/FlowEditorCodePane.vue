@@ -19,11 +19,11 @@
 import { storeToRefs } from 'pinia'
 
 import UiButton from '@/presentation/ui/UiButton.vue'
-import { useEditorDocumentStore } from '@/domains/editor-document'
+import { useDiagramStore } from '@/domains/diagram'
 
 import CodeEditor from './CodeEditor.vue'
 
-const documentStore = useEditorDocumentStore()
+const documentStore = useDiagramStore()
 
 const {
   jsonError,
@@ -35,7 +35,7 @@ async function onSetCode(): Promise<void> {
 }
 
 async function onGetCode(): Promise<void> {
-  await documentStore.loadSchemeSnapshot(documentStore.schemeId)
+  await documentStore.loadCurrentVersion(documentStore.schemeId)
 }
 </script>
 

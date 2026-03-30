@@ -1,15 +1,16 @@
 import { computed, type ComputedRef } from 'vue'
 import { storeToRefs } from 'pinia'
 
-import { useEditorDocumentStore } from '@/domains/editor-document'
+import { useDiagramStore } from '@/domains/diagram'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
-import type { ConnectionSide } from '@/domains/graph'
+import type { ConnectionSide, Edge } from '@/domains/graph'
 
 type UseFlowEditorConnectionsOptions = {
   nodeSendableData: ComputedRef<Record<string, string[]>>
   addCommentForNode: (nodeId: string) => boolean
   addCommentForEdge: (edgeId: string) => boolean
   addCommentOnCanvas: (event: MouseEvent) => boolean
+  createEdge: (edge: Edge) => void
   clearSelection: () => void
 }
 
@@ -38,9 +39,10 @@ export function useFlowEditorConnections({
   addCommentForNode,
   addCommentForEdge,
   addCommentOnCanvas,
+  createEdge,
   clearSelection,
 }: UseFlowEditorConnectionsOptions) {
-  const documentStore = useEditorDocumentStore()
+  const documentStore = useDiagramStore()
   const uiStore = useEditorUiStore()
 
   const { nodes, edges } = storeToRefs(documentStore)
@@ -63,6 +65,25 @@ export function useFlowEditorConnections({
   const startConnectionMode = () => uiStore.startConnectionMode()
   const resetConnectionMode = () => uiStore.resetConnectionMode()
 
+  function buildPendingEdge(
+    sourceId: string,
+    sourceSide: ConnectionSide,
+    targetId: string,
+    targetSide: ConnectionSide,
+  ) {
+    return {
+      id: documentStore.createEdgeId(),
+      sourceNodeId: sourceId,
+      targetNodeId: targetId,
+      sourceSide,
+      targetSide,
+      label: '',
+      lineStyle: 'solid' as const,
+      markerType: 'triangle' as const,
+      dataKeys: [] as string[],
+    }
+  }
+
   function createConnection(
     sourceId: string,
     sourceSide: ConnectionSide,
@@ -76,15 +97,11 @@ export function useFlowEditorConnections({
     const targetName = nodes.value.find(node => node.id === targetId)?.text?.trim() ?? ''
     const label = buildEdgeLabel(sourceId, targetId, edges.value.map(edge => edge.label ?? ''), sourceName, targetName)
 
-    documentStore.addEdge({
-      id: documentStore.createEdgeId(),
+    createEdge({
+      ...buildPendingEdge(sourceId, sourceSide, targetId, targetSide),
       sourceNodeId: sourceId,
       targetNodeId: targetId,
-      sourceSide,
-      targetSide,
       label,
-      lineStyle: 'solid',
-      markerType: 'triangle',
       dataKeys: Array.from(new Set(nodeSendableData.value[sourceId] ?? [])),
     })
   }
@@ -93,7 +110,7 @@ export function useFlowEditorConnections({
     if (isConnectionMode.value) uiStore.setHoveredNode(nodeId, side)
   }
 
-  function onNodeClick(nodeId: string, event: MouseEvent): void {
+  async function onNodeClick(nodeId: string, event: MouseEvent): Promise<void> {
     event.stopPropagation()
 
     if (isCommentMode.value) {
@@ -104,7 +121,18 @@ export function useFlowEditorConnections({
     }
 
     if (!isConnectionMode.value) {
-      if (nodes.value.some(node => node.id === nodeId)) uiStore.selectNode(nodeId)
+      if (!nodes.value.some(node => node.id === nodeId)) return
+      if (uiStore.selectedNodeId === nodeId) {
+        const locked = await documentStore.beginNodeEdit(nodeId)
+        if (!locked) return
+        uiStore.selectNode(nodeId)
+        return
+      }
+
+      clearSelection()
+      const locked = await documentStore.beginNodeEdit(nodeId)
+      if (!locked) return
+      uiStore.selectNode(nodeId)
       return
     }
 
@@ -121,7 +149,7 @@ export function useFlowEditorConnections({
     resetConnectionMode()
   }
 
-  function onEdgeClick(edgeId: string, event: MouseEvent): void {
+  async function onEdgeClick(edgeId: string, event: MouseEvent): Promise<void> {
     event.stopPropagation()
 
     if (isCommentMode.value) {
@@ -131,7 +159,18 @@ export function useFlowEditorConnections({
       return
     }
 
-    if (edges.value.some(edge => edge.id === edgeId)) uiStore.selectEdge(edgeId)
+    if (!edges.value.some(edge => edge.id === edgeId)) return
+    if (uiStore.selectedEdgeId === edgeId) {
+      const locked = await documentStore.beginEdgeEdit(edgeId)
+      if (!locked) return
+      uiStore.selectEdge(edgeId)
+      return
+    }
+
+    clearSelection()
+    const locked = await documentStore.beginEdgeEdit(edgeId)
+    if (!locked) return
+    uiStore.selectEdge(edgeId)
   }
 
   function onCanvasClick(event: MouseEvent): void {

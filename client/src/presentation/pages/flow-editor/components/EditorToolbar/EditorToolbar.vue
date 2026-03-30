@@ -114,7 +114,7 @@ import type { CommentsStoreComment } from '@/domains/comments'
 import UiButton from '@/presentation/ui/UiButton.vue'
 import UiInput from '@/presentation/ui/UiInput.vue'
 import JsonExportButton from './JsonExportButton.vue'
-import type { VersionRecord } from '@/domains/editor-document'
+import type { VersionRecord } from '@/domains/diagram'
 import type { DataFlow, Edge, Node } from '@/domains/graph'
 
 defineProps<{

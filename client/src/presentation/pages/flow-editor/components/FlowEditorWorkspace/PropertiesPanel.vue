@@ -4,8 +4,13 @@
       <h3>Свойства</h3>
       <button class="close-btn" @click="clearSelection">×</button>
     </div>
-    
-    <div class="properties-content">
+
+    <div v-if="lockMessage" class="lock-banner">
+      {{ lockMessage }}
+    </div>
+
+    <fieldset class="properties-fieldset" :disabled="isLocked">
+      <div class="properties-content">
       <!-- Свойства узла -->
       <div v-if="selectedNode" class="node-properties">
         <div class="property-group">
@@ -14,7 +19,7 @@
             <label>Текст:</label>
             <UiInput
               v-model="selectedNode.text" 
-              @update:model-value="onNodeTextChange"
+              @change="onNodeTextChange"
               class="property-input"
             />
           </div>
@@ -192,7 +197,7 @@
             <label>Название:</label>
             <UiInput
               v-model="selectedEdge.label"
-              @update:model-value="onEdgeLabelChange"
+              @change="onEdgeLabelChange"
               class="property-input"
               placeholder="Название связи"
             />
@@ -261,14 +266,15 @@
           
         </div>
       </div>
-    </div>
-    
-    <!-- Кнопка удаления -->
-    <div class="properties-actions">
-      <UiButton block variant="danger-outline" @click="deleteSelectedObject">
-        Удалить
-      </UiButton>
-    </div>
+      </div>
+
+      <!-- Кнопка удаления -->
+      <div class="properties-actions">
+        <UiButton block variant="danger-outline" @click="deleteSelectedObject">
+          Удалить
+        </UiButton>
+      </div>
+    </fieldset>
   </div>
 </template>
 
@@ -277,7 +283,7 @@ import { computed } from 'vue'
 import UiButton from '@/presentation/ui/UiButton.vue'
 import UiInput from '@/presentation/ui/UiInput.vue'
 import UiSelect from '@/presentation/ui/UiSelect.vue'
-import type { SelectedObject } from '@/domains/editor-document'
+import type { SelectedObject } from '@/domains/diagram'
 import type { DataFlow, Edge, LineStyle, Node } from '@/domains/graph'
 
 interface Props {
@@ -286,6 +292,8 @@ interface Props {
   nodes?: Node[]
   dataSets?: Record<string, string[]>
   dataFlows?: DataFlow[]
+  isLocked?: boolean
+  lockMessage?: string | null
 }
 
 interface Emits {
@@ -629,6 +637,21 @@ function clearSelection(): void {
 
 .properties-content {
   padding: 16px;
+}
+
+.properties-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.lock-banner {
+  padding: 10px 16px;
+  background: #fff4e5;
+  color: #8a4b00;
+  font-size: 13px;
+  border-bottom: 1px solid #f0d3a6;
 }
 
 .property-group {

@@ -6,7 +6,7 @@ import {
   evaluateNodeMissingTarget,
   evaluatePassThroughStatus as evaluateGraphPassThroughStatus,
   getEdgeRequiresPassThroughFlags,
-} from '@/domains/editor-document'
+} from '@/domains/diagram'
 import type { DataFlow, Edge, Node } from '@/domains/graph'
 
 type UseEditorDiagnosticsOptions = {

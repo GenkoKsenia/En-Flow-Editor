@@ -14,6 +14,7 @@
       'data-flow-error': hasDataError,
       'missing-target': hasMissingTarget,
       'forbidden-outgoing': hasForbiddenOutgoing,
+      locked: isLocked,
       [nodeBorderClass]: true
     }"
     :title="tooltipText"
@@ -56,6 +57,8 @@ interface Props {
   hasForbiddenOutgoing?: boolean
   errorMessage?: string | null
   warningMessage?: string | null
+  isLocked?: boolean
+  lockedBy?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -72,7 +75,9 @@ const props = withDefaults(defineProps<Props>(), {
   hasMissingTarget: false,
   hasForbiddenOutgoing: false,
   errorMessage: null,
-  warningMessage: null
+  warningMessage: null,
+  isLocked: false,
+  lockedBy: null,
 })
 
 const emit = defineEmits<{
@@ -130,6 +135,11 @@ const nodeStyle = computed(() => {
 const tooltipText = computed<string | undefined>(() => {
   if (props.errorMessage) return props.errorMessage
   if (props.warningMessage) return props.warningMessage
+  if (props.isLocked) {
+    return props.lockedBy && props.lockedBy !== 'locked'
+      ? `Занято: ${props.lockedBy}`
+      : 'Занято другим пользователем'
+  }
   return undefined
 })
 
@@ -344,5 +354,9 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 
 .node.forbidden-outgoing {
   box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.55);
+}
+
+.node.locked {
+  opacity: 0.7;
 }
 </style>
