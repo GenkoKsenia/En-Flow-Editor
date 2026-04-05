@@ -1,0 +1,9 @@
+.git
+.vs
+.vscode
+client
+node_modules
+server/fastapi-backend
+server/postgres-init
+server/asp-backend/**/bin
+server/asp-backend/**/obj

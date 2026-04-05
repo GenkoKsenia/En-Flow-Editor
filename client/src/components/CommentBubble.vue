@@ -5,16 +5,19 @@
     @mousedown.stop
     @click.stop
   >
-    <div class="comment-meta">
+    <div class="comment-meta" @mousedown.left.stop.prevent="onDragHandleMouseDown">
       <span class="comment-author">{{ comment.author }}</span>
       <span class="comment-time">{{ comment.createdAt }}</span>
-      <button class="comment-remove" type="button" @click.stop="$emit('remove', comment.id)">×</button>
+      <button class="comment-remove" type="button" @click.stop="$emit('remove', comment.id)">
+        <X :size="14" />
+      </button>
     </div>
     <textarea v-model="comment.text" placeholder="Комментарий"></textarea>
   </div>
 </template>
 
 <script setup lang="ts">
+import { X } from 'lucide-vue-next'
 import type { Position } from '../types'
 
 type CommentTarget = 'node' | 'edge' | 'canvas'
@@ -36,10 +39,15 @@ interface Props {
   styleObject?: Record<string, string>
 }
 
-defineProps<Props>()
-defineEmits<{
+const props = defineProps<Props>()
+const emit = defineEmits<{
   remove: [commentId: string]
+  dragStart: [commentId: string, event: MouseEvent]
 }>()
+
+function onDragHandleMouseDown(event: MouseEvent): void {
+  emit('dragStart', props.comment.id, event)
+}
 </script>
 
 <style scoped>
@@ -64,6 +72,8 @@ defineEmits<{
   gap: 8px;
   font-size: 12px;
   color: #6c757d;
+  cursor: move;
+  user-select: none;
 }
 
 .comment-author {
@@ -80,8 +90,10 @@ defineEmits<{
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #dc3545;
 }
 
