@@ -31,6 +31,9 @@ namespace Diplom
 
             // FavoriteScheme
             modelBuilder.Entity<FavoriteScheme>()
+                .HasKey(f => new { f.UserID, f.SchemeID });
+
+            modelBuilder.Entity<FavoriteScheme>()
                 .HasOne(f => f.Scheme)
                 .WithMany(s => s.FavoriteSchemes)
                 .HasForeignKey(f => f.SchemeID);

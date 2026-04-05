@@ -6,8 +6,6 @@ namespace Diplom.Models.DB
 {
     public class FavoriteScheme
     {
-        [Key]
-        public int ID { get; set; }
         [ForeignKey("Scheme")]
         public int SchemeID { get; set; }
         [JsonIgnore]
