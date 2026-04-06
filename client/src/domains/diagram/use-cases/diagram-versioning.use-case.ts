@@ -28,12 +28,15 @@ export function createDiagramVersioningUseCases(
 
       if (latestVersion) {
         dependencies.setDiagramFromServer(latestVersion.code)
+        context.lastPersistedJson.value = context.lastSerializedJson.value
       } else {
         dependencies.resetDiagram()
+        context.lastPersistedJson.value = context.lastSerializedJson.value
       }
     } catch (error) {
       context.loadError.value = error instanceof Error ? error.message : 'Не удалось загрузить схему'
       dependencies.resetDiagram()
+      context.lastPersistedJson.value = context.lastSerializedJson.value
     } finally {
       context.isLoading.value = false
     }
@@ -51,6 +54,7 @@ export function createDiagramVersioningUseCases(
       : JSON.parse(JSON.stringify(context.jsonBuffer.value)) as DiagramDto
 
     await context.updateVersion(context.currentVersionId.value, payload)
+    context.lastPersistedJson.value = context.lastSerializedJson.value
   }
 
   return {

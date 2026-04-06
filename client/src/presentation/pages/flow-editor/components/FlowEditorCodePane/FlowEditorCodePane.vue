@@ -1,10 +1,5 @@
 <template>
   <div class="left-panel">
-    <div class="code-actions">
-      <UiButton variant="primary" @click="onSetCode">Отправить псевдокод</UiButton>
-      <UiButton variant="primary" @click="onGetCode">Получить псевдокод</UiButton>
-    </div>
-
     <CodeEditor
       :content="diagramJson"
       :error="jsonError"
@@ -18,7 +13,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 
-import UiButton from '@/presentation/ui/UiButton.vue'
 import { useDiagramStore } from '@/domains/diagram'
 
 import CodeEditor from './CodeEditor.vue'
@@ -29,14 +23,6 @@ const {
   jsonError,
   jsonBuffer: diagramJson,
 } = storeToRefs(documentStore)
-
-async function onSetCode(): Promise<void> {
-  await documentStore.saveCurrentVersion()
-}
-
-async function onGetCode(): Promise<void> {
-  await documentStore.loadCurrentVersion(documentStore.schemeId)
-}
 </script>
 
 <style scoped>
@@ -48,18 +34,6 @@ async function onGetCode(): Promise<void> {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.code-actions {
-  display: flex;
-  gap: 10px;
-  padding: 12px 16px;
-  align-items: center;
-  flex-wrap: nowrap;
-}
-
-:deep(.code-actions .ui-button) {
-  white-space: nowrap;
 }
 
 :deep(.code-editor-container) {

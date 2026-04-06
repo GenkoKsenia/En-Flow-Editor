@@ -11,6 +11,7 @@ export interface CommentsStoreComment {
   targetId: string | null
   position: Position
   text: string
+  authorId?: string
   author: string
   createdAt: string
   status: CommentStatus

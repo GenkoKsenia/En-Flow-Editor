@@ -10,8 +10,19 @@
     @click.stop
   >
     <div class="comment-meta" @mousedown.left.stop.prevent="onDragHandleMouseDown">
-      <span class="comment-author">{{ comment.author }}</span>
-      <span class="comment-time">{{ comment.createdAt }}</span>
+      <div class="comment-meta-main">
+        <span class="comment-author">{{ comment.author }}</span>
+        <span class="comment-time">{{ formattedCreatedAt }}</span>
+      </div>
+      <button
+        v-if="props.showDelete"
+        class="comment-delete"
+        type="button"
+        aria-label="Удалить комментарий"
+        @click.stop="$emit('delete', comment.id)"
+      >
+        ×
+      </button>
     </div>
     <textarea
       ref="textareaRef"
@@ -50,6 +61,7 @@ import type { CommentsStoreComment } from '@/domains/comments'
 
 interface Props {
   comment: CommentsStoreComment
+  showDelete?: boolean
   styleObject?: Record<string, string>
 }
 
@@ -59,16 +71,49 @@ const emit = defineEmits<{
   'update:text': [commentId: string, text: string]
   save: [commentId: string]
   cancel: [commentId: string]
+  delete: [commentId: string]
 }>()
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const isEditable = computed(() => props.comment.status === 'draft' || props.comment.status === 'error')
 const canSave = computed(() => props.comment.text.trim().length > 0)
+const formattedCreatedAt = computed(() => formatCommentDateTime(props.comment.createdAt))
 
 onMounted(() => {
   if (!isEditable.value) return
   void nextTick(() => textareaRef.value?.focus())
 })
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+function formatDate(date: Date): string {
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${pad(date.getFullYear() % 100)} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function formatCommentDateTime(value: string): string {
+  const parsed = new Date(value)
+  if (!Number.isNaN(parsed.getTime())) {
+    return formatDate(parsed)
+  }
+
+  const trimmed = value.trim()
+  const ruMatch = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})(?:,|\s)+(\d{1,2}):(\d{2})(?::\d{2}(?:[.,]\d+)?)?$/)
+  if (!ruMatch) {
+    return value
+  }
+
+  const [, day, month, yearRaw, hours, minutes] = ruMatch
+  const year = yearRaw.length === 2 ? Number(`20${yearRaw}`) : Number(yearRaw)
+  const date = new Date(year, Number(month) - 1, Number(day), Number(hours), Number(minutes))
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return formatDate(date)
+}
 
 function onDragHandleMouseDown(event: MouseEvent): void {
   if (!isEditable.value) return
@@ -104,13 +149,23 @@ function onInput(event: Event): void {
 }
 
 .comment-meta {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 24px;
   font-size: 12px;
   color: #6c757d;
   cursor: move;
   user-select: none;
+}
+
+.comment-meta-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .comment-bubble--readonly .comment-meta {
@@ -124,6 +179,26 @@ function onInput(event: Event): void {
 
 .comment-time {
   font-size: 11px;
+}
+
+.comment-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #6c757d;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.comment-delete:hover {
+  background: rgba(201, 42, 42, 0.12);
+  color: #c92a2a;
 }
 
 .comment-bubble textarea {

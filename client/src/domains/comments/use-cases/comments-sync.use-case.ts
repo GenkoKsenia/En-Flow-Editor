@@ -7,6 +7,7 @@ import {
   inferRefreshTargetKey,
   mapJoinedCommentList,
 } from '../mappers'
+import { resolveCommentAuthor } from '../api'
 import type { CommentsStoreComment } from '../models'
 
 import type { CommentsContext } from './comments.context'
@@ -27,10 +28,22 @@ function normalizeTargets(targets: CommentTargetKey[]): CommentTargetKey[] {
 }
 
 export function createCommentsSyncUseCases(context: CommentsContext) {
+  function filterHiddenSyncedComments(items: CommentsStoreComment[]): CommentsStoreComment[] {
+    const hiddenIds = new Set(context.hiddenSyncedCommentIds.value)
+    return items.filter(item => !hiddenIds.has(item.id))
+  }
+
+  async function resolveAuthors(items: CommentsStoreComment[]): Promise<CommentsStoreComment[]> {
+    return await Promise.all(items.map(async item => ({
+      ...item,
+      author: await resolveCommentAuthor(item.author),
+    })))
+  }
+
   function replaceSyncedCommentsForTarget(targetKey: CommentTargetKey, syncedComments: CommentsStoreComment[]): void {
     context.comments.value = dedupeComments([
       ...context.comments.value.filter(comment => !(comment.status === 'synced' && matchesTarget(comment, targetKey))),
-      ...syncedComments,
+      ...filterHiddenSyncedComments(syncedComments),
     ])
   }
 
@@ -94,7 +107,8 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
       context.activeSchemeId.value,
       type === 'canvas' ? '' : (targetId ?? ''),
     )
-    replaceSyncedCommentsForTarget(targetKey, mapJoinedCommentList(payload, targetKey))
+    const mappedComments = mapJoinedCommentList(payload, targetKey)
+    replaceSyncedCommentsForTarget(targetKey, await resolveAuthors(mappedComments))
   }
 
   async function leaveTarget(targetKey: CommentTargetKey): Promise<void> {

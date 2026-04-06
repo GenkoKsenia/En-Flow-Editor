@@ -25,6 +25,16 @@ export async function createScheme(name: string): Promise<Scheme> {
   return mapSchemeDtoToScheme(response.data)
 }
 
+export async function updateSchemeName(id: string | number, name: string): Promise<Scheme> {
+  const response = await http.patch<SchemeResponseDto>(`/Scheme/patch/${id}`, JSON.stringify(name), {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  return mapSchemeDtoToScheme(response.data)
+}
+
 export async function deleteScheme(id: string | number): Promise<void> {
   await http.delete(`/Scheme/delete/${id}`)
 }

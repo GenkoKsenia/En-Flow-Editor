@@ -20,6 +20,7 @@ export type DiagramContext = {
   isUpdatingFromState: Ref<boolean>
   isEditorFocused: Ref<boolean>
   lastSerializedJson: Ref<string>
+  lastPersistedJson: Ref<string>
   isLoading: Ref<boolean>
   loadError: Ref<string | null>
   applyTimeout: Ref<number | null>

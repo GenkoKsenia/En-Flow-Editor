@@ -11,7 +11,7 @@
     </button>
 
     <div class="preview">
-      <div class="preview-placeholder">Превью схемы</div>
+      <SchemePreview :scheme-id="scheme.id" :code="scheme.previewCode" />
     </div>
 
     <div class="card-footer">
@@ -100,6 +100,8 @@ import UiButton from '@/presentation/ui/UiButton.vue'
 import UiInput from '@/presentation/ui/UiInput.vue'
 import type { SchemeCard } from '@/domains/schemes'
 
+import SchemePreview from './SchemePreview.vue'
+
 defineProps<{
   scheme: SchemeCard
   isEditing: boolean
@@ -186,11 +188,6 @@ function formatUpdatedAt(isoDate: string | null): string {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.preview-placeholder {
-  font-size: 12px;
-  color: #8a909b;
 }
 
 .card-footer {

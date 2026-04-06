@@ -10,6 +10,9 @@ export type DraftPatch = Partial<Pick<CommentsStoreComment, 'text' | 'position'>
 export type CommentsContext = {
   client: CommentsHubClient
   comments: Ref<CommentsStoreComment[]>
+  hiddenSyncedCommentIds: Ref<string[]>
+  currentAuthorId: Ref<string | null>
+  currentAuthorAliases: Ref<string[]>
   isLoading: Ref<boolean>
   loadError: Ref<string | null>
   connectionStatus: Ref<CommentsConnectionStatus>

@@ -13,6 +13,7 @@
       :edges="edges"
       :data-flows="dataFlows"
       :comments="comments"
+      :include-comments-in-png="includeCommentsInPng"
       @add-node="addNode"
       @start-connection-mode="startConnectionMode"
       @toggle-comment-mode="toggleCommentMode"
@@ -25,6 +26,7 @@
       @toggle-download-menu="toggleDownloadMenu"
       @close-download-menu="closeDownloadMenu"
       @close-version-menu="closeVersionMenu"
+      @update:include-comments-in-png="includeCommentsInPng = $event"
       @download-png="onDownloadPng"
     />
 
@@ -115,11 +117,13 @@
           v-for="comment in comments"
           :key="comment.id"
           :comment="comment"
+          :show-delete="canDeleteComment(comment)"
           :style-object="getCommentStyle(comment)"
           @drag-start="startCommentDrag"
           @update:text="updateCommentText"
           @save="submitComment"
           @cancel="removeComment"
+          @delete="removeComment"
         />
       </div>
 
@@ -173,6 +177,7 @@ const {
   currentVersionLabel,
   showDragHandles,
   showConnectionHints,
+  zoom,
   zoomPercent,
   canvasTransformStyle,
   canvasGridStyle,
@@ -223,13 +228,18 @@ const {
   updateCommentText,
   submitComment,
   removeComment,
+  canDeleteComment,
   zoomIn,
   zoomOut,
 } = useFlowEditorWorkspace(canvas, canvasContent)
 
+const includeCommentsInPng = ref(false)
+
 const { onDownloadPng } = useFlowEditorPngExport({
   canvasContent,
   nodes,
+  zoom,
+  includeComments: includeCommentsInPng,
   getAbsoluteNodePosition,
   closeDownloadMenu,
 })

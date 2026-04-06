@@ -6,6 +6,7 @@ export interface SchemeCard {
   name: string
   updatedAt: string | null
   favorite: boolean
+  previewCode: unknown | null
 }
 
 export function toSchemeCard(scheme: Scheme): SchemeCard {
@@ -19,5 +20,6 @@ export function toSchemeCard(scheme: Scheme): SchemeCard {
     name: scheme.name,
     updatedAt: latestVersion?.date ?? null,
     favorite: scheme.favorite,
+    previewCode: latestVersion?.code ?? null,
   }
 }

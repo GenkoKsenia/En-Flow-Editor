@@ -28,6 +28,7 @@ export function useFlowEditorComments({
   const uiStore = useEditorUiStore()
 
   const { nodes, edges } = storeToRefs(documentStore)
+  const { currentAuthor, currentAuthorId, currentAuthorAliases } = storeToRefs(commentsStore)
   const { zoom } = storeToRefs(uiStore)
 
   function addCommentForNode(nodeId: string): boolean {
@@ -103,6 +104,30 @@ export function useFlowEditorComments({
     commentsStore.discardDraft(commentId)
   }
 
+  function dismissComment(commentId: string): void {
+    commentsStore.dismissComment(commentId)
+  }
+
+  function canDeleteComment(comment: CommentsStoreComment): boolean {
+    if (comment.status !== 'synced') return false
+
+    const aliases = new Set([
+      ...currentAuthorAliases.value,
+      currentAuthor.value,
+      currentAuthorId.value ?? '',
+    ].filter(Boolean))
+
+    if (aliases.size === 0 || (aliases.size === 1 && aliases.has('User'))) {
+      return true
+    }
+
+    if (comment.authorId && aliases.has(comment.authorId)) {
+      return true
+    }
+
+    return aliases.has(comment.author)
+  }
+
   return {
     addCommentForNode,
     addCommentForEdge,
@@ -112,5 +137,7 @@ export function useFlowEditorComments({
     updateCommentPosition,
     submitComment,
     discardComment,
+    dismissComment,
+    canDeleteComment,
   }
 }

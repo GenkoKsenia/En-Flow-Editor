@@ -72,7 +72,7 @@
                   <label>Название:</label>
                   <UiInput
                     class="property-input"
-                    :value="item.dataName"
+                    :model-value="item.dataName"
                     size="sm"
                     @update:model-value="value => onDataNameChange(item.dataKey, String(value))"
                   />
@@ -110,7 +110,7 @@
             <label>Стиль рамки:</label>
             <UiSelect
               class="property-input"
-              :value="selectedNode.borderStyle || 'solid'"
+              :model-value="selectedNode.borderStyle || 'solid'"
               size="sm"
               @update:model-value="onNodeBorderStyleChange"
             >
@@ -129,7 +129,7 @@
               type="color"
               size="sm"
               class="property-input small"
-              :value="selectedNode.color || '#ffffff'"
+              :model-value="selectedNode.color || '#ffffff'"
               @update:model-value="value => onNodeColorChange(String(value))"
             />
           </div>
@@ -139,7 +139,7 @@
               type="color"
               size="sm"
               class="property-input small"
-              :value="selectedNode.borderColor || '#666666'"
+              :model-value="selectedNode.borderColor || '#666666'"
               @update:model-value="value => onNodeBorderColorChange(String(value))"
             />
           </div>
@@ -206,7 +206,7 @@
             <label>Стиль линии:</label>
             <UiSelect
               class="property-input"
-              :value="selectedEdge.lineStyle || 'solid'"
+              :model-value="selectedEdge.lineStyle || 'solid'"
               size="sm"
               @update:model-value="onEdgeLineStyleChange"
             >
@@ -225,7 +225,7 @@
               type="color"
               size="sm"
               class="property-input small"
-              :value="selectedEdge.color || '#666666'"
+              :model-value="selectedEdge.color || '#666666'"
               @update:model-value="value => onEdgeColorChange(String(value))"
             />
           </div>
@@ -430,6 +430,10 @@ function onAddDataItem(): void {
 
 function onDataNameChange(dataKey: string, value: string): void {
   if (!props.dataFlows) return
+  const flow = props.dataFlows.find(item => item.dataKey === dataKey)
+  if (flow) {
+    flow.dataName = value
+  }
   const flows = props.dataFlows.map(f => f.dataKey === dataKey ? { ...f, dataName: value } : f)
   emit('update:dataFlows', flows)
 }

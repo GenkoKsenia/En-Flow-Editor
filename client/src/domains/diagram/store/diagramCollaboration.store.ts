@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 
 import { createSchemeHubClient } from '../api'
@@ -31,6 +31,7 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
   const lastRemoteEvent = ref<string | null>(null)
   const reconnectState = ref<string | null>(null)
   const lastError = ref<string | null>(null)
+  const connectPromise = shallowRef<Promise<void> | null>(null)
 
   let initialized = false
   const unsubscribeHandlers: Array<() => void> = []
@@ -219,19 +220,31 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
   }
 
   async function connect(): Promise<void> {
-    if (connectionStatus.value === 'connected' || connectionStatus.value === 'connecting') return
+    if (connectionStatus.value === 'connected') return
+
+    if (connectPromise.value) {
+      await connectPromise.value
+      return
+    }
 
     connectionStatus.value = 'connecting'
     lastError.value = null
     initializeSubscriptions()
 
-    try {
-      await client.start()
-      connectionStatus.value = 'connected'
-    } catch (error) {
-      connectionStatus.value = 'error'
-      lastError.value = error instanceof Error ? error.message : 'Не удалось подключиться к realtime'
-    }
+    connectPromise.value = (async () => {
+      try {
+        await client.start()
+        connectionStatus.value = 'connected'
+      } catch (error) {
+        connectionStatus.value = 'error'
+        lastError.value = error instanceof Error ? error.message : 'Не удалось подключиться к realtime'
+        throw error
+      } finally {
+        connectPromise.value = null
+      }
+    })()
+
+    await connectPromise.value
   }
 
   async function disconnect(): Promise<void> {
@@ -265,8 +278,10 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
     if (!Number.isFinite(schemeId)) return
 
     try {
-      await releaseActiveOwnedLockScope(schemeId)
-      await client.leaveScheme(schemeId)
+      if (connectionStatus.value === 'connected') {
+        await releaseActiveOwnedLockScope(schemeId)
+        await client.leaveScheme(schemeId)
+      }
     } finally {
       if (joinedSchemeId.value === schemeId) {
         joinedSchemeId.value = null

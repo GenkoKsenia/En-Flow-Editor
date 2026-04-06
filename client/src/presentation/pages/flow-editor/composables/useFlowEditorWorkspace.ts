@@ -278,6 +278,7 @@ export function useFlowEditorWorkspace(
     currentVersionLabel,
     showDragHandles,
     showConnectionHints,
+    zoom,
     zoomPercent,
     canvasTransformStyle,
     canvasGridStyle,
@@ -327,7 +328,8 @@ export function useFlowEditorWorkspace(
     startCommentDrag,
     updateCommentText: commentsApi.updateCommentText,
     submitComment: commentsApi.submitComment,
-    removeComment: commentsApi.discardComment,
+    removeComment: commentsApi.dismissComment,
+    canDeleteComment: commentsApi.canDeleteComment,
     zoomIn: viewport.zoomIn,
     zoomOut: viewport.zoomOut,
   }

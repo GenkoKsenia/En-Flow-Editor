@@ -33,9 +33,11 @@ export const useDiagramStore = defineStore('diagram', () => {
   const isUpdatingFromState = ref(false)
   const isEditorFocused = ref(false)
   const lastSerializedJson = ref('')
+  const lastPersistedJson = ref('')
   const isLoading = ref(false)
   const loadError = ref<string | null>(null)
   const applyTimeout = ref<number | null>(null)
+  const codeSaveTimeout = ref<number | null>(null)
   const isDirty = computed(() => jsonBuffer.value !== lastSerializedJson.value)
 
   const context: DiagramContext = {
@@ -52,6 +54,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     isUpdatingFromState,
     isEditorFocused,
     lastSerializedJson,
+    lastPersistedJson,
     isLoading,
     loadError,
     applyTimeout,
@@ -147,6 +150,22 @@ export const useDiagramStore = defineStore('diagram', () => {
     if (value === previousValue) return
     debounceApplyFromEditor()
   })
+  watch(lastSerializedJson, value => {
+    if (!isEditorFocused.value) return
+    if (jsonError.value) return
+    if (value === lastPersistedJson.value) return
+
+    if (codeSaveTimeout.value) {
+      window.clearTimeout(codeSaveTimeout.value)
+    }
+
+    codeSaveTimeout.value = window.setTimeout(() => {
+      codeSaveTimeout.value = null
+      void saveCurrentVersion().catch(error => {
+        loadError.value = error instanceof Error ? error.message : 'Не удалось сохранить изменения JSON'
+      })
+    }, 700)
+  })
 
   return {
     schemeId,
@@ -162,6 +181,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     isUpdatingFromState,
     isEditorFocused,
     lastSerializedJson,
+    lastPersistedJson,
     isLoading,
     loadError,
     isDirty,

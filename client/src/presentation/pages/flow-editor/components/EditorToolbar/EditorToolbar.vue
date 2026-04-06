@@ -100,6 +100,14 @@
             @exported="$emit('close-download-menu')"
           />
           <UiButton block size="sm" variant="outline" @click="$emit('download-png')">PNG</UiButton>
+          <label class="download-checkbox" @click.stop>
+            <input
+              type="checkbox"
+              :checked="includeCommentsInPng"
+              @change="$emit('update:include-comments-in-png', ($event.target as HTMLInputElement).checked)"
+            />
+            <span>Сохранять PNG с комментариями</span>
+          </label>
         </div>
       </div>
     </div>
@@ -130,6 +138,7 @@ defineProps<{
   edges: Edge[]
   dataFlows: DataFlow[]
   comments: CommentsStoreComment[]
+  includeCommentsInPng: boolean
 }>()
 
 const emit = defineEmits<{
@@ -145,6 +154,7 @@ const emit = defineEmits<{
   'toggle-download-menu': []
   'close-download-menu': []
   'close-version-menu': []
+  'update:include-comments-in-png': [value: boolean]
   'download-png': []
 }>()
 
@@ -299,5 +309,21 @@ onBeforeUnmount(() => {
 
 .download-toggle {
   min-width: 98px;
+}
+
+.download-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 6px;
+  font-size: 12px;
+  color: #495057;
+  cursor: pointer;
+  user-select: none;
+}
+
+.download-checkbox input {
+  margin: 1px 0 0;
+  accent-color: #066664;
 }
 </style>

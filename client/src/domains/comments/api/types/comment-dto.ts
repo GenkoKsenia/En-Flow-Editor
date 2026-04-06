@@ -5,4 +5,6 @@ export interface CommentDto {
   user: string
   dateTime: string
   text: string
+  x: number
+  y: number
 }

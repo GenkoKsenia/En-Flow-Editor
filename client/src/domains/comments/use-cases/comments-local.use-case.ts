@@ -14,6 +14,12 @@ export function createCommentsLocalUseCases(
   context: CommentsContext,
   dependencies: CommentsLocalDependencies,
 ) {
+  function hideSyncedComment(commentId: string): void {
+    if (!context.hiddenSyncedCommentIds.value.includes(commentId)) {
+      context.hiddenSyncedCommentIds.value = [...context.hiddenSyncedCommentIds.value, commentId]
+    }
+  }
+
   function startDraft(
     targetType: CommentTarget,
     targetId: string | null,
@@ -29,6 +35,7 @@ export function createCommentsLocalUseCases(
         y: roundCoord(position.y),
       },
       text: '',
+      authorId: context.currentAuthorId.value ?? undefined,
       author: context.getDefaultAuthor(),
       createdAt: new Date().toLocaleString('ru-RU'),
       status: 'draft',
@@ -86,10 +93,22 @@ export function createCommentsLocalUseCases(
     context.comments.value = context.comments.value.filter(comment => !(comment.id === commentId && comment.status !== 'synced'))
   }
 
+  function dismissComment(commentId: string): void {
+    const comment = context.comments.value.find(item => item.id === commentId)
+    if (!comment) return
+
+    if (comment.status === 'synced') {
+      hideSyncedComment(commentId)
+    }
+
+    context.comments.value = context.comments.value.filter(item => item.id !== commentId)
+  }
+
   return {
     startDraft,
     updateDraft,
     submitDraft,
     discardDraft,
+    dismissComment,
   }
 }

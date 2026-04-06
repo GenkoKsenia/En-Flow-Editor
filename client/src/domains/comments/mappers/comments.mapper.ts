@@ -95,6 +95,7 @@ export function mapJoinedCommentPayloadToComment(
     targetId,
     position: { x, y },
     text,
+    authorId: author || undefined,
     author,
     createdAt,
     status: 'synced',

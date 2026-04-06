@@ -63,6 +63,8 @@ export function useNodeDrag({
   uiStore,
   containerPadding = 24,
 }: UseNodeDragOptions) {
+  const DRAG_THRESHOLD = 3
+
   function getAncestorIds(nodeId: string): string[] {
     const ancestors: string[] = []
     let current = nodes.value.find(item => item.id === nodeId)
@@ -247,7 +249,7 @@ export function useNodeDrag({
       dy: 0,
     }
 
-    let potentialParentId: string | null = null
+    let potentialParentId: string | null = node.parentId ?? null
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const scale = zoom.value || 1
@@ -278,6 +280,7 @@ export function useNodeDrag({
     }
 
     const onMouseUp = () => {
+      const didMove = Math.abs(tempNode.dx) >= DRAG_THRESHOLD || Math.abs(tempNode.dy) >= DRAG_THRESHOLD
       const newAbsoluteX = roundCoord(Math.max(0, startNodeX + tempNode.dx))
       const newAbsoluteY = roundCoord(Math.max(0, startNodeY + tempNode.dy))
 
@@ -300,10 +303,13 @@ export function useNodeDrag({
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
 
-      documentStore.finalizeNodeDrag(nodeId, potentialParentId, newAbsoluteX, newAbsoluteY, containerPadding)
-      void documentStore.finishNodeUpdate(nodeId, { affectedEdgeIds: [...(node.passThroughEdges ?? [])] })
+      if (didMove) {
+        documentStore.finalizeNodeDrag(nodeId, potentialParentId, newAbsoluteX, newAbsoluteY, containerPadding)
+        void documentStore.finishNodeUpdate(nodeId, { affectedEdgeIds: [...(node.passThroughEdges ?? [])] })
+      }
+
       void documentStore.endNodeEdit(nodeId)
-      if (tempNode.dx !== 0 || tempNode.dy !== 0) {
+      if (didMove) {
         uiStore.suppressSelectionClickOnce()
       }
     }
