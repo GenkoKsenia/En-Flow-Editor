@@ -11,11 +11,13 @@ namespace Diplom.Mappers
             return new CommentDto
             {
                 ID = comment.ID,
-                Version = comment.Version.Id, 
+                SchemeID = comment.SchemeID, 
                 ElementID = comment.ElementID,
                 Date = comment.Date,
                 UserID = comment.UserID,
-                Text = comment.Text
+                Text = comment.Text, 
+                X = comment.X, 
+                Y = comment.Y
             };
         }
     }

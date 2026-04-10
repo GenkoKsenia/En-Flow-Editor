@@ -4,8 +4,8 @@ namespace Diplom.Models.Hub
 {
     public class HubElementCommentRequest
     {
-        [JsonPropertyName("versionId")]
-        public int VersionId { get; set; }
+        [JsonPropertyName("schemeId")]
+        public int SchemeId { get; set; }
         [JsonPropertyName("elementId")]
         public string ElementId { get; set; }
         [JsonPropertyName("elementtype")]

@@ -47,9 +47,9 @@ namespace Diplom
 
             //Comment
             modelBuilder.Entity<Comment>()
-                .HasOne(c => c.Version)
+                .HasOne(c => c.Scheme)
                 .WithMany(v => v.Comments)
-                .HasForeignKey(c => c.VersionID);
+                .HasForeignKey(c => c.SchemeID);
 
             //Access_User_Schema_Right
             modelBuilder.Entity<Access_User_Schema_Right>()

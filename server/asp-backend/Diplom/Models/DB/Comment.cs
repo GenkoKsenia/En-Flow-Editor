@@ -8,9 +8,9 @@ namespace Diplom.Models.DB
     {
         [Key]
         public int ID { get; set; }
-        [ForeignKey("Version")]
-        public int VersionID { get; set; }
-        public Version Version { get; set; }
+        [ForeignKey("Scheme")]
+        public int SchemeID { get; set; }
+        public Scheme Scheme { get; set; }
         [Required]
         public string ElementID { get; set; }
         [Required]

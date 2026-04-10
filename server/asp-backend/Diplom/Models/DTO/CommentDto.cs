@@ -8,8 +8,8 @@ namespace Diplom.Models.DTO
     {
         [JsonPropertyName("id")]
         public int ID { get; set; }
-        [JsonPropertyName("version")]
-        public int Version { get; set; }
+        [JsonPropertyName("schemeId")]
+        public int SchemeID { get; set; }
         [JsonPropertyName("elementId")]
         public string ElementID { get; set; }
         [JsonPropertyName("user")]
@@ -18,5 +18,9 @@ namespace Diplom.Models.DTO
         public DateTime Date { get; set; }
         [JsonPropertyName("text")]
         public string Text { get; set; }
+        [JsonPropertyName("x")]
+        public float X { get; set; }
+        [JsonPropertyName("y")]
+        public float Y { get; set; }
     }
 }

@@ -11,6 +11,7 @@ namespace Diplom.Mappers
             return new VersionResponseDto
             {
                 Id = version.Id,
+                IsReadOnly = version.IsReadOnly, 
                 Code = JsonSerializer.Deserialize<CodeRequest>(version.Code),
                 Date = version.Date,
                 SchemeID = version.SchemeID

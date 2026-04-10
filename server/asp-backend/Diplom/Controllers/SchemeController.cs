@@ -250,24 +250,5 @@ namespace Diplom.Controllers
 
             return differences;
         }
-
-        [HttpPost("lock/{id}")]
-        public async Task<IActionResult> SetReadOnly(int id, [FromBody] bool isReadOnly)
-        {
-            string Sid = userContextService.GetCurrentUserSid();
-
-            Scheme availableScheme = await context.Schemes
-                .FirstOrDefaultAsync(
-                s => s.ID == id &&
-                s.UserID == Sid
-                );
-
-            if (availableScheme == null)
-                return Unauthorized();
-
-            availableScheme.IsReadOnly = isReadOnly;
-            await context.SaveChangesAsync();
-            return Ok();
-        }
     }
 }

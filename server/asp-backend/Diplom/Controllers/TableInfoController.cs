@@ -25,7 +25,7 @@ namespace Diplom.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<CodeRequest>> GetDbScheme([FromBody] DbConnectionRequest connection)
+        public async Task<ActionResult<IEnumerable<TableInfo>>> GetDbScheme([FromBody] DbConnectionRequest connection)
         {
             using (var dbContext = await dynamicDbContext.CreateDbContext(connection))
             {
@@ -98,7 +98,7 @@ namespace Diplom.Controllers
                     })
                     .ToList();
 
-                return Ok(PseudocodeMapper.MapDbInfo(result));
+                return Ok(result);
             }
         }
     }

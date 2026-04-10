@@ -149,12 +149,13 @@ namespace Diplom.Hubs
             if (availableScheme == null)
                 return;
 
-            if (availableScheme.IsReadOnly)
+            var latestVersion = availableScheme.Versions.FirstOrDefault();
+
+            if (latestVersion.IsReadOnly)
                 return;
 
             if (availableScheme.Versions != null && availableScheme.Versions.Any())
             {
-                var latestVersion = availableScheme.Versions.FirstOrDefault();
                 var latestVersionDto = VersionToDtoMapper.Map(latestVersion);
 
                 //применение изменений

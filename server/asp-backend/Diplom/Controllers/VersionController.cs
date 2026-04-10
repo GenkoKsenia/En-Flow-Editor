@@ -121,7 +121,7 @@ namespace Diplom.Controllers
             if (version == null)
                 return Forbid();
 
-            if (version.Scheme.IsReadOnly)
+            if (version.IsReadOnly)
                 return Forbid();
 
             string pseudoCode = JsonSerializer.Serialize(request);
@@ -158,6 +158,27 @@ namespace Diplom.Controllers
             context.Versions.Remove(version);
             await context.SaveChangesAsync();
 
+            return Ok();
+        }
+
+        [HttpPost("lock/{id}")]
+        public async Task<IActionResult> SetReadOnly(int id, [FromBody] bool isReadOnly)
+        {
+            string Sid = userContextService.GetCurrentUserSid();
+
+            Models.DB.Version version = await context.Versions
+                .Include(v => v.Scheme)
+                .FirstOrDefaultAsync(v => v.Id == id);
+
+            if (version == null)
+                return Forbid();
+
+            if (version.Scheme.UserID != Sid)
+                return Unauthorized();
+
+
+            version.IsReadOnly = isReadOnly;
+            await context.SaveChangesAsync();
             return Ok();
         }
     }

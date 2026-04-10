@@ -1,10 +1,14 @@
-﻿namespace Diplom.Models.Requests
+﻿using System.Text.Json.Serialization;
+
+namespace Diplom.Models.Requests
 {
     public class CommentPositionUpdateRequest
     {
-        public int VersionId { get; set; }
-        public string? ElementId { get; set; }
+        [JsonPropertyName("commentId")]
+        public int CommentId { get; set; }
+        [JsonPropertyName("x")]
         public float X { get; set; }
+        [JsonPropertyName("y")]
         public float Y { get; set; }
     }
 }
