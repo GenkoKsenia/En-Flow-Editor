@@ -16,6 +16,7 @@ namespace Diplom.Mappers
                 Date = comment.Date,
                 UserID = comment.UserID,
                 Text = comment.Text, 
+                CompletionDate = comment.CompletionDate, 
                 X = comment.X, 
                 Y = comment.Y
             };

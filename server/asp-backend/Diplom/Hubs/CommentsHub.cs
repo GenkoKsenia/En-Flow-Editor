@@ -3,7 +3,7 @@ using Diplom.Mappers;
 using Diplom.Models.DB;
 using Diplom.Models.DTO;
 using Diplom.Models.Hub;
-using Diplom.Models.Requests;
+using Diplom.Models.Requests.CommentRequests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.SignalR;
@@ -60,7 +60,7 @@ namespace Diplom.Hubs
                 .ToList() ?? new List<string>();
         }
 
-        public async Task<IEnumerable<CommentDto>> JoinElementComments(int schemeId, string elementId)
+        public async Task<IEnumerable<CommentDto>> JoinComments(int schemeId)
         {
 
             String Sid = GetCurrentUserSid();
@@ -99,39 +99,22 @@ namespace Diplom.Hubs
             if (availableScheme.Versions == null || !availableScheme.Versions.Any())
                 throw new HubException("Versions is null");
 
-            if (elementId == null || elementId == "")
-            {
-                await Groups.AddToGroupAsync(Context.ConnectionId, $"comments-{schemeId}");
 
-                logger.LogInformation($"Клиент подключился к группе comments-{schemeId} и получил комменты. ConnectionId: {Context.ConnectionId}");
-            }
-            else
-            {
-                await Groups.AddToGroupAsync(Context.ConnectionId, $"comments-{schemeId}-{elementId}");
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"comments-{schemeId}");
 
-                logger.LogInformation($"Клиент подключился к группе comments-{schemeId}-{elementId} и получил комменты. ConnectionId: {Context.ConnectionId}");
-            }
+            logger.LogInformation($"Клиент подключился к группе comments-{schemeId} и получил комменты. ConnectionId: {Context.ConnectionId}");
 
-            var comments = availableScheme.Comments
-                .Where(c => c.ElementID == elementId);
+
+            var comments = availableScheme.Comments;
 
             return comments.Select(c => CommentToDtoMapper.Map(c));
         }
 
-        public async Task LeaveElementComments(int schemeId, string elementId)
+        public async Task LeaveElementComments(int schemeId)
         {
-            if (elementId == null || elementId == "")
-            {
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"comments-{schemeId}");
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"comments-{schemeId}");
 
-                logger.LogInformation($"Клиент отключился от группы comments-{schemeId}. ConnectionId: {Context.ConnectionId}");
-            }
-            else
-            {
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"comments-{schemeId}-{elementId}");
-
-                logger.LogInformation($"Клиент отключился от группы comments-{schemeId}-{elementId}. ConnectionId: {Context.ConnectionId}");
-            }
+            logger.LogInformation($"Клиент отключился от группы comments-{schemeId}. ConnectionId: {Context.ConnectionId}");
         }
 
         public async Task SendComment(HubElementCommentRequest request)
@@ -143,7 +126,8 @@ namespace Diplom.Hubs
 
             logger.LogInformation($"Извлеченный Sid пользователя: {Sid}");
 
-            
+            int editingRightLevel = 2;
+
             Scheme availableScheme = await context.Schemes
                 .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
                 .Include(s => s.Access_User_Schema_Rights)
@@ -152,8 +136,8 @@ namespace Diplom.Hubs
                     .ThenInclude(r => r.Access_Right)
                 .Where(s => s.ID == request.SchemeId)
                 .Where(s => s.UserID == Sid ||
-                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
-                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
                 .FirstOrDefaultAsync();
             
 
@@ -228,28 +212,14 @@ namespace Diplom.Hubs
             context.Comments.Add(comment);
             await context.SaveChangesAsync();
 
-            if (elementId == null || elementId == "")
-            {
-                //оповещение
-                await Clients.OthersInGroup($"comments-{request.SchemeId}")
-                    .SendAsync("CommentAdded", CommentToDtoMapper.Map(comment));
+            //оповещение
+            await Clients.OthersInGroup($"comments-{request.SchemeId}")
+                .SendAsync("CommentAdded", CommentToDtoMapper.Map(comment));
 
-                //подтверждение пользователю
-                await Clients.Caller.SendAsync("YourCommentAdded", CommentToDtoMapper.Map(comment));
+            //подтверждение пользователю
+            await Clients.Caller.SendAsync("YourCommentAdded", CommentToDtoMapper.Map(comment));
 
-                logger.LogInformation($"Клиент добавил коммент для всей схемы {request.SchemeId}. ConnectionId: {Context.ConnectionId}, Comment: {CommentToDtoMapper.Map(comment)}");
-            }
-            else
-            {
-                //оповещение
-                await Clients.OthersInGroup($"comments-{request.SchemeId}-{elementId}")
-                    .SendAsync("CommentAdded", CommentToDtoMapper.Map(comment));
-
-                //подтверждение пользователю
-                await Clients.Caller.SendAsync("YourCommentAdded", CommentToDtoMapper.Map(comment));
-
-                logger.LogInformation($"Клиент добавил коммент для схемы {request.SchemeId} к элементу- {elementId}. ConnectionId: {Context.ConnectionId}, Comment: {CommentToDtoMapper.Map(comment)}");
-            }
+            logger.LogInformation($"Клиент добавил коммент для схемы {request.SchemeId}. ConnectionId: {Context.ConnectionId}, Comment: {CommentToDtoMapper.Map(comment)}");
         }
 
         public async Task UpdateCommentText(CommentUpdateRequest request)
@@ -257,52 +227,46 @@ namespace Diplom.Hubs
             string Sid = GetCurrentUserSid();
             var groups = GetCurrentUserGroups();
 
+            int editingRightLevel = 2;
+
             Comment availableComment = await context.Comments
                 .Include(c => c.Scheme)
                     .ThenInclude(s => s.Access_User_Schema_Rights)
                 .Include(c => c.Scheme)
                     .ThenInclude(s => s.Access_Group_Schema_Rights)
                 .Where(c => c.Scheme.UserID == Sid ||
-                    c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
-                    c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                    c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
                 .FirstOrDefaultAsync(c => c.ID == request.CommentId);
 
 
             if (availableComment == null)
                 return;
 
+            /*
             if (availableComment.UserID != Sid)
                 return;
+            */
 
             availableComment.Text = request.Text;
             await context.SaveChangesAsync();
 
-            await Clients.Caller.SendAsync("YourCommentUpdated", 
+            await Clients.Caller.SendAsync("CommentUpdated", 
                 CommentToDtoMapper.Map(availableComment));
 
-            
-            if (availableComment.ElementID == null || availableComment.ElementID == "")
-            {
-                //оповещение
-                await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
-                    .SendAsync("CommentUpdated", CommentToDtoMapper.Map(availableComment));
+            //оповещение
+            await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
+                .SendAsync("CommentUpdated", CommentToDtoMapper.Map(availableComment));
 
-                logger.LogInformation($"Клиент обновил коммент для схемы {availableComment.SchemeID}. ConnectionId: {Context.ConnectionId}, Comment: {CommentToDtoMapper.Map(availableComment)}");
-            }
-            else
-            {
-                //оповещение
-                await Clients.OthersInGroup($"comments-{availableComment.SchemeID}-{availableComment.ElementID}")
-                    .SendAsync("CommentUpdated", CommentToDtoMapper.Map(availableComment));
-
-                logger.LogInformation($"Клиент обновил коммент для схемы {availableComment.SchemeID} к элементу- {availableComment.ElementID}. ConnectionId: {Context.ConnectionId}, Comment: {CommentToDtoMapper.Map(availableComment)}");
-            }
+            logger.LogInformation($"Клиент обновил коммент для схемы {availableComment.SchemeID}. ConnectionId: {Context.ConnectionId}, Comment: {CommentToDtoMapper.Map(availableComment)}");
         }
 
         public async Task UpdateCommentPosition(CommentPositionUpdateRequest request)
         {
             string Sid = GetCurrentUserSid();
             var groups = GetCurrentUserGroups();
+
+            int editingRightLevel = 2;
 
             logger.LogInformation($"Поиск коммента ({request.CommentId})");
 
@@ -312,9 +276,10 @@ namespace Diplom.Hubs
                 .Include(c => c.Scheme)
                     .ThenInclude(s => s.Access_Group_Schema_Rights)
                 .Where(c => c.Scheme.UserID == Sid ||
-                    c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
-                    c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                    c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
                 .FirstOrDefaultAsync(c => c.ID == request.CommentId);
+
 
             if (availableComment == null)
             {
@@ -332,18 +297,89 @@ namespace Diplom.Hubs
 
             await Clients.Caller.SendAsync("CommentMoved", CommentToDtoMapper.Map(availableComment));
 
-            if (elementId == null || elementId == "")
+            //оповещение
+            await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
+                .SendAsync("CommentMoved", CommentToDtoMapper.Map(availableComment));
+        }
+
+        public async Task CompleteComment(CommentCompleteRequest request)
+        {
+            string Sid = GetCurrentUserSid();
+            var groups = GetCurrentUserGroups();
+
+            int editingRightLevel = 2;
+
+            logger.LogInformation($"Поиск коммента ({request.CommentId})");
+
+            Comment availableComment = await context.Comments
+                .Include(c => c.Scheme)
+                    .ThenInclude(s => s.Access_User_Schema_Rights)
+                .Include(c => c.Scheme)
+                    .ThenInclude(s => s.Access_Group_Schema_Rights)
+                .Where(c => c.Scheme.UserID == Sid ||
+                    c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .FirstOrDefaultAsync(c => c.ID == request.CommentId);
+
+            if (availableComment == null)
             {
-                //оповещение
-                await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
-                    .SendAsync("CommentMoved", CommentToDtoMapper.Map(availableComment));
+                logger.LogInformation($"Коммент недоступен ({request.CommentId})");
+                return;
             }
-            else
+
+            if (availableComment.CompletionDate != null)
             {
-                //оповещение
-                await Clients.OthersInGroup($"comments-{availableComment.SchemeID}-{availableComment.ElementID}")
-                    .SendAsync("CommentMoved", CommentToDtoMapper.Map(availableComment));
+                logger.LogInformation($"Коммент уже завершен ({request.CommentId})");
+                return;
             }
+
+            string elementId = availableComment.ElementID;
+
+            availableComment.CompletionDate = DateTime.Now;
+            await context.SaveChangesAsync();
+
+            await Clients.Caller.SendAsync("CommentCompleted", CommentToDtoMapper.Map(availableComment));
+
+            //оповещение
+            await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
+                .SendAsync("CommentCompleted", CommentToDtoMapper.Map(availableComment));
+        }
+
+        public async Task DeleteComment(CommentDeleteRequest request)
+        {
+            string Sid = GetCurrentUserSid();
+            var groups = GetCurrentUserGroups();
+
+            int editingRightLevel = 2;
+
+            logger.LogInformation($"Поиск коммента ({request.CommentId})");
+
+            Comment availableComment = await context.Comments
+                .Include(c => c.Scheme)
+                    .ThenInclude(s => s.Access_User_Schema_Rights)
+                .Include(c => c.Scheme)
+                    .ThenInclude(s => s.Access_Group_Schema_Rights)
+                .Where(c => c.Scheme.UserID == Sid ||
+                    c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .FirstOrDefaultAsync(c => c.ID == request.CommentId);
+
+            if (availableComment == null)
+            {
+                logger.LogInformation($"Коммент недоступен ({request.CommentId})");
+                return;
+            }
+
+            string elementId = availableComment.ElementID;
+
+            context.Comments.Remove(availableComment);
+            await context.SaveChangesAsync();
+
+            await Clients.Caller.SendAsync("CommentDeleted", availableComment.ID);
+
+            //оповещение
+            await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
+                .SendAsync("CommentDeleted", availableComment.ID);
         }
     }
 }

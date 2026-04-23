@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace Diplom.Models.Requests
+namespace Diplom.Models.Requests.CommentRequests
 {
     public class CommentPositionUpdateRequest
     {

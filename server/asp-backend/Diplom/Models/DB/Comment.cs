@@ -18,6 +18,7 @@ namespace Diplom.Models.DB
         [Required]
         public DateTime Date { get; set; } = DateTime.Now;
         public string Text {  get; set; }
+        public DateTime? CompletionDate { get; set; }
         [Required]
         public float X {  get; set; }
         [Required]
