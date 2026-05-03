@@ -4,7 +4,11 @@ namespace Diplom.Models.Requests.CommentRequests
 {
     public class CommentCompleteRequest
     {
-        [JsonPropertyName("id")]
+        [JsonPropertyName("schemeId")]
+        public int SchemeId { get; set; }
+        [JsonPropertyName("versionId")]
+        public int VersionId { get; set; }
+        [JsonPropertyName("commentId")]
         public int CommentId { get; set; }
     }
 }

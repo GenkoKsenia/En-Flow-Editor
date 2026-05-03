@@ -1,4 +1,3 @@
-using Diplom;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +7,7 @@ using Diplom.Services.UserTrackers;
 using Serilog;
 using Serilog.Filters;
 using Serilog.Events;
+using Diplom.DBContexts;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(
@@ -33,9 +33,11 @@ builder.Host.UseSerilog();
 
 // получаем строку подключения из файла конфигурации
 string connection = builder.Configuration.GetConnectionString("DefaultConnection");
+string testAdConnection = builder.Configuration.GetConnectionString("TestADConnection");
 
 // добавляем контекст ApplicationContext в качестве сервиса в приложение
 builder.Services.AddDbContext<ApplicationContext>(options => options.UseSqlServer(connection));
+builder.Services.AddDbContext<TestADContext>(options => options.UseSqlServer(testAdConnection));
 
 builder.Services.AddScoped<DynamicDbContext>();
 

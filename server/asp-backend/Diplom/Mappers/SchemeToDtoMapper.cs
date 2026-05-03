@@ -1,4 +1,4 @@
-﻿using Diplom.Models.DB;
+﻿using Diplom.Models.DB.Main;
 using Diplom.Models.DTO;
 using Diplom.Models.Requests;
 using System.Text.Json;

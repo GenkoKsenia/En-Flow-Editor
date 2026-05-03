@@ -1,6 +1,7 @@
-﻿using Diplom.Hubs;
+﻿using Diplom.DBContexts;
+using Diplom.Hubs;
 using Diplom.Mappers;
-using Diplom.Models.DB;
+using Diplom.Models.DB.Main;
 using Diplom.Models.DTO;
 using Diplom.Models.Hub;
 using Diplom.Services.UserTrackers;
@@ -140,7 +141,7 @@ namespace Diplom.Services
             await context.SaveChangesAsync();
             */
 
-            Models.DB.Version latestVersion = scheme.Versions.First();
+            Models.DB.Main.Version latestVersion = scheme.Versions.First();
             latestVersion.IsReadOnly = true;
             await context.SaveChangesAsync();
 
@@ -174,7 +175,7 @@ namespace Diplom.Services
                 latestVersion.Code = updatedCode;
             }    
 
-            var newVersion = new Models.DB.Version
+            var newVersion = new Models.DB.Main.Version
             {
                 Code = latestVersion.Code,
                 SchemeID = scheme.ID
@@ -253,7 +254,7 @@ namespace Diplom.Services
                     latestVersion.Code = updatedCode;
                 }
 
-                var newVersion = new Diplom.Models.DB.Version
+                var newVersion = new Diplom.Models.DB.Main.Version
                 {
                     Code = latestVersion.Code,
                     SchemeID = latestVersion.SchemeID
@@ -309,7 +310,7 @@ namespace Diplom.Services
                     string updatedCode = JsonSerializer.Serialize(latestVersionDto.Code);
                     latestVersion.Code = updatedCode;
 
-                    var newVersion = new Diplom.Models.DB.Version
+                    var newVersion = new Diplom.Models.DB.Main.Version
                     {
                         Code = latestVersion.Code,
                         SchemeID = latestVersion.SchemeID
@@ -333,7 +334,7 @@ namespace Diplom.Services
             }
         }
 
-        private async Task SendNewVersion(int schemeId, Models.DB.Version version)
+        private async Task SendNewVersion(int schemeId, Models.DB.Main.Version version)
         {
             await _hubContext.Clients.Group($"scheme-{schemeId}")
                 .SendAsync("NewVersionCreated", new

@@ -7,9 +7,10 @@ using System.DirectoryServices;
 using Diplom.Services;
 using System.Text.Json;
 using Diplom.Mappers;
-using Diplom.Models.DB;
 using Diplom.Models.DTO;
 using Diplom.Models.Requests;
+using Diplom.DBContexts;
+using Diplom.Models.DB.Main;
 
 namespace Diplom.Controllers
 {
@@ -27,7 +28,7 @@ namespace Diplom.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Models.DB.Version>>> Get()
+        public async Task<ActionResult<IEnumerable<Models.DB.Main.Version>>> Get()
         {
             return Ok(await context.Versions.ToListAsync());
         }
@@ -38,7 +39,7 @@ namespace Diplom.Controllers
             string Sid = userContextService.GetCurrentUserSid();
             var groups = userContextService.GetCurrentUserGroups();
 
-            List<Models.DB.Version> versions = await context.Versions
+            List<Models.DB.Main.Version> versions = await context.Versions
                 .Include(v => v.Scheme)
                 .Include(v => v.Scheme.Access_User_Schema_Rights)
                 .Include(v => v.Scheme.Access_Group_Schema_Rights)
@@ -90,7 +91,7 @@ namespace Diplom.Controllers
 
             string pseudoCode = JsonSerializer.Serialize(request);
 
-            Models.DB.Version version = new Models.DB.Version { Code = pseudoCode, SchemeID = schemeId };
+            Models.DB.Main.Version version = new Models.DB.Main.Version { Code = pseudoCode, SchemeID = schemeId };
 
             context.Versions.Add(version);
             await context.SaveChangesAsync();
@@ -106,7 +107,7 @@ namespace Diplom.Controllers
 
             int editingRightLevel = 2;
 
-            Models.DB.Version version = await context.Versions
+            Models.DB.Main.Version version = await context.Versions
                 .Include(v => v.Scheme)
                 .Include(v => v.Scheme.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
@@ -138,7 +139,7 @@ namespace Diplom.Controllers
             string Sid = userContextService.GetCurrentUserSid();
             var groups = userContextService.GetCurrentUserGroups();
 
-            Models.DB.Version version = await context.Versions
+            Models.DB.Main.Version version = await context.Versions
                 .Include(v => v.Scheme)
                 .Include(v => v.Scheme.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
@@ -166,7 +167,7 @@ namespace Diplom.Controllers
         {
             string Sid = userContextService.GetCurrentUserSid();
 
-            Models.DB.Version version = await context.Versions
+            Models.DB.Main.Version version = await context.Versions
                 .Include(v => v.Scheme)
                 .FirstOrDefaultAsync(v => v.Id == id);
 

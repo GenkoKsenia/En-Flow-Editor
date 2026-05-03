@@ -1,4 +1,5 @@
-﻿using Diplom.Models.DB;
+﻿using Diplom.DBContexts;
+using Diplom.Models.DB.Main;
 using Diplom.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace Diplom.Models.DB
+namespace Diplom.Models.DB.Main
 {
     public class Scheme
     {

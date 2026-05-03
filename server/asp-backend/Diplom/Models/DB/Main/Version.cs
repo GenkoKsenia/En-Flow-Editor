@@ -2,19 +2,19 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
-namespace Diplom.Models.DB
+namespace Diplom.Models.DB.Main
 {
-    public class SchemeUpdate
+    public class Version
     {
         [Key]
-        public int ID { get; set; }
+        public int Id { get; set; }
+        public bool IsReadOnly { get; set; } = false;
+        public string Code { get; set; }
+        [Required]
+        public DateTime Date { get; set; } = DateTime.Now;
         [ForeignKey("Scheme")]
         public int SchemeID { get; set; }
         [JsonIgnore]
         public virtual Scheme Scheme { get; set; }
-        public DateTime? SendDateTime { get; set; }
-        public string ConnectionID {  get; set; }
-        public bool IsSent { get; set; } = false;
-        public string? Updates { get; set; }
     }
 }

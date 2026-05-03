@@ -1,4 +1,4 @@
-﻿using Diplom.Models.DB;
+﻿using Diplom.Models.DB.Main;
 
 namespace Diplom.Models.DTO
 {

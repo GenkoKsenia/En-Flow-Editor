@@ -6,7 +6,7 @@ namespace Diplom.Mappers
 {
     public class VersionToDtoMapper
     {
-        public static VersionResponseDto Map(Models.DB.Version version)
+        public static VersionResponseDto Map(Models.DB.Main.Version version)
         {
             return new VersionResponseDto
             {

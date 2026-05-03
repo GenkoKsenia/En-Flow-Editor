@@ -1,6 +1,5 @@
 ﻿using Azure.Core;
 using Diplom.Mappers;
-using Diplom.Models.DB;
 using Diplom.Models.DTO;
 using Diplom.Models.Requests;
 using Diplom.Services;
@@ -12,6 +11,8 @@ using System.Security.Principal;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using KellermanSoftware.CompareNetObjects;
+using Diplom.DBContexts;
+using Diplom.Models.DB.Main;
 
 namespace Diplom.Controllers
 {
@@ -132,7 +133,7 @@ namespace Diplom.Controllers
 
             string pseudoCode = JsonSerializer.Serialize(code);
 
-            Models.DB.Version version = new Models.DB.Version { Code = pseudoCode, SchemeID = scheme.ID };
+            Models.DB.Main.Version version = new Models.DB.Main.Version { Code = pseudoCode, SchemeID = scheme.ID };
 
             context.Versions.Add(version);
             await context.SaveChangesAsync();

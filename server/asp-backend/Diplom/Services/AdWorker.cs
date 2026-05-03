@@ -1,4 +1,4 @@
-﻿using Diplom.Models.DTO;
+﻿using Diplom.Models.DB.TestAD;
 using System.DirectoryServices.AccountManagement;
 
 namespace Diplom.Services

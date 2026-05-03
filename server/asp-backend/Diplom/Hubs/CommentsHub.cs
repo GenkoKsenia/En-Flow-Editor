@@ -1,6 +1,7 @@
 ﻿using Azure.Core;
+using Diplom.DBContexts;
 using Diplom.Mappers;
-using Diplom.Models.DB;
+using Diplom.Models.DB.Main;
 using Diplom.Models.DTO;
 using Diplom.Models.Hub;
 using Diplom.Models.Requests.CommentRequests;
@@ -60,13 +61,21 @@ namespace Diplom.Hubs
                 .ToList() ?? new List<string>();
         }
 
-        public async Task<IEnumerable<CommentDto>> JoinComments(int schemeId)
+        public async Task<IEnumerable<CommentDto>> JoinComments(JoinCommentsRequest request)
         {
 
             String Sid = GetCurrentUserSid();
             var groups = GetCurrentUserGroups();
 
-            
+            DateTime targetVersionDate = await context.Versions
+                .Where(v => v.Id == request.VersionId)
+                .Select(v => v.Date)
+                .FirstOrDefaultAsync();
+
+            if (targetVersionDate == default)
+                throw new ArgumentException($"Версия {request.VersionId} не найдена");
+
+            /*
             Scheme availableScheme = await context.Schemes
                 .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
                 .Include(s => s.Comments)
@@ -79,7 +88,25 @@ namespace Diplom.Hubs
                     s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
                     s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
                 .FirstOrDefaultAsync();
-            
+            */
+
+            Scheme availableScheme = await context.Schemes
+                .Include(s => s.Versions
+                    .Where(v => v.Date >= targetVersionDate)
+                    .OrderBy(v => v.Date)
+                    .Take(2))
+                .Include(s => s.Comments)
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.ID == request.SchemeId)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                .FirstOrDefaultAsync();
+
+
             /*
             Models.DB.Version availableVersion = await context.Versions
                 .Include(v => v.Comments)
@@ -97,17 +124,45 @@ namespace Diplom.Hubs
                 throw new HubException("Access denied");
 
             if (availableScheme.Versions == null || !availableScheme.Versions.Any())
-                throw new HubException("Versions is null");
+                throw new HubException("Versions are null");
 
 
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"comments-{schemeId}");
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"comments-{request.SchemeId}");
 
-            logger.LogInformation($"Клиент подключился к группе comments-{schemeId} и получил комменты. ConnectionId: {Context.ConnectionId}");
+            logger.LogInformation($"Клиент подключился к группе comments-{request.SchemeId} и получил комменты. ConnectionId: {Context.ConnectionId}");
+
+            List<CommentDto> comments = new List<CommentDto>();
 
 
-            var comments = availableScheme.Comments;
+            if (availableScheme.Versions.Count == 1)
+            {
+                // Версия с versionId- последняя
+                comments = availableScheme.Comments
+                    .Select(c => CommentToDtoMapper.Map(c))
+                    .ToList();
+            }
+            else
+            {
+                Models.DB.Main.Version scheduleVersion = availableScheme.Versions
+                    .Skip(1)
+                    .First();
 
-            return comments.Select(c => CommentToDtoMapper.Map(c));
+                comments = availableScheme.Comments
+                    .Where(c => c.Date < scheduleVersion.Date)
+                    .Select(c => CommentToDtoMapper.Map(c))
+                    .ToList();
+
+                foreach (var comment in comments)
+                {
+                    if (comment.CompletionDate.HasValue &&
+                        comment.CompletionDate > scheduleVersion.Date)
+                    {
+                        comment.CompletionDate = null;
+                    }
+                }
+            }
+
+            return comments;
         }
 
         public async Task LeaveElementComments(int schemeId)
@@ -119,7 +174,7 @@ namespace Diplom.Hubs
 
         public async Task SendComment(HubElementCommentRequest request)
         {
-            logger.LogInformation($"Начало добавления коммента для схемы {request.SchemeId}");
+            logger.LogInformation($"Начало добавления коммента для схемы {request.SchemeId}, {request.VersionId}");
 
             string Sid = GetCurrentUserSid();
             var groups = GetCurrentUserGroups();
@@ -139,7 +194,6 @@ namespace Diplom.Hubs
                     s.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
                     s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
                 .FirstOrDefaultAsync();
-            
 
             /*
             Models.DB.Version availableVersion = await context.Versions
@@ -165,9 +219,17 @@ namespace Diplom.Hubs
                 return;
             }
 
+            var version = availableScheme.Versions.First();
+
+            if (version.Id != request.VersionId)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не является последней");
+                return;
+            }
+
             logger.LogInformation($"Схема доступна: {availableScheme.Name}");
 
-            var version = availableScheme.Versions.First();
+            
             var mappedVersion = VersionToDtoMapper.Map(version);
 
             string elementId = "";
@@ -214,10 +276,19 @@ namespace Diplom.Hubs
 
             //оповещение
             await Clients.OthersInGroup($"comments-{request.SchemeId}")
-                .SendAsync("CommentAdded", CommentToDtoMapper.Map(comment));
+                .SendAsync("CommentAdded", new CommentAfterActionResponse
+                {
+                    VersionId = version.Id, 
+                    CommentDto = CommentToDtoMapper.Map(comment)
+                });
 
             //подтверждение пользователю
-            await Clients.Caller.SendAsync("YourCommentAdded", CommentToDtoMapper.Map(comment));
+            await Clients.Caller
+                .SendAsync("YourCommentAdded", new CommentAfterActionResponse
+                {
+                    VersionId = version.Id, 
+                    CommentDto = CommentToDtoMapper.Map(comment)
+                });
 
             logger.LogInformation($"Клиент добавил коммент для схемы {request.SchemeId}. ConnectionId: {Context.ConnectionId}, Comment: {CommentToDtoMapper.Map(comment)}");
         }
@@ -229,6 +300,7 @@ namespace Diplom.Hubs
 
             int editingRightLevel = 2;
 
+            /*
             Comment availableComment = await context.Comments
                 .Include(c => c.Scheme)
                     .ThenInclude(s => s.Access_User_Schema_Rights)
@@ -238,21 +310,53 @@ namespace Diplom.Hubs
                     c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
                     c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
                 .FirstOrDefaultAsync(c => c.ID == request.CommentId);
+            */
 
+            Scheme availableScheme = await context.Schemes
+                .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
+                .Include(s => s.Comments.Where(c => c.ID == request.CommentId))
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.ID == request.SchemeId)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .FirstOrDefaultAsync();
+
+            if (availableScheme == null)
+            {
+                logger.LogInformation($"Схема {request.SchemeId} недоступна");
+                return;
+            }
+            
+            if (availableScheme.Versions.Count == 0)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не найдена");
+                return;
+            }
+
+            Models.DB.Main.Version version = availableScheme.Versions.FirstOrDefault();
+
+            if (version.Id != request.VersionId)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не является последней для схемы {request.SchemeId}");
+                return;
+            }
+
+            Comment availableComment = availableScheme.Comments.FirstOrDefault();
 
             if (availableComment == null)
+            {
+                logger.LogInformation($"Коммент {request.CommentId} не найден");
                 return;
-
-            /*
-            if (availableComment.UserID != Sid)
-                return;
-            */
+            }
 
             availableComment.Text = request.Text;
             await context.SaveChangesAsync();
 
-            await Clients.Caller.SendAsync("CommentUpdated", 
-                CommentToDtoMapper.Map(availableComment));
+            await Clients.Caller.SendAsync("CommentUpdated", CommentToDtoMapper.Map(availableComment));
 
             //оповещение
             await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
@@ -270,6 +374,7 @@ namespace Diplom.Hubs
 
             logger.LogInformation($"Поиск коммента ({request.CommentId})");
 
+            /*
             Comment availableComment = await context.Comments
                 .Include(c => c.Scheme)
                     .ThenInclude(s => s.Access_User_Schema_Rights)
@@ -279,7 +384,43 @@ namespace Diplom.Hubs
                     c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
                     c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
                 .FirstOrDefaultAsync(c => c.ID == request.CommentId);
+            */
 
+            Scheme availableScheme = await context.Schemes
+                .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
+                .Include(s => s.Comments.Where(c => c.ID == request.CommentId))
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.ID == request.SchemeId)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .FirstOrDefaultAsync();
+
+            if (availableScheme == null)
+            {
+                logger.LogInformation($"Схема {request.SchemeId} недоступна");
+                return;
+            }
+
+            if (availableScheme.Versions.Count == 0)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не найдена");
+                return;
+            }
+
+            Models.DB.Main.Version version = availableScheme.Versions.FirstOrDefault();
+
+            if (version.Id != request.VersionId)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не является последней для схемы {request.SchemeId}");
+                return;
+            }
+
+
+            Comment availableComment = availableScheme.Comments.FirstOrDefault();
 
             if (availableComment == null)
             {
@@ -292,10 +433,10 @@ namespace Diplom.Hubs
             availableComment.X = request.X;
             availableComment.Y = request.Y;
 
-
             await context.SaveChangesAsync();
 
-            await Clients.Caller.SendAsync("CommentMoved", CommentToDtoMapper.Map(availableComment));
+            await Clients.Caller
+                .SendAsync("CommentMoved", CommentToDtoMapper.Map(availableComment));
 
             //оповещение
             await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
@@ -311,6 +452,7 @@ namespace Diplom.Hubs
 
             logger.LogInformation($"Поиск коммента ({request.CommentId})");
 
+            /*
             Comment availableComment = await context.Comments
                 .Include(c => c.Scheme)
                     .ThenInclude(s => s.Access_User_Schema_Rights)
@@ -320,6 +462,43 @@ namespace Diplom.Hubs
                     c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
                     c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
                 .FirstOrDefaultAsync(c => c.ID == request.CommentId);
+            */
+
+            Scheme availableScheme = await context.Schemes
+                .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
+                .Include(s => s.Comments.Where(c => c.ID == request.CommentId))
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.ID == request.SchemeId)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .FirstOrDefaultAsync();
+
+            if (availableScheme == null)
+            {
+                logger.LogInformation($"Схема {request.SchemeId} недоступна");
+                return;
+            }
+
+            if (availableScheme.Versions.Count == 0)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не найдена");
+                return;
+            }
+
+            Models.DB.Main.Version version = availableScheme.Versions.FirstOrDefault();
+
+            if (version.Id != request.VersionId)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не является последней для схемы {request.SchemeId}");
+                return;
+            }
+
+
+            Comment availableComment = availableScheme.Comments.FirstOrDefault();
 
             if (availableComment == null)
             {
@@ -338,11 +517,19 @@ namespace Diplom.Hubs
             availableComment.CompletionDate = DateTime.Now;
             await context.SaveChangesAsync();
 
-            await Clients.Caller.SendAsync("CommentCompleted", CommentToDtoMapper.Map(availableComment));
+            await Clients.Caller.SendAsync("CommentCompleted", new CommentAfterActionResponse
+            {
+                VersionId = version.Id, 
+                CommentDto = CommentToDtoMapper.Map(availableComment)
+            });
 
             //оповещение
             await Clients.OthersInGroup($"comments-{availableComment.SchemeID}")
-                .SendAsync("CommentCompleted", CommentToDtoMapper.Map(availableComment));
+                .SendAsync("CommentCompleted", new CommentAfterActionResponse
+                {
+                    VersionId = version.Id, 
+                    CommentDto = CommentToDtoMapper.Map(availableComment)
+                });
         }
 
         public async Task DeleteComment(CommentDeleteRequest request)
@@ -354,6 +541,7 @@ namespace Diplom.Hubs
 
             logger.LogInformation($"Поиск коммента ({request.CommentId})");
 
+            /*
             Comment availableComment = await context.Comments
                 .Include(c => c.Scheme)
                     .ThenInclude(s => s.Access_User_Schema_Rights)
@@ -363,6 +551,43 @@ namespace Diplom.Hubs
                     c.Scheme.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
                     c.Scheme.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
                 .FirstOrDefaultAsync(c => c.ID == request.CommentId);
+            */
+
+            Scheme availableScheme = await context.Schemes
+                .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
+                .Include(s => s.Comments.Where(c => c.ID == request.CommentId))
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.ID == request.SchemeId)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid && r.Access_Right.Level == editingRightLevel) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID) && r.Access_Right.Level == editingRightLevel))
+                .FirstOrDefaultAsync();
+
+            if (availableScheme == null)
+            {
+                logger.LogInformation($"Схема {request.SchemeId} недоступна");
+                return;
+            }
+
+            if (availableScheme.Versions.Count == 0)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не найдена");
+                return;
+            }
+
+            Models.DB.Main.Version version = availableScheme.Versions.FirstOrDefault();
+
+            if (version.Id != request.VersionId)
+            {
+                logger.LogInformation($"Версия {request.VersionId} не является последней для схемы {request.SchemeId}");
+                return;
+            }
+
+
+            Comment availableComment = availableScheme.Comments.FirstOrDefault();
 
             if (availableComment == null)
             {

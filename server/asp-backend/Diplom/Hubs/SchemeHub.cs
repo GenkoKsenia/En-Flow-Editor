@@ -1,8 +1,6 @@
 ﻿using Diplom.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-
-using Diplom.Models.DB;
 using Microsoft.EntityFrameworkCore;
 using Diplom.Models.Requests;
 using Diplom.Mappers;
@@ -17,6 +15,8 @@ using Diplom.Models.DTO;
 using Microsoft.Extensions.Logging;
 using Diplom.Services.UserTrackers;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Diplom.DBContexts;
+using Diplom.Models.DB.Main;
 
 namespace Diplom.Hubs
 {
