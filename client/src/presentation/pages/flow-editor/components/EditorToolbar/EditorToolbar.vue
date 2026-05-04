@@ -39,10 +39,17 @@
     </div>
 
     <div class="toolbar-right">
-      <div class="stats">
-        Узлов: {{ nodesCount }}
-        <span v-if="edgesCount">, Связей: {{ edgesCount }}</span>
-      </div>
+      <UiButton
+        class="comments-visibility-button"
+        variant="neutral"
+        pill
+        :active="!isCommentsVisible"
+        @click="$emit('toggle-comments-visibility')"
+        :aria-label="isCommentsVisible ? 'Скрыть комментарии' : 'Показать комментарии'"
+      >
+        <component :is="isCommentsVisible ? EyeOff : Eye" :size="16" />
+        <span class="team-label">{{ isCommentsVisible ? 'Скрыть комментарии' : 'Показать комментарии' }}</span>
+      </UiButton>
 
       <UiButton variant="neutral" pill @click="$emit('open-team-modal')" aria-label="Команда">
         <span class="team-avatars">
@@ -116,7 +123,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Database, GitBranch, Globe, History, MessageSquare, Square, SquareDashed, UserRound } from 'lucide-vue-next'
+import { Database, Eye, EyeOff, GitBranch, Globe, History, MessageSquare, Square, SquareDashed, UserRound } from 'lucide-vue-next'
 
 import type { CommentsStoreComment } from '@/domains/comments'
 import UiButton from '@/presentation/ui/UiButton.vue'
@@ -126,10 +133,9 @@ import type { VersionRecord } from '@/domains/diagram'
 import type { DataFlow, Edge, Node } from '@/domains/graph'
 
 defineProps<{
-  nodesCount: number
-  edgesCount: number
   isConnectionMode: boolean
   isCommentMode: boolean
+  isCommentsVisible: boolean
   isDownloadMenuOpen: boolean
   isVersionMenuOpen: boolean
   currentVersionLabel: string
@@ -145,6 +151,7 @@ const emit = defineEmits<{
   'add-node': []
   'start-connection-mode': []
   'toggle-comment-mode': []
+  'toggle-comments-visibility': []
   'add-boundary': []
   'open-team-modal': []
   'toggle-version-menu': []
@@ -205,6 +212,10 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.comments-visibility-button {
+  gap: 8px;
+}
+
 .icon-group {
   gap: 6px;
 }
@@ -217,11 +228,6 @@ onBeforeUnmount(() => {
   flex: 0 0 20px;
   display: block;
   stroke-width: 2;
-}
-
-.stats {
-  font-size: 14px;
-  color: #495057;
 }
 
 .team-avatars {

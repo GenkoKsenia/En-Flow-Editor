@@ -1,8 +1,7 @@
 import { computed, type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
-import { useCommentsStore } from '@/domains/comments'
-import { clampBreakpointX, clampBreakpointY, useDiagramCollaborationStore, useDiagramStore } from '@/domains/diagram'
+import { useDiagramCollaborationStore, useDiagramStore } from '@/domains/diagram'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import type { Edge, Node } from '@/domains/graph'
 
@@ -24,11 +23,9 @@ export function useFlowEditorWorkspace(
 ) {
   const diagramStore = useDiagramStore()
   const collaborationStore = useDiagramCollaborationStore()
-  const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
 
   const { nodes, edges, dataFlows } = storeToRefs(diagramStore)
-  const { comments } = storeToRefs(commentsStore)
   const {
     selectedNodeIds,
     selectedEdgeIds,
@@ -113,22 +110,63 @@ export function useFlowEditorWorkspace(
   const clampXValue = (edge: Edge, x: number) => {
     const sourceNode = nodes.value.find(node => node.id === edge.sourceNodeId)
     const targetNode = nodes.value.find(node => node.id === edge.targetNodeId)
-    return !sourceNode || !targetNode ? x : clampBreakpointX(edge, sourceNode, targetNode, x)
+    if (!sourceNode || !targetNode) return x
+
+    const sourceRect = getNodeRect(sourceNode)
+    const targetRect = getNodeRect(targetNode)
+
+    if (edge.sourceSide === 'left' && edge.targetSide === 'left') {
+      const minX = Math.min(sourceRect.left, targetRect.left) - 200
+      const maxX = Math.min(sourceRect.left, targetRect.left) - 20
+      return Math.max(minX, Math.min(maxX, x))
+    }
+
+    if (edge.sourceSide === 'right' && edge.targetSide === 'right') {
+      const minX = Math.max(sourceRect.right, targetRect.right) + 20
+      const maxX = Math.max(sourceRect.right, targetRect.right) + 200
+      return Math.max(minX, Math.min(maxX, x))
+    }
+
+    const minX = Math.min(sourceRect.left, targetRect.left) + 10
+    const maxX = Math.max(sourceRect.right, targetRect.right) - 10
+
+    return Math.max(minX, Math.min(maxX, x))
   }
 
   const clampYValue = (edge: Edge, y: number) => {
     const sourceNode = nodes.value.find(node => node.id === edge.sourceNodeId)
     const targetNode = nodes.value.find(node => node.id === edge.targetNodeId)
-    return !sourceNode || !targetNode ? y : clampBreakpointY(edge, sourceNode, targetNode, y)
+    if (!sourceNode || !targetNode) return y
+
+    const sourceRect = getNodeRect(sourceNode)
+    const targetRect = getNodeRect(targetNode)
+
+    if (edge.sourceSide === 'top' && edge.targetSide === 'top') {
+      const minY = Math.min(sourceRect.top, targetRect.top) - 200
+      const maxY = Math.min(sourceRect.top, targetRect.top) - 20
+      return Math.max(minY, Math.min(maxY, y))
+    }
+
+    if (edge.sourceSide === 'bottom' && edge.targetSide === 'bottom') {
+      const minY = Math.max(sourceRect.bottom, targetRect.bottom) + 20
+      const maxY = Math.max(sourceRect.bottom, targetRect.bottom) + 200
+      return Math.max(minY, Math.min(maxY, y))
+    }
+
+    const minY = Math.min(sourceRect.top, targetRect.top) + 10
+    const maxY = Math.max(sourceRect.bottom, targetRect.bottom) - 10
+
+    return Math.max(minY, Math.min(maxY, y))
   }
 
   const { startCommentDrag } = useCommentDrag({
-    comments,
+    comments: commentsApi.comments,
     zoom,
-    documentStore: commentsStore,
+    documentStore: commentsApi,
   })
 
   const { onBreakpointDragStart } = useBreakpointDrag({
+    nodes,
     edges,
     isDraggingBreakpoint,
     draggingEdgeId,
@@ -177,7 +215,8 @@ export function useFlowEditorWorkspace(
       target?.closest('.lock-badge') ||
       target?.closest('.comment-bubble') ||
       target?.closest('.canvas-zoom-controls') ||
-      target?.closest('.properties-panel')
+      target?.closest('.properties-panel') ||
+      target?.closest('.diagnostics-panel')
     ) {
       return
     }
@@ -256,7 +295,7 @@ export function useFlowEditorWorkspace(
     nodes,
     edges,
     dataFlows,
-    comments,
+    comments: commentsApi.comments,
     selectedObject,
     selectedNodeIds,
     selectedEdgeIds,
@@ -292,6 +331,7 @@ export function useFlowEditorWorkspace(
     nodeForbiddenOutgoing: diagnostics.nodeForbiddenOutgoing,
     nodeErrorMessages: diagnostics.nodeErrorMessages,
     nodeWarningMessages: diagnostics.nodeWarningMessages,
+    schemeDiagnostics: diagnostics.schemeDiagnostics,
     nodeSendableData: diagnostics.nodeSendableData,
     isConnectionSource: connections.isConnectionSource,
     isConnectionTarget: connections.isConnectionTarget,
@@ -329,6 +369,8 @@ export function useFlowEditorWorkspace(
     updateCommentText: commentsApi.updateCommentText,
     submitComment: commentsApi.submitComment,
     removeComment: commentsApi.dismissComment,
+    isCommentResolved: commentsApi.isCommentResolved,
+    toggleCommentResolved: commentsApi.toggleCommentResolved,
     canDeleteComment: commentsApi.canDeleteComment,
     zoomIn: viewport.zoomIn,
     zoomOut: viewport.zoomOut,

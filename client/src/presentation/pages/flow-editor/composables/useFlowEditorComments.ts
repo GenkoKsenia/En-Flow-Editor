@@ -1,5 +1,5 @@
+import { computed, ref, watch, type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import type { Ref } from 'vue'
 
 import { useDiagramStore } from '@/domains/diagram'
 import { useCommentsStore, type CommentsStoreComment } from '@/domains/comments'
@@ -26,10 +26,82 @@ export function useFlowEditorComments({
   const documentStore = useDiagramStore()
   const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
+  const localCommentPatches = ref<Record<string, Partial<Pick<CommentsStoreComment, 'text' | 'position'>>>>({})
+  const resolvedCommentIds = ref<string[]>([])
 
   const { nodes, edges } = storeToRefs(documentStore)
-  const { currentAuthor, currentAuthorId, currentAuthorAliases } = storeToRefs(commentsStore)
+  const { comments: sourceComments, currentAuthor, currentAuthorId, currentAuthorAliases } = storeToRefs(commentsStore)
   const { zoom } = storeToRefs(uiStore)
+  const comments = computed<CommentsStoreComment[]>(() =>
+    sourceComments.value.map(comment => {
+      const patch = localCommentPatches.value[comment.id]
+      if (!patch) return comment
+
+      return {
+        ...comment,
+        text: patch.text ?? comment.text,
+        position: patch.position ?? comment.position,
+      }
+    }),
+  )
+
+  watch(sourceComments, nextComments => {
+    const existingIds = new Set(nextComments.map(comment => comment.id))
+    resolvedCommentIds.value = resolvedCommentIds.value.filter(commentId => existingIds.has(commentId))
+  })
+
+  function getSourceComment(commentId: string): CommentsStoreComment | undefined {
+    return sourceComments.value.find(comment => comment.id === commentId)
+  }
+
+  function setLocalCommentPatch(
+    commentId: string,
+    patch: Partial<Pick<CommentsStoreComment, 'text' | 'position'>>,
+  ): void {
+    const sourceComment = getSourceComment(commentId)
+    if (!sourceComment) return
+
+    const currentPatch = localCommentPatches.value[commentId] ?? {}
+    const nextPatch: Partial<Pick<CommentsStoreComment, 'text' | 'position'>> = {
+      ...currentPatch,
+      ...patch,
+    }
+
+    if (nextPatch.text === sourceComment.text) {
+      delete nextPatch.text
+    }
+
+    if (
+      nextPatch.position &&
+      nextPatch.position.x === sourceComment.position.x &&
+      nextPatch.position.y === sourceComment.position.y
+    ) {
+      delete nextPatch.position
+    }
+
+    if (typeof nextPatch.text === 'undefined' && !nextPatch.position) {
+      const { [commentId]: _removed, ...rest } = localCommentPatches.value
+      localCommentPatches.value = rest
+      return
+    }
+
+    localCommentPatches.value = {
+      ...localCommentPatches.value,
+      [commentId]: nextPatch,
+    }
+  }
+
+  function clearLocalCommentPatch(commentId: string): void {
+    if (!localCommentPatches.value[commentId]) return
+
+    const { [commentId]: _removed, ...rest } = localCommentPatches.value
+    localCommentPatches.value = rest
+  }
+
+  function clearResolvedComment(commentId: string): void {
+    if (!resolvedCommentIds.value.includes(commentId)) return
+    resolvedCommentIds.value = resolvedCommentIds.value.filter(id => id !== commentId)
+  }
 
   function addCommentForNode(nodeId: string): boolean {
     const node = nodes.value.find(item => item.id === nodeId)
@@ -89,10 +161,26 @@ export function useFlowEditorComments({
   }
 
   function updateCommentText(commentId: string, text: string): void {
+    const comment = getSourceComment(commentId)
+    if (!comment) return
+
+    if (comment.status === 'synced') {
+      setLocalCommentPatch(commentId, { text })
+      return
+    }
+
     commentsStore.updateDraft(commentId, { text })
   }
 
   function updateCommentPosition(commentId: string, position: Position): void {
+    const comment = getSourceComment(commentId)
+    if (!comment) return
+
+    if (comment.status === 'synced') {
+      setLocalCommentPatch(commentId, { position })
+      return
+    }
+
     commentsStore.updateDraft(commentId, { position })
   }
 
@@ -101,11 +189,31 @@ export function useFlowEditorComments({
   }
 
   function discardComment(commentId: string): void {
+    clearLocalCommentPatch(commentId)
+    clearResolvedComment(commentId)
     commentsStore.discardDraft(commentId)
   }
 
   function dismissComment(commentId: string): void {
+    clearLocalCommentPatch(commentId)
+    clearResolvedComment(commentId)
     commentsStore.dismissComment(commentId)
+  }
+
+  function isCommentResolved(commentId: string): boolean {
+    return resolvedCommentIds.value.includes(commentId)
+  }
+
+  function toggleCommentResolved(commentId: string): void {
+    const comment = getSourceComment(commentId)
+    if (!comment || comment.status === 'sending') return
+
+    if (resolvedCommentIds.value.includes(commentId)) {
+      clearResolvedComment(commentId)
+      return
+    }
+
+    resolvedCommentIds.value = [...resolvedCommentIds.value, commentId]
   }
 
   function canDeleteComment(comment: CommentsStoreComment): boolean {
@@ -129,6 +237,7 @@ export function useFlowEditorComments({
   }
 
   return {
+    comments,
     addCommentForNode,
     addCommentForEdge,
     addCommentOnCanvas,
@@ -138,6 +247,8 @@ export function useFlowEditorComments({
     submitComment,
     discardComment,
     dismissComment,
+    isCommentResolved,
+    toggleCommentResolved,
     canDeleteComment,
   }
 }

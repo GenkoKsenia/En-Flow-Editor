@@ -9,11 +9,11 @@ type CommentLike = {
 }
 
 type CommentStoreApi = {
-  updateDraft(commentId: string, updates: { position: Position }): void
+  updateCommentPosition(commentId: string, position: Position): void
 }
 
 type UseCommentDragOptions<TComment extends CommentLike> = {
-  comments: Ref<TComment[]>
+  comments: Readonly<Ref<TComment[]>>
   zoom: Ref<number>
   documentStore: CommentStoreApi
 }
@@ -36,11 +36,9 @@ export function useCommentDrag<TComment extends CommentLike>({
     const onMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = (moveEvent.clientX - startMouseX) / scale
       const deltaY = (moveEvent.clientY - startMouseY) / scale
-      documentStore.updateDraft(commentId, {
-        position: {
-          x: roundCoord(startOffsetX + deltaX),
-          y: roundCoord(startOffsetY + deltaY),
-        },
+      documentStore.updateCommentPosition(commentId, {
+        x: roundCoord(startOffsetX + deltaX),
+        y: roundCoord(startOffsetY + deltaY),
       })
     }
 

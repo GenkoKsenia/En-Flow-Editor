@@ -593,17 +593,16 @@ function clearSelection(): void {
 
 <style scoped>
 .properties-panel {
-  position: absolute;
-  top: 120px;
-  right: 10px;
-  width: 300px;
+  width: 100%;
+  height: 100%;
   background: white;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  max-height: 80vh;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .properties-header {
@@ -641,6 +640,9 @@ function clearSelection(): void {
 
 .properties-content {
   padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .properties-fieldset {
@@ -648,6 +650,10 @@ function clearSelection(): void {
   margin: 0;
   padding: 0;
   min-width: 0;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .lock-banner {

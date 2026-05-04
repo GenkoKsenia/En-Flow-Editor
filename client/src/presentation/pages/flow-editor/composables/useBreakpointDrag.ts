@@ -1,7 +1,13 @@
 import type { Ref } from 'vue'
 
 import type { Edge } from '@/domains/graph'
-import { roundCoord } from '@/domains/diagram'
+import type { Node, Position } from '@/domains/graph'
+import {
+  getAbsoluteNodePosition,
+  getNodeConnectionPoint,
+  getOrthogonalDefaultBreakpoint,
+  roundCoord,
+} from '@/domains/diagram'
 
 type UiBreakpointApi = {
   setDraggingBreakpoint(value: boolean): void
@@ -15,6 +21,7 @@ type DiagramBreakpointApi = {
 }
 
 type UseBreakpointDragOptions = {
+  nodes: Ref<Node[]>
   edges: Ref<Edge[]>
   isDraggingBreakpoint: Ref<boolean>
   draggingEdgeId: Ref<string | null>
@@ -27,6 +34,7 @@ type UseBreakpointDragOptions = {
 }
 
 export function useBreakpointDrag({
+  nodes,
   edges,
   isDraggingBreakpoint,
   draggingEdgeId,
@@ -37,6 +45,27 @@ export function useBreakpointDrag({
   clampXValue,
   clampYValue,
 }: UseBreakpointDragOptions) {
+  function resolveBreakpointFallback(edge: Edge): Position {
+    const sourceNode = nodes.value.find(item => item.id === edge.sourceNodeId)
+    const targetNode = nodes.value.find(item => item.id === edge.targetNodeId)
+    if (!sourceNode || !targetNode) {
+      return { x: 0, y: 0 }
+    }
+
+    const sourcePoint = getNodeConnectionPoint(
+      getAbsoluteNodePosition(nodes.value, sourceNode),
+      sourceNode,
+      edge.sourceSide,
+    )
+    const targetPoint = getNodeConnectionPoint(
+      getAbsoluteNodePosition(nodes.value, targetNode),
+      targetNode,
+      edge.targetSide,
+    )
+
+    return getOrthogonalDefaultBreakpoint(edge, sourcePoint, targetPoint)
+  }
+
   async function onBreakpointDragStart(edgeId: string, event: MouseEvent): Promise<void> {
     const locked = await diagramStore.beginEdgeEdit(edgeId)
     if (!locked) {
@@ -84,9 +113,15 @@ export function useBreakpointDrag({
 
       if (axis === 'x') {
         const newX = (moveEvent.clientX - canvasRect.left + scrollLeft) / scale
+        if (typeof activeEdge.breakpointY !== 'number') {
+          activeEdge.breakpointY = roundCoord(resolveBreakpointFallback(activeEdge).y)
+        }
         activeEdge.breakpointX = roundCoord(clampXValue(activeEdge, newX))
       } else {
         const newY = (moveEvent.clientY - canvasRect.top + scrollTop) / scale
+        if (typeof activeEdge.breakpointX !== 'number') {
+          activeEdge.breakpointX = roundCoord(resolveBreakpointFallback(activeEdge).x)
+        }
         activeEdge.breakpointY = roundCoord(clampYValue(activeEdge, newY))
       }
     }

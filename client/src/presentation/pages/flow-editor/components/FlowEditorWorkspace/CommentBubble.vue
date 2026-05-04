@@ -4,6 +4,7 @@
     :class="{
       'comment-bubble--editable': isEditable,
       'comment-bubble--readonly': !isEditable,
+      'comment-bubble--resolved': isResolved,
     }"
     :style="styleObject"
     @mousedown.stop
@@ -14,6 +15,17 @@
         <span class="comment-author">{{ comment.author }}</span>
         <span class="comment-time">{{ formattedCreatedAt }}</span>
       </div>
+      <button
+        v-if="showResolveToggle"
+        class="comment-resolve"
+        type="button"
+        :class="{ 'comment-resolve--active': isResolved }"
+        :disabled="comment.status === 'sending'"
+        :aria-label="isResolved ? 'Снять отметку с комментария' : 'Отметить комментарий'"
+        @click.stop="$emit('toggle-resolved', comment.id)"
+      >
+        ✓
+      </button>
       <button
         v-if="props.showDelete"
         class="comment-delete"
@@ -32,7 +44,7 @@
       placeholder="Комментарий"
       @input="onInput"
     />
-    <div v-if="isEditable" class="comment-actions">
+    <div v-if="showActions" class="comment-actions">
       <button
         class="comment-action comment-action--ghost"
         type="button"
@@ -63,6 +75,11 @@ interface Props {
   comment: CommentsStoreComment
   showDelete?: boolean
   styleObject?: Record<string, string>
+  isEditable?: boolean
+  showActions?: boolean
+  autoFocus?: boolean
+  isResolved?: boolean
+  showResolveToggle?: boolean
 }
 
 const props = defineProps<Props>()
@@ -72,15 +89,19 @@ const emit = defineEmits<{
   save: [commentId: string]
   cancel: [commentId: string]
   delete: [commentId: string]
+  'toggle-resolved': [commentId: string]
 }>()
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const isEditable = computed(() => props.comment.status === 'draft' || props.comment.status === 'error')
+const isEditable = computed(() => props.isEditable ?? (props.comment.status === 'draft' || props.comment.status === 'error'))
+const showActions = computed(() => props.showActions ?? (props.comment.status === 'draft' || props.comment.status === 'error'))
+const isResolved = computed(() => props.isResolved ?? false)
+const showResolveToggle = computed(() => props.showResolveToggle ?? true)
 const canSave = computed(() => props.comment.text.trim().length > 0)
 const formattedCreatedAt = computed(() => formatCommentDateTime(props.comment.createdAt))
 
 onMounted(() => {
-  if (!isEditable.value) return
+  if (!props.autoFocus) return
   void nextTick(() => textareaRef.value?.focus())
 })
 
@@ -148,13 +169,18 @@ function onInput(event: Event): void {
   background: #fffdf3;
 }
 
+.comment-bubble--resolved {
+  opacity: 0.58;
+  filter: saturate(0.7);
+}
+
 .comment-meta {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-right: 24px;
+  padding-right: 52px;
   font-size: 12px;
   color: #6c757d;
   cursor: move;
@@ -196,9 +222,41 @@ function onInput(event: Event): void {
   line-height: 1;
 }
 
+.comment-resolve {
+  position: absolute;
+  top: 0;
+  right: 24px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #6c757d;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.comment-resolve--active {
+  border-color: #0f766e;
+  background: rgba(15, 118, 110, 0.14);
+  color: #0f766e;
+}
+
+.comment-resolve:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .comment-delete:hover {
   background: rgba(201, 42, 42, 0.12);
   color: #c92a2a;
+}
+
+.comment-resolve:hover:not(:disabled) {
+  border-color: #0f766e;
+  color: #0f766e;
 }
 
 .comment-bubble textarea {

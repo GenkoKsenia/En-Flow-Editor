@@ -198,7 +198,9 @@ export function useFlowEditorConnections({
         target?.closest('.edge') ||
         target?.closest('.lock-badge') ||
         target?.closest('.comment-bubble') ||
-        target?.closest('.canvas-zoom-controls')
+        target?.closest('.canvas-zoom-controls') ||
+        target?.closest('.properties-panel') ||
+        target?.closest('.diagnostics-panel')
       ) return
 
       if (addCommentOnCanvas(event)) {
@@ -211,7 +213,13 @@ export function useFlowEditorConnections({
       resetConnectionMode()
     }
 
-    if (!target?.closest('.node') && !target?.closest('.edge') && !target?.closest('.lock-badge')) {
+    if (
+      !target?.closest('.node') &&
+      !target?.closest('.edge') &&
+      !target?.closest('.lock-badge') &&
+      !target?.closest('.properties-panel') &&
+      !target?.closest('.diagnostics-panel')
+    ) {
       void clearSelection()
     }
   }

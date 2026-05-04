@@ -13,8 +13,8 @@
         <span class="avatar-main">OP</span>
       </div>
       <div class="user-info">
-        <div class="user-name">Фамилия И.О.</div>
-        <div class="user-email">username@gmail.ru</div>
+        <div class="user-name">Генько К.П.</div>
+        <div class="user-email">genkoksenia@gmail.ru</div>
       </div>
       <div class="user-divider"></div>
       <div class="user-actions">

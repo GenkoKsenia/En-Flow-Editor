@@ -1,4 +1,4 @@
-import type { Edge, Node, Position, Segment } from '@/domains/graph'
+import type { ConnectionSide, Edge, Node, Position, Segment } from '@/domains/graph'
 
 export type NodeRect = {
   left: number
@@ -13,6 +13,58 @@ export type PassThroughOffsets = Record<string, {
   horizontal: Record<string, number>
   vertical: Record<string, number>
 }>
+
+export function getNodeConnectionPoint(
+  position: Position,
+  node: Pick<Node, 'width' | 'height'>,
+  side: ConnectionSide,
+  ratio = 0.5,
+): Position {
+  switch (side) {
+    case 'top':
+      return {
+        x: position.x + node.width * ratio,
+        y: position.y,
+      }
+    case 'right':
+      return {
+        x: position.x + node.width,
+        y: position.y + node.height * ratio,
+      }
+    case 'bottom':
+      return {
+        x: position.x + node.width * ratio,
+        y: position.y + node.height,
+      }
+    case 'left':
+      return {
+        x: position.x,
+        y: position.y + node.height * ratio,
+      }
+  }
+}
+
+export function getOrthogonalDefaultBreakpoint(
+  edge: Pick<Edge, 'sourceSide' | 'targetSide'>,
+  start: Position,
+  end: Position,
+): Position {
+  const { sourceSide, targetSide } = edge
+
+  const x = (() => {
+    if (sourceSide === 'left' && targetSide === 'left') return Math.min(start.x, end.x) - 80
+    if (sourceSide === 'right' && targetSide === 'right') return Math.max(start.x, end.x) + 80
+    return (start.x + end.x) / 2
+  })()
+
+  const y = (() => {
+    if (sourceSide === 'top' && targetSide === 'top') return Math.min(start.y, end.y) - 40
+    if (sourceSide === 'bottom' && targetSide === 'bottom') return Math.max(start.y, end.y) + 40
+    return (start.y + end.y) / 2
+  })()
+
+  return { x, y }
+}
 
 export function isHorizontalPassThroughEdge(edge: Edge): boolean {
   return (edge.sourceSide === 'left' || edge.sourceSide === 'right')
@@ -131,20 +183,9 @@ export function buildOrthogonalEdgeSegments(edge: Edge, start: Position, end: Po
     (sourceSide === 'bottom' && targetSide === 'bottom')
 
   if (needsThreeSegments || edge.breakpointX !== undefined || edge.breakpointY !== undefined) {
-    const defaultBreakpointX = (() => {
-      if (sourceSide === 'left' && targetSide === 'left') return Math.min(start.x, end.x) - 80
-      if (sourceSide === 'right' && targetSide === 'right') return Math.max(start.x, end.x) + 80
-      return (start.x + end.x) / 2
-    })()
-
-    const defaultBreakpointY = (() => {
-      if (sourceSide === 'top' && targetSide === 'top') return Math.min(start.y, end.y) - 40
-      if (sourceSide === 'bottom' && targetSide === 'bottom') return Math.max(start.y, end.y) + 40
-      return (start.y + end.y) / 2
-    })()
-
-    const breakpointX = edge.breakpointX ?? defaultBreakpointX
-    const breakpointY = edge.breakpointY ?? defaultBreakpointY
+    const defaultBreakpoint = getOrthogonalDefaultBreakpoint(edge, start, end)
+    const breakpointX = edge.breakpointX ?? defaultBreakpoint.x
+    const breakpointY = edge.breakpointY ?? defaultBreakpoint.y
 
     if (sourceSide === 'left' || sourceSide === 'right') {
       const point1 = { x: breakpointX, y: start.y }

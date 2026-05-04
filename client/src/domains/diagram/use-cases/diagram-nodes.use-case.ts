@@ -1,4 +1,5 @@
 import type { Node } from '@/domains/graph'
+import { findFreeLeftPlacement } from '@/domains/diagram/lib'
 
 import type { DiagramContext } from './diagram.context'
 
@@ -19,12 +20,14 @@ export function createDiagramNodesUseCases(
   }
 
   function addNode(): Node {
+    const width = 120
+    const height = 60
     const node: Node = {
       id: `node-${context.nextNodeId.value++}`,
-      position: { x: 100, y: 100 + context.nodes.value.length * 80 },
+      position: findFreeLeftPlacement(context.nodes.value, { width, height }),
       text: `Узел ${context.nodes.value.length + 1}`,
-      width: 120,
-      height: 60,
+      width,
+      height,
       passThroughEdges: [],
       borderStyle: 'solid',
       color: context.defaults.DEFAULT_NODE_COLOR,
@@ -39,12 +42,18 @@ export function createDiagramNodesUseCases(
 
   function addBoundary(): Node {
     const index = getNextBoundaryIndex()
+    const width = 180
+    const height = 150
     const node: Node = {
       id: `boundary-${context.nextBoundaryId.value++}`,
-      position: { x: 80, y: 80 + context.nodes.value.length * 60 },
+      position: findFreeLeftPlacement(
+        context.nodes.value,
+        { width, height },
+        { defaultPosition: { x: 80, y: 80 } },
+      ),
       text: `Область ${index}`,
-      width: 180,
-      height: 150,
+      width,
+      height,
       passThroughEdges: [],
       color: context.defaults.DEFAULT_NODE_COLOR,
       borderColor: context.defaults.DEFAULT_BORDER_COLOR,
@@ -71,6 +80,12 @@ export function createDiagramNodesUseCases(
   function deleteNode(nodeId: string): void {
     context.nodes.value = context.nodes.value.filter(node => node.id !== nodeId)
     context.edges.value = context.edges.value.filter(edge => edge.sourceNodeId !== nodeId && edge.targetNodeId !== nodeId)
+    context.dataFlows.value = context.dataFlows.value
+      .filter(flow => flow.startBlock !== nodeId)
+      .map(flow => ({
+        ...flow,
+        finishBlocks: (flow.finishBlocks ?? []).filter(finishBlockId => finishBlockId !== nodeId),
+      }))
   }
 
   return {

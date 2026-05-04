@@ -76,6 +76,7 @@ type NormalizedBlock = {
   y: number
   width: number
   height: number
+  parentId: string | null
   fill: string
   stroke: string
   strokeWidth: number
@@ -137,7 +138,7 @@ const preview = computed<PreviewModel>(() => {
     }
   }
 
-  const bounds = getBounds(normalized.blocks, normalized.connections)
+  const bounds = getBounds(normalized.blocks, [])
   const contentWidth = Math.max(bounds.maxX - bounds.minX, 1)
   const contentHeight = Math.max(bounds.maxY - bounds.minY, 1)
   const availableWidth = VIEWBOX_WIDTH - PADDING * 2
@@ -159,16 +160,7 @@ const preview = computed<PreviewModel>(() => {
       strokeWidth: clamp(block.strokeWidth * Math.max(scale, 0.65), 1, 3),
       radius: clamp(block.radius * scale, 3, 16),
     })),
-    connections: normalized.connections.map((connection) => ({
-      id: connection.id,
-      points: buildConnectionPoints(connection, normalized.blocks).map((point) => ({
-        x: offsetX + (point.x - bounds.minX) * scale,
-        y: offsetY + (point.y - bounds.minY) * scale,
-      })),
-      color: connection.color,
-      width: clamp(connection.width * Math.max(scale, 0.65), 1.25, 3.5),
-      dasharray: connection.dasharray,
-    })),
+    connections: [],
   }
 })
 
@@ -253,7 +245,7 @@ function normalizeDiagram(code: unknown): {
 }
 
 function normalizeBlocks(blocksInput: unknown[], styleMap: Map<string, ReturnType<typeof normalizeBlockStyle>>): NormalizedBlock[] {
-  return blocksInput.flatMap((blockInput) => {
+  const blocks = blocksInput.flatMap((blockInput) => {
     const block = toRecord(blockInput)
     if (!block) return []
 
@@ -261,8 +253,8 @@ function normalizeBlocks(blocksInput: unknown[], styleMap: Map<string, ReturnTyp
     const position = readPosition(block)
     if (!id || !position) return []
 
-    const width = clamp(readNumberKey(block, ['width', 'Width']) ?? 132, 72, 320)
-    const height = clamp(readNumberKey(block, ['height', 'Height']) ?? 72, 44, 220)
+    const width = Math.max(readNumberKey(block, ['width', 'Width']) ?? 132, 24)
+    const height = Math.max(readNumberKey(block, ['height', 'Height']) ?? 72, 24)
     const style = styleMap.get(id)
 
     return [{
@@ -271,12 +263,15 @@ function normalizeBlocks(blocksInput: unknown[], styleMap: Map<string, ReturnTyp
       y: position.y,
       width,
       height,
+      parentId: readStringKey(block, ['parentId', 'ParentId']),
       fill: style?.fill ?? '#f4f5f7',
       stroke: style?.stroke ?? '#5f6570',
       strokeWidth: style?.strokeWidth ?? 1.5,
       radius: style?.radius ?? 10,
     }]
   })
+
+  return resolveAbsoluteBlockPositions(blocks)
 }
 
 function normalizeConnections(
@@ -420,6 +415,54 @@ function getBlockCenter(block: Pick<NormalizedBlock, 'x' | 'y' | 'width' | 'heig
     x: block.x + block.width / 2,
     y: block.y + block.height / 2,
   }
+}
+
+function resolveAbsoluteBlockPositions(blocks: NormalizedBlock[]): NormalizedBlock[] {
+  const blockById = new Map(blocks.map((block) => [block.id, block]))
+  const resolved = new Map<string, Point>()
+  const resolving = new Set<string>()
+
+  function resolvePosition(block: NormalizedBlock): Point {
+    const cached = resolved.get(block.id)
+    if (cached) return cached
+
+    if (!block.parentId) {
+      const position = { x: block.x, y: block.y }
+      resolved.set(block.id, position)
+      return position
+    }
+
+    if (resolving.has(block.id)) {
+      return { x: block.x, y: block.y }
+    }
+
+    const parent = blockById.get(block.parentId)
+    if (!parent) {
+      const position = { x: block.x, y: block.y }
+      resolved.set(block.id, position)
+      return position
+    }
+
+    resolving.add(block.id)
+    const parentPosition = resolvePosition(parent)
+    resolving.delete(block.id)
+
+    const position = {
+      x: parentPosition.x + block.x,
+      y: parentPosition.y + block.y,
+    }
+    resolved.set(block.id, position)
+    return position
+  }
+
+  return blocks.map((block) => {
+    const position = resolvePosition(block)
+    return {
+      ...block,
+      x: position.x,
+      y: position.y,
+    }
+  })
 }
 
 function readPosition(source: Record<string, unknown>): Point | null {

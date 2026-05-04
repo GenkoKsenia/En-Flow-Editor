@@ -3,6 +3,9 @@ import type { DataFlow, Edge, Node } from '@/domains/graph'
 import {
   createEmptyDiagram,
   generateEdgeLabel,
+  getAbsoluteNodePosition,
+  getNodeConnectionPoint,
+  getOrthogonalDefaultBreakpoint,
   normalizeBorderStyle,
   normalizeConnectionSide,
   normalizeDataFlow,
@@ -64,7 +67,32 @@ export function createDiagramJsonUseCases(
       return [{ x: edge.breakpointX, y: edge.breakpointY }]
     }
 
-    return []
+    if (typeof edge.breakpointX !== 'number' && typeof edge.breakpointY !== 'number') {
+      return []
+    }
+
+    const sourceNode = context.nodes.value.find(node => node.id === edge.sourceNodeId)
+    const targetNode = context.nodes.value.find(node => node.id === edge.targetNodeId)
+    if (!sourceNode || !targetNode) {
+      return []
+    }
+
+    const sourcePoint = getNodeConnectionPoint(
+      getAbsoluteNodePosition(context.nodes.value, sourceNode),
+      sourceNode,
+      edge.sourceSide,
+    )
+    const targetPoint = getNodeConnectionPoint(
+      getAbsoluteNodePosition(context.nodes.value, targetNode),
+      targetNode,
+      edge.targetSide,
+    )
+    const fallback = getOrthogonalDefaultBreakpoint(edge, sourcePoint, targetPoint)
+
+    return [{
+      x: typeof edge.breakpointX === 'number' ? edge.breakpointX : fallback.x,
+      y: typeof edge.breakpointY === 'number' ? edge.breakpointY : fallback.y,
+    }]
   }
 
   function serializeDiagram(): DiagramDto {

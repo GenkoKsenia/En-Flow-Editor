@@ -150,7 +150,6 @@ export function evaluateDataIntegrity(nodes: Node[], edges: Edge[], dataFlows: D
 
     const finishes = flow.finishBlocks ?? []
     if (!finishes.length) {
-      nodeErrors[start] = true
       return
     }
 
