@@ -13,9 +13,11 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@microsoft/signalr": "^10.0.0",
     "axios": "^1.13.4",
     "js-cookie": "^3.0.5",
     "lucide-vue-next": "latest",
+    "pinia": "^3.0.4",
     "vue": "^3.5.22",
     "vue-router": "^4.6.4"
   },
