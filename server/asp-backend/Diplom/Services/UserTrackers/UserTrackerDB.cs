@@ -1,12 +1,13 @@
 ﻿using Diplom.Hubs;
 using Diplom.Models.Hub;
 using Microsoft.AspNetCore.SignalR;
-using Diplom.Models.DB;
 using Microsoft.EntityFrameworkCore;
 using Diplom.Models.UserTrackers;
 using System.Text.Json;
 using Diplom.Models.DTO;
 using Diplom.Mappers;
+using Diplom.DBContexts;
+using Diplom.Models.DB.Main;
 
 namespace Diplom.Services.UserTrackers
 {

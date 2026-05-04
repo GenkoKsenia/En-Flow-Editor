@@ -1,21 +1,13 @@
 import {
-  buildCommentTargetKey,
-  parseCommentTargetKey,
   type CommentTargetKey,
 } from '../lib'
 import {
-  inferRefreshTargetKey,
   mapJoinedCommentList,
 } from '../mappers'
 import { resolveCommentAuthor } from '../api'
 import type { CommentsStoreComment } from '../models'
 
 import type { CommentsContext } from './comments.context'
-
-function matchesTarget(comment: CommentsStoreComment, targetKey: CommentTargetKey): boolean {
-  const { type, targetId } = parseCommentTargetKey(targetKey)
-  return comment.targetType === type && comment.targetId === targetId
-}
 
 function dedupeComments(items: CommentsStoreComment[]): CommentsStoreComment[] {
   const unique = new Map<string, CommentsStoreComment>()
@@ -40,9 +32,9 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
     })))
   }
 
-  function replaceSyncedCommentsForTarget(targetKey: CommentTargetKey, syncedComments: CommentsStoreComment[]): void {
+  function replaceSyncedComments(syncedComments: CommentsStoreComment[]): void {
     context.comments.value = dedupeComments([
-      ...context.comments.value.filter(comment => !(comment.status === 'synced' && matchesTarget(comment, targetKey))),
+      ...context.comments.value.filter(comment => comment.status !== 'synced'),
       ...filterHiddenSyncedComments(syncedComments),
     ])
   }
@@ -52,17 +44,23 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
     context.initialized.value = true
 
     context.unsubscribeHandlers.push(
-      context.client.onCommentAdded(payload => {
-        const targetKey = inferRefreshTargetKey(payload, context.subscribedTargets.value)
-        if (targetKey) {
-          void refreshTarget(targetKey)
-        }
+      context.client.onCommentAdded(() => {
+        void refreshComments()
       }),
-      context.client.onYourCommentAdded(payload => {
-        const targetKey = inferRefreshTargetKey(payload, context.subscribedTargets.value)
-        if (targetKey) {
-          void refreshTarget(targetKey)
-        }
+      context.client.onYourCommentAdded(() => {
+        void refreshComments()
+      }),
+      context.client.onCommentUpdated(() => {
+        void refreshComments()
+      }),
+      context.client.onCommentMoved(() => {
+        void refreshComments()
+      }),
+      context.client.onCommentCompleted(() => {
+        void refreshComments()
+      }),
+      context.client.onCommentDeleted(() => {
+        void refreshComments()
       }),
     )
   }
@@ -97,50 +95,21 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
     await context.connectPromise.value
   }
 
-  async function joinTarget(targetKey: CommentTargetKey): Promise<void> {
-    if (context.activeSchemeId.value === null) return
+  async function refreshComments(): Promise<void> {
+    if (context.activeSchemeId.value === null || context.activeVersionId.value === null) return
 
     await ensureConnected()
 
-    const { type, targetId } = parseCommentTargetKey(targetKey)
-    const payload = await context.client.joinElementComments(
-      context.activeSchemeId.value,
-      type === 'canvas' ? '' : (targetId ?? ''),
-    )
-    const mappedComments = mapJoinedCommentList(payload, targetKey)
-    replaceSyncedCommentsForTarget(targetKey, await resolveAuthors(mappedComments))
+    const payload = await context.client.joinComments({
+      schemeId: context.activeSchemeId.value,
+      versionId: context.activeVersionId.value,
+    })
+    const mappedComments = mapJoinedCommentList(payload, context.subscribedTargets.value)
+    replaceSyncedComments(await resolveAuthors(mappedComments))
   }
 
-  async function leaveTarget(targetKey: CommentTargetKey): Promise<void> {
-    if (context.activeSchemeId.value === null) return
-
-    const { type, targetId } = parseCommentTargetKey(targetKey)
-    await context.client.leaveElementComments(
-      context.activeSchemeId.value,
-      type === 'canvas' ? '' : (targetId ?? ''),
-    )
-  }
-
-  async function bootstrapTargets(targets: CommentTargetKey[]): Promise<void> {
-    const nextTargets = normalizeTargets(targets)
-    const nextTargetsSet = new Set(nextTargets)
-
-    for (const targetKey of context.subscribedTargets.value) {
-      if (nextTargetsSet.has(targetKey)) continue
-
-      await leaveTarget(targetKey)
-      context.comments.value = context.comments.value.filter(comment => !matchesTarget(comment, targetKey))
-    }
-
-    for (const targetKey of nextTargets) {
-      await joinTarget(targetKey)
-    }
-
-    context.subscribedTargets.value = nextTargets
-  }
-
-  async function initializeForScheme(schemeId: number, targets: CommentTargetKey[]): Promise<void> {
-    if (!Number.isFinite(schemeId)) return
+  async function initializeForScheme(schemeId: number, versionId: number, targets: CommentTargetKey[]): Promise<void> {
+    if (!Number.isFinite(schemeId) || !Number.isFinite(versionId)) return
 
     context.isLoading.value = true
     context.loadError.value = null
@@ -151,8 +120,10 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
       }
 
       context.activeSchemeId.value = schemeId
+      context.activeVersionId.value = versionId
+      context.subscribedTargets.value = normalizeTargets(targets)
       await ensureConnected()
-      await bootstrapTargets(targets)
+      await refreshComments()
     } catch (error) {
       context.loadError.value = error instanceof Error ? error.message : 'Не удалось инициализировать комментарии'
     } finally {
@@ -161,38 +132,38 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
   }
 
   async function syncTargets(targets: CommentTargetKey[]): Promise<void> {
-    if (context.activeSchemeId.value === null) return
+    if (context.activeSchemeId.value === null || context.activeVersionId.value === null) return
 
     try {
-      await ensureConnected()
-
-      const nextTargets = normalizeTargets(targets)
-      const previousTargets = new Set(context.subscribedTargets.value)
-      const nextTargetsSet = new Set(nextTargets)
-
-      for (const targetKey of context.subscribedTargets.value) {
-        if (nextTargetsSet.has(targetKey)) continue
-
-        await leaveTarget(targetKey)
-        context.comments.value = context.comments.value.filter(comment => !matchesTarget(comment, targetKey))
-      }
-
-      for (const targetKey of nextTargets) {
-        if (previousTargets.has(targetKey)) continue
-        await joinTarget(targetKey)
-      }
-
-      context.subscribedTargets.value = nextTargets
+      context.subscribedTargets.value = normalizeTargets(targets)
+      await refreshComments()
     } catch (error) {
       context.loadError.value = error instanceof Error ? error.message : 'Не удалось синхронизировать комментарии'
     }
   }
 
-  async function refreshTarget(targetKey: CommentTargetKey): Promise<void> {
-    if (!context.subscribedTargets.value.includes(targetKey)) return
+  async function syncVersion(versionId: number | null): Promise<void> {
+    context.activeVersionId.value = versionId
+
+    if (versionId === null) {
+      context.comments.value = context.comments.value.filter(comment => comment.status !== 'synced')
+      return
+    }
+
+    if (context.activeSchemeId.value === null) return
 
     try {
-      await joinTarget(targetKey)
+      await refreshComments()
+    } catch (error) {
+      context.loadError.value = error instanceof Error ? error.message : 'Не удалось синхронизировать версию комментариев'
+    }
+  }
+
+  async function refreshTarget(_targetKey?: CommentTargetKey): Promise<void> {
+    if (context.activeSchemeId.value === null || context.activeVersionId.value === null) return
+
+    try {
+      await refreshComments()
     } catch (error) {
       context.loadError.value = error instanceof Error ? error.message : 'Не удалось обновить комментарии'
     }
@@ -200,12 +171,10 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
 
   async function reset(): Promise<void> {
     if (context.activeSchemeId.value !== null) {
-      for (const targetKey of context.subscribedTargets.value) {
-        try {
-          await leaveTarget(targetKey)
-        } catch {
-          // noop
-        }
+      try {
+        await context.client.leaveComments(context.activeSchemeId.value)
+      } catch {
+        // noop
       }
     }
 
@@ -224,6 +193,7 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
     context.loadError.value = null
     context.connectionStatus.value = 'idle'
     context.activeSchemeId.value = null
+    context.activeVersionId.value = null
     context.subscribedTargets.value = []
     context.initialized.value = false
     context.connectPromise.value = null
@@ -232,6 +202,7 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
   return {
     initializeForScheme,
     syncTargets,
+    syncVersion,
     refreshTarget,
     reset,
   }

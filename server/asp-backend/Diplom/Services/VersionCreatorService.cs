@@ -1,6 +1,7 @@
-﻿using Diplom.Hubs;
+﻿using Diplom.DBContexts;
+using Diplom.Hubs;
 using Diplom.Mappers;
-using Diplom.Models.DB;
+using Diplom.Models.DB.Main;
 using Diplom.Models.DTO;
 using Diplom.Models.Hub;
 using Diplom.Services.UserTrackers;
@@ -134,15 +135,22 @@ namespace Diplom.Services
 
         private async Task CreateVersionWithoutComparing(Scheme scheme, ApplicationContext context)
         {
-            //блокируем схему
+            //блокируем версию схемы
+            /*
             scheme.IsReadOnly = true;
             await context.SaveChangesAsync();
+            */
 
-            _logger.LogInformation($"[] У схемы ({scheme.ID}) 1 версия, схема заблокирована, начат процесс создания версии.");
+            Models.DB.Main.Version latestVersion = scheme.Versions.First();
+            latestVersion.IsReadOnly = true;
+            await context.SaveChangesAsync();
 
-            //берем код посленей версии
+            _logger.LogInformation($"[] У схемы ({scheme.ID}) 1 версия, версия заблокирована, начат процесс создания версии.");
+
+            /*берем код посленей версии
             var allVersions = scheme.Versions.OrderByDescending(v => v.Date);
             var latestVersion = allVersions.First();
+            */
             var latestVersionDto = VersionToDtoMapper.Map(latestVersion);
 
             //собираем изменнеия
@@ -167,7 +175,7 @@ namespace Diplom.Services
                 latestVersion.Code = updatedCode;
             }    
 
-            var newVersion = new Models.DB.Version
+            var newVersion = new Models.DB.Main.Version
             {
                 Code = latestVersion.Code,
                 SchemeID = scheme.ID
@@ -183,11 +191,12 @@ namespace Diplom.Services
             //отправляем новую версию
             await SendNewVersion(scheme.ID, newVersion);
 
-            //разблокировка схемы
+            /*разблокировка схемы
             scheme.IsReadOnly = false; 
             await context.SaveChangesAsync();
-
+            
             _logger.LogInformation("[] Версия разблокирована (схема- {scheme.ID}, версия- {newVersion.Id}).");
+            */
         }
 
         private async Task CreateVersionWithComparing(Scheme scheme, ApplicationContext context)
@@ -215,11 +224,15 @@ namespace Diplom.Services
 
                 _logger.LogInformation($"[] У схемы ({scheme.ID}) несколько версий, последние 2 неодинаковы, начат процесс создания версии.");
 
-                //блокируем схему
+                /*блокируем схему
                 scheme.IsReadOnly = true;
                 await context.SaveChangesAsync();
+                */
 
-                _logger.LogInformation($"[] Схема ({scheme.ID}) заблокирована.");
+                latestVersion.IsReadOnly = true;
+                await context.SaveChangesAsync();
+
+                _logger.LogInformation($"[] Версия ({latestVersion.Id}) схемы ({scheme.ID}) заблокирована.");
 
                 var latestVersionDto = VersionToDtoMapper.Map(latestVersion);
 
@@ -241,11 +254,10 @@ namespace Diplom.Services
                     latestVersion.Code = updatedCode;
                 }
 
-                var newVersion = new Diplom.Models.DB.Version
+                var newVersion = new Diplom.Models.DB.Main.Version
                 {
                     Code = latestVersion.Code,
-                    SchemeID = latestVersion.SchemeID,
-                    Comments = latestVersion.Comments
+                    SchemeID = latestVersion.SchemeID
                 };
 
                 context.Versions.Add(newVersion);
@@ -256,19 +268,24 @@ namespace Diplom.Services
                 //отправляем новую версию
                 await SendNewVersion(scheme.ID, newVersion);
 
-                //разблокировка схемы
+                /*разблокировка схемы
                 scheme.IsReadOnly = false;
                 await context.SaveChangesAsync();
 
                 _logger.LogInformation($"[] Схема ({scheme.ID}) разблокирована.");
+                */
             }
             else
             {
-                // блокируем схему
+                /* блокируем схему
                 scheme.IsReadOnly = true;
                 await context.SaveChangesAsync();
+                */
 
-                _logger.LogInformation($"[] Схема ({scheme.ID}) заблокирована.");
+                latestVersion.IsReadOnly = true;
+                await context.SaveChangesAsync();
+
+                _logger.LogInformation($"[] Версия ({latestVersion.Id}) схемы ({scheme.ID}) заблокирована.");
 
                 var latestVersionDto = VersionToDtoMapper.Map(latestVersion);
 
@@ -293,11 +310,10 @@ namespace Diplom.Services
                     string updatedCode = JsonSerializer.Serialize(latestVersionDto.Code);
                     latestVersion.Code = updatedCode;
 
-                    var newVersion = new Diplom.Models.DB.Version
+                    var newVersion = new Diplom.Models.DB.Main.Version
                     {
                         Code = latestVersion.Code,
-                        SchemeID = latestVersion.SchemeID,
-                        Comments = latestVersion.Comments
+                        SchemeID = latestVersion.SchemeID
                     };
 
                     context.Versions.Add(newVersion);
@@ -309,15 +325,16 @@ namespace Diplom.Services
                     await SendNewVersion(scheme.ID, newVersion);
                 }
 
-                //разблокировка схемы
+                /*разблокировка схемы
                 scheme.IsReadOnly = false;
                 await context.SaveChangesAsync();
 
                 _logger.LogInformation($"[] Схема ({scheme.ID}) разблокирована.");
+                */
             }
         }
 
-        private async Task SendNewVersion(int schemeId, Models.DB.Version version)
+        private async Task SendNewVersion(int schemeId, Models.DB.Main.Version version)
         {
             await _hubContext.Clients.Group($"scheme-{schemeId}")
                 .SendAsync("NewVersionCreated", new

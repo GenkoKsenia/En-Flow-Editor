@@ -27,7 +27,6 @@ export function useFlowEditorComments({
   const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
   const localCommentPatches = ref<Record<string, Partial<Pick<CommentsStoreComment, 'text' | 'position'>>>>({})
-  const resolvedCommentIds = ref<string[]>([])
 
   const { nodes, edges } = storeToRefs(documentStore)
   const { comments: sourceComments, currentAuthor, currentAuthorId, currentAuthorAliases } = storeToRefs(commentsStore)
@@ -46,8 +45,34 @@ export function useFlowEditorComments({
   )
 
   watch(sourceComments, nextComments => {
-    const existingIds = new Set(nextComments.map(comment => comment.id))
-    resolvedCommentIds.value = resolvedCommentIds.value.filter(commentId => existingIds.has(commentId))
+    const commentsById = new Map(nextComments.map(comment => [comment.id, comment]))
+    const nextPatches: Record<string, Partial<Pick<CommentsStoreComment, 'text' | 'position'>>> = {}
+
+    Object.entries(localCommentPatches.value).forEach(([commentId, patch]) => {
+      const sourceComment = commentsById.get(commentId)
+      if (!sourceComment || sourceComment.status !== 'synced') {
+        return
+      }
+
+      const nextPatch = { ...patch }
+      if (typeof nextPatch.text === 'string' && nextPatch.text === sourceComment.text) {
+        delete nextPatch.text
+      }
+
+      if (
+        nextPatch.position
+        && nextPatch.position.x === sourceComment.position.x
+        && nextPatch.position.y === sourceComment.position.y
+      ) {
+        delete nextPatch.position
+      }
+
+      if (typeof nextPatch.text !== 'undefined' || nextPatch.position) {
+        nextPatches[commentId] = nextPatch
+      }
+    })
+
+    localCommentPatches.value = nextPatches
   })
 
   function getSourceComment(commentId: string): CommentsStoreComment | undefined {
@@ -98,9 +123,12 @@ export function useFlowEditorComments({
     localCommentPatches.value = rest
   }
 
-  function clearResolvedComment(commentId: string): void {
-    if (!resolvedCommentIds.value.includes(commentId)) return
-    resolvedCommentIds.value = resolvedCommentIds.value.filter(id => id !== commentId)
+  function hasPendingChanges(commentId: string): boolean {
+    const patch = localCommentPatches.value[commentId]
+    if (!patch) return false
+
+    if (typeof patch.text !== 'undefined') return true
+    return Boolean(patch.position)
   }
 
   function addCommentForNode(nodeId: string): boolean {
@@ -184,36 +212,81 @@ export function useFlowEditorComments({
     commentsStore.updateDraft(commentId, { position })
   }
 
-  function submitComment(commentId: string): Promise<void> {
-    return commentsStore.submitDraft(commentId)
+  async function submitComment(commentId: string): Promise<void> {
+    const comment = getSourceComment(commentId)
+    if (!comment) return
+
+    if (comment.status !== 'synced') {
+      await commentsStore.submitDraft(commentId)
+      return
+    }
+
+    const patch = localCommentPatches.value[commentId]
+    if (!patch) return
+
+    await commentsStore.saveSyncedComment(commentId, patch)
+    clearLocalCommentPatch(commentId)
   }
 
   function discardComment(commentId: string): void {
     clearLocalCommentPatch(commentId)
-    clearResolvedComment(commentId)
     commentsStore.discardDraft(commentId)
   }
 
-  function dismissComment(commentId: string): void {
-    clearLocalCommentPatch(commentId)
-    clearResolvedComment(commentId)
-    commentsStore.dismissComment(commentId)
-  }
-
-  function isCommentResolved(commentId: string): boolean {
-    return resolvedCommentIds.value.includes(commentId)
-  }
-
-  function toggleCommentResolved(commentId: string): void {
+  function cancelComment(commentId: string): void {
     const comment = getSourceComment(commentId)
-    if (!comment || comment.status === 'sending') return
+    if (!comment) return
 
-    if (resolvedCommentIds.value.includes(commentId)) {
-      clearResolvedComment(commentId)
+    if (comment.status === 'synced') {
+      clearLocalCommentPatch(commentId)
       return
     }
 
-    resolvedCommentIds.value = [...resolvedCommentIds.value, commentId]
+    discardComment(commentId)
+  }
+
+  function isCommentResolved(commentId: string): boolean {
+    return Boolean(getSourceComment(commentId)?.completionDate)
+  }
+
+  async function toggleCommentResolved(commentId: string): Promise<void> {
+    const comment = getSourceComment(commentId)
+    if (!comment || comment.status !== 'synced' || comment.completionDate) return
+
+    await commentsStore.completeComment(commentId)
+    clearLocalCommentPatch(commentId)
+  }
+
+  async function deleteComment(commentId: string): Promise<void> {
+    await commentsStore.deleteComment(commentId)
+    clearLocalCommentPatch(commentId)
+  }
+
+  function commitCommentPosition(commentId: string): void {
+    const comment = getSourceComment(commentId)
+    const patch = localCommentPatches.value[commentId]
+    if (!comment || comment.status !== 'synced' || !patch?.position) return
+
+    void submitComment(commentId)
+  }
+
+  function canEditComment(comment: CommentsStoreComment): boolean {
+    return comment.status !== 'sending' && !comment.completionDate
+  }
+
+  function showCommentActions(commentId: string): boolean {
+    const comment = getSourceComment(commentId)
+    if (!comment) return false
+
+    if (comment.status === 'draft' || comment.status === 'error') {
+      return true
+    }
+
+    return hasPendingChanges(commentId)
+  }
+
+  function canResolveComment(comment: CommentsStoreComment): boolean {
+    return comment.status === 'synced' && !comment.completionDate
   }
 
   function canDeleteComment(comment: CommentsStoreComment): boolean {
@@ -242,11 +315,15 @@ export function useFlowEditorComments({
     addCommentForEdge,
     addCommentOnCanvas,
     getCommentStyle,
+    canEditComment,
+    showCommentActions,
+    canResolveComment,
     updateCommentText,
     updateCommentPosition,
+    commitCommentPosition,
     submitComment,
-    discardComment,
-    dismissComment,
+    cancelComment,
+    deleteComment,
     isCommentResolved,
     toggleCommentResolved,
     canDeleteComment,

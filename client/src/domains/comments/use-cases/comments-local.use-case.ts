@@ -1,13 +1,12 @@
 import { roundCoord } from '@/domains/diagram'
 
-import { buildCommentTargetKey } from '../lib'
 import { mapCommentToHubRequest } from '../mappers'
 import type { CommentTarget } from '../models'
 
 import type { CommentsContext, DraftPatch } from './comments.context'
 
 type CommentsLocalDependencies = {
-  refreshTarget: (targetKey: ReturnType<typeof buildCommentTargetKey>) => Promise<void>
+  refreshComments: () => Promise<void>
 }
 
 export function createCommentsLocalUseCases(
@@ -38,6 +37,7 @@ export function createCommentsLocalUseCases(
       authorId: context.currentAuthorId.value ?? undefined,
       author: context.getDefaultAuthor(),
       createdAt: new Date().toLocaleString('ru-RU'),
+      completionDate: null,
       status: 'draft',
     })
     return commentId
@@ -59,6 +59,38 @@ export function createCommentsLocalUseCases(
     }
   }
 
+  function getActiveScope(): { schemeId: number; versionId: number } | null {
+    if (context.activeSchemeId.value === null) {
+      context.loadError.value = 'Схема не выбрана'
+      return null
+    }
+
+    if (context.activeVersionId.value === null) {
+      context.loadError.value = 'Версия не выбрана'
+      return null
+    }
+
+    return {
+      schemeId: context.activeSchemeId.value,
+      versionId: context.activeVersionId.value,
+    }
+  }
+
+  function getSyncedComment(commentId: string) {
+    const comment = context.comments.value.find(item => item.id === commentId)
+    if (!comment || comment.status !== 'synced' || typeof comment.serverId !== 'number') {
+      return null
+    }
+
+    return comment
+  }
+
+  function setCommentStatus(commentId: string, status: 'sending' | 'synced'): void {
+    const comment = context.comments.value.find(item => item.id === commentId)
+    if (!comment || comment.status === 'draft' || comment.status === 'error') return
+    comment.status = status
+  }
+
   async function submitDraft(commentId: string): Promise<void> {
     const comment = context.comments.value.find(item => item.id === commentId)
     if (!comment || comment.status === 'synced') return
@@ -68,9 +100,9 @@ export function createCommentsLocalUseCases(
       return
     }
 
-    if (context.activeSchemeId.value === null) {
+    const scope = getActiveScope()
+    if (!scope) {
       comment.status = 'error'
-      context.loadError.value = 'Схема не выбрана'
       return
     }
 
@@ -78,14 +110,112 @@ export function createCommentsLocalUseCases(
     context.loadError.value = null
 
     try {
-      await context.client.sendComment(mapCommentToHubRequest(comment, context.activeSchemeId.value))
+      await context.client.sendComment(mapCommentToHubRequest(comment, scope.schemeId, scope.versionId))
 
-      const targetKey = buildCommentTargetKey(comment.targetType, comment.targetId)
       context.comments.value = context.comments.value.filter(item => item.id !== commentId)
-      await dependencies.refreshTarget(targetKey)
+      await dependencies.refreshComments()
     } catch (error) {
       comment.status = 'error'
       context.loadError.value = error instanceof Error ? error.message : 'Не удалось отправить комментарий'
+    }
+  }
+
+  async function saveSyncedComment(commentId: string, patch: DraftPatch): Promise<void> {
+    const comment = getSyncedComment(commentId)
+    const scope = getActiveScope()
+    if (!comment || !scope) return
+
+    const hasTextChange = typeof patch.text === 'string' && patch.text !== comment.text
+    const hasPositionChange = Boolean(
+      patch.position
+      && (patch.position.x !== comment.position.x || patch.position.y !== comment.position.y),
+    )
+
+    if (!hasTextChange && !hasPositionChange) return
+
+    setCommentStatus(commentId, 'sending')
+    context.loadError.value = null
+
+    try {
+      if (hasTextChange) {
+        await context.client.updateCommentText({
+          schemeId: scope.schemeId,
+          versionId: scope.versionId,
+          commentId: comment.serverId!,
+          text: patch.text ?? comment.text,
+        })
+      }
+
+      if (hasPositionChange && patch.position) {
+        await context.client.updateCommentPosition({
+          schemeId: scope.schemeId,
+          versionId: scope.versionId,
+          commentId: comment.serverId!,
+          x: patch.position.x,
+          y: patch.position.y,
+        })
+      }
+
+      await dependencies.refreshComments()
+    } catch (error) {
+      context.loadError.value = error instanceof Error ? error.message : 'Не удалось сохранить комментарий'
+      throw error
+    } finally {
+      setCommentStatus(commentId, 'synced')
+    }
+  }
+
+  async function completeComment(commentId: string): Promise<void> {
+    const comment = getSyncedComment(commentId)
+    const scope = getActiveScope()
+    if (!comment || !scope || comment.completionDate) return
+
+    setCommentStatus(commentId, 'sending')
+    context.loadError.value = null
+
+    try {
+      await context.client.completeComment({
+        schemeId: scope.schemeId,
+        versionId: scope.versionId,
+        commentId: comment.serverId!,
+      })
+      await dependencies.refreshComments()
+    } catch (error) {
+      context.loadError.value = error instanceof Error ? error.message : 'Не удалось завершить комментарий'
+      throw error
+    } finally {
+      setCommentStatus(commentId, 'synced')
+    }
+  }
+
+  async function deleteComment(commentId: string): Promise<void> {
+    const comment = context.comments.value.find(item => item.id === commentId)
+    if (!comment) return
+
+    if (comment.status !== 'synced') {
+      discardDraft(commentId)
+      return
+    }
+
+    const syncedComment = getSyncedComment(commentId)
+    const scope = getActiveScope()
+    if (!syncedComment || !scope) return
+
+    setCommentStatus(commentId, 'sending')
+    context.loadError.value = null
+
+    try {
+      await context.client.deleteComment({
+        schemeId: scope.schemeId,
+        versionId: scope.versionId,
+        commentId: syncedComment.serverId!,
+      })
+      await dependencies.refreshComments()
+    } catch (error) {
+      context.loadError.value = error instanceof Error ? error.message : 'Не удалось удалить комментарий'
+      throw error
+    } finally {
+      setCommentStatus(commentId, 'synced')
     }
   }
 
@@ -108,6 +238,9 @@ export function createCommentsLocalUseCases(
     startDraft,
     updateDraft,
     submitDraft,
+    saveSyncedComment,
+    completeComment,
+    deleteComment,
     discardDraft,
     dismissComment,
   }

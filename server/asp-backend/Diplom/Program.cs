@@ -1,12 +1,13 @@
-using Diplom;
-using Diplom.Hubs;
-using Diplom.Services;
-using Diplom.Services.UserTrackers;
 using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
+using Diplom.Services;
+using Diplom.Hubs;
+using Diplom.Services.UserTrackers;
 using Serilog;
-using Serilog.Events;
 using Serilog.Filters;
+using Serilog.Events;
+using Diplom.DBContexts;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(
@@ -26,20 +27,39 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog();
 
-string connection = builder.Configuration.GetConnectionString("DefaultConnection");
+// Настройка логирования
+//builder.Logging.ClearProviders();
+//builder.Logging.AddConsole(); // Логи в консоль
 
+// получаем строку подключения из файла конфигурации
+string connection = builder.Configuration.GetConnectionString("DefaultConnection");
+string testAdConnection = builder.Configuration.GetConnectionString("TestADConnection");
+
+// добавляем контекст ApplicationContext в качестве сервиса в приложение
 builder.Services.AddDbContext<ApplicationContext>(options => options.UseSqlServer(connection));
+builder.Services.AddDbContext<TestADContext>(options => options.UseSqlServer(testAdConnection));
+
+builder.Services.AddScoped<DynamicDbContext>();
 
 builder.Services.AddSignalR();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
-builder.Services.AddSingleton<IUserDirectoryService, UserDirectoryService>();
 builder.Services.AddSingleton<IUserTracker, UserTrackerDB>();
+//builder.Services.AddHostedService<VersionCreatorService>();
 
 builder.Services.AddHttpClient();
 
+/*
+builder.Services.AddDbContext<ApplicationContext>( options =>
+{
+    //options.UseSqlServer("Server=LAPTOP-6UD8366G;Database=redactor;Trusted_Connection=True;");
+    options.UseSqlServer("Server=LAPTOP-6UD8366G\\SQLEXPRESS;Database=redactor;Trusted_Connection=True;TrustServerCertificate=True;");
+});
+*/
+
 builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

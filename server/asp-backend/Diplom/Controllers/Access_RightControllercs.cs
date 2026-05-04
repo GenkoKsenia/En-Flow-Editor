@@ -3,8 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using System.Reflection.Emit;
 using System.Security.Principal;
 using Microsoft.AspNetCore.Authorization;
-using Diplom.Models.DB;
 using Diplom.Models.Requests;
+using Diplom.DBContexts;
+using Diplom.Models.DB.Main;
 
 namespace Diplom.Controllers
 {

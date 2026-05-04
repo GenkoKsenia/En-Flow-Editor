@@ -1,12 +1,12 @@
-﻿using Diplom.Models.DB;
+﻿using Diplom.Models.DB.Main;
 using Microsoft.EntityFrameworkCore;
 
-namespace Diplom
+namespace Diplom.DBContexts
 {
     public class ApplicationContext : DbContext
     {
         public DbSet<Scheme> Schemes { get; set; } = null;
-        public DbSet<Models.DB.Version> Versions { get; set; } = null;
+        public DbSet<Models.DB.Main.Version> Versions { get; set; } = null;
         public DbSet<Comment> Comments { get; set; } = null;
         public DbSet<Access_Right> Access_Rights { get; set; } = null;
         public DbSet<Access_User_Schema_Right> Access_User_Schema_Rights { get; set; } = null;
@@ -24,12 +24,15 @@ namespace Diplom
             base.OnModelCreating(modelBuilder);
 
             //Version
-            modelBuilder.Entity<Models.DB.Version>()
+            modelBuilder.Entity<Models.DB.Main.Version>()
                 .HasOne(s => s.Scheme)
                 .WithMany(v => v.Versions)
                 .HasForeignKey(v => v.SchemeID);
 
             // FavoriteScheme
+            modelBuilder.Entity<FavoriteScheme>()
+                .HasKey(f => new { f.UserID, f.SchemeID });
+
             modelBuilder.Entity<FavoriteScheme>()
                 .HasOne(f => f.Scheme)
                 .WithMany(s => s.FavoriteSchemes)
@@ -44,9 +47,9 @@ namespace Diplom
 
             //Comment
             modelBuilder.Entity<Comment>()
-                .HasOne(c => c.Version)
+                .HasOne(c => c.Scheme)
                 .WithMany(v => v.Comments)
-                .HasForeignKey(c => c.VersionID);
+                .HasForeignKey(c => c.SchemeID);
 
             //Access_User_Schema_Right
             modelBuilder.Entity<Access_User_Schema_Right>()

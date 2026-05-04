@@ -1,8 +1,6 @@
 ﻿using Diplom.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-
-using Diplom.Models.DB;
 using Microsoft.EntityFrameworkCore;
 using Diplom.Models.Requests;
 using Diplom.Mappers;
@@ -17,6 +15,8 @@ using Diplom.Models.DTO;
 using Microsoft.Extensions.Logging;
 using Diplom.Services.UserTrackers;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Diplom.DBContexts;
+using Diplom.Models.DB.Main;
 
 namespace Diplom.Hubs
 {
@@ -149,12 +149,13 @@ namespace Diplom.Hubs
             if (availableScheme == null)
                 return;
 
-            if (availableScheme.IsReadOnly)
+            var latestVersion = availableScheme.Versions.FirstOrDefault();
+
+            if (latestVersion.IsReadOnly)
                 return;
 
             if (availableScheme.Versions != null && availableScheme.Versions.Any())
             {
-                var latestVersion = availableScheme.Versions.FirstOrDefault();
                 var latestVersionDto = VersionToDtoMapper.Map(latestVersion);
 
                 //применение изменений

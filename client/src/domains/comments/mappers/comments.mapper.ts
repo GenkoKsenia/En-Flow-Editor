@@ -68,6 +68,22 @@ function readDateTime(value: unknown, keys: string[]): string {
   return normalizeDateTime(null)
 }
 
+function readOptionalDateTime(value: unknown, keys: string[]): string | null {
+  const record = asRecord(value)
+  if (!record) return null
+
+  for (const key of keys) {
+    const current = record[key]
+    if (current == null) {
+      continue
+    }
+
+    return normalizeDateTime(current)
+  }
+
+  return null
+}
+
 function buildServerCommentId(serverId: number | null, targetKey: CommentTargetKey, text: string, createdAt: string): string {
   if (serverId !== null) {
     return `comment-${serverId}`
@@ -78,12 +94,16 @@ function buildServerCommentId(serverId: number | null, targetKey: CommentTargetK
 
 export function mapJoinedCommentPayloadToComment(
   payload: unknown,
-  targetKey: CommentTargetKey,
+  availableTargets: Iterable<CommentTargetKey>,
 ): CommentsStoreComment | null {
+  const targetKey = inferRefreshTargetKey(payload, availableTargets)
+  if (!targetKey) return null
+
   const serverId = readNumber(payload, ['id', 'ID'])
   const text = readString(payload, ['text', 'Text']) ?? ''
   const author = readString(payload, ['user', 'User', 'userID', 'UserID']) ?? ''
-  const createdAt = readDateTime(payload, ['dateTime', 'DateTime', 'date', 'Date'])
+  const createdAt = readDateTime(payload, ['creationDate', 'CreationDate', 'dateTime', 'DateTime', 'date', 'Date'])
+  const completionDate = readOptionalDateTime(payload, ['completionDate', 'CompletionDate'])
   const x = readNumber(payload, ['x', 'X']) ?? 0
   const y = readNumber(payload, ['y', 'Y']) ?? 0
   const { type, targetId } = parseCommentTargetKey(targetKey)
@@ -98,17 +118,18 @@ export function mapJoinedCommentPayloadToComment(
     authorId: author || undefined,
     author,
     createdAt,
+    completionDate,
     status: 'synced',
   }
 }
 
-export function mapJoinedCommentList(payload: unknown, targetKey: CommentTargetKey): CommentsStoreComment[] {
+export function mapJoinedCommentList(payload: unknown, availableTargets: Iterable<CommentTargetKey>): CommentsStoreComment[] {
   if (!Array.isArray(payload)) return []
 
   const unique = new Map<string, CommentsStoreComment>()
 
   payload.forEach(item => {
-    const mapped = mapJoinedCommentPayloadToComment(item, targetKey)
+    const mapped = mapJoinedCommentPayloadToComment(item, availableTargets)
     if (!mapped) return
     unique.set(mapped.id, mapped)
   })
@@ -121,9 +142,9 @@ export function inferRefreshTargetKey(
   availableTargets: Iterable<CommentTargetKey>,
 ): CommentTargetKey | null {
   const elementId = readString(payload, ['elementId', 'ElementId', 'elementID', 'ElementID']) ?? ''
-  if (!elementId) return 'canvas'
-
   const targets = new Set(availableTargets)
+  if (!elementId) return targets.has('canvas') ? 'canvas' : null
+
   const nodeTarget = buildCommentTargetKey('node', elementId)
   if (targets.has(nodeTarget)) return nodeTarget
 
@@ -136,9 +157,11 @@ export function inferRefreshTargetKey(
 export function mapCommentToHubRequest(
   comment: Pick<CommentsStoreComment, 'targetType' | 'targetId' | 'position' | 'text'>,
   schemeId: number,
+  versionId: number,
 ): CommentHubRequest {
   const requestBase = {
     schemeId,
+    versionId,
     text: comment.text,
     x: comment.position.x,
     y: comment.position.y,
@@ -149,19 +172,19 @@ export function mapCommentToHubRequest(
       return {
         ...requestBase,
         elementId: comment.targetId ?? '',
-        elementtype: 'block',
+        elementType: 'block',
       }
     case 'edge':
       return {
         ...requestBase,
         elementId: comment.targetId ?? '',
-        elementtype: 'connection',
+        elementType: 'connection',
       }
     default:
       return {
         ...requestBase,
         elementId: '',
-        elementtype: 'canvas',
+        elementType: 'canvas',
       }
   }
 }

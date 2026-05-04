@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute } from 'vue-router'
 
 import { buildCommentTargetKey, type CommentTargetKey, useCommentsStore } from '@/domains/comments'
@@ -11,12 +12,19 @@ function parseSchemeId(rawSchemeId: string | null | undefined): number | null {
   return Number.isFinite(value) ? value : null
 }
 
+function parseVersionId(rawVersionId: string | null | undefined): number | null {
+  if (!rawVersionId) return null
+  const value = Number(rawVersionId)
+  return Number.isFinite(value) ? value : null
+}
+
 export function useFlowEditorRoute() {
   const route = useRoute()
   const diagramStore = useDiagramStore()
   const commentsStore = useCommentsStore()
   const uiStore = useEditorUiStore()
   const collaborationStore = useDiagramCollaborationStore()
+  const { currentVersionId } = storeToRefs(diagramStore)
 
   const schemeId = computed(() => {
     const raw = route.params.schemeId
@@ -46,16 +54,17 @@ export function useFlowEditorRoute() {
 
         const previousNumericId = parseSchemeId(previousSchemeId)
         const nextNumericId = parseSchemeId(nextSchemeId)
+        const nextVersionNumericId = parseVersionId(currentVersionId.value)
 
         if (previousNumericId !== null && previousNumericId !== nextNumericId) {
           await collaborationStore.leaveScheme(previousNumericId)
         }
         if (requestId !== navigationRequestId) return
 
-        if (nextNumericId !== null) {
+        if (nextNumericId !== null && nextVersionNumericId !== null) {
           await collaborationStore.joinScheme(nextNumericId)
           if (requestId !== navigationRequestId) return
-          await commentsStore.initializeForScheme(nextNumericId, commentTargets.value)
+          await commentsStore.initializeForScheme(nextNumericId, nextVersionNumericId, commentTargets.value)
         } else {
           await collaborationStore.disconnect()
           await commentsStore.reset()
@@ -71,6 +80,10 @@ export function useFlowEditorRoute() {
 
   watch(commentTargets, targets => {
     void commentsStore.syncTargets(targets)
+  })
+
+  watch(currentVersionId, versionId => {
+    void commentsStore.syncVersion(parseVersionId(versionId))
   })
 
   onBeforeUnmount(() => {

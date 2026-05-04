@@ -1,23 +1,24 @@
-using Diplom.Models.DB;
+﻿using Diplom.Models.DB.Main;
 using Diplom.Models.DTO;
-using Diplom.Services;
+using Diplom.Models.Requests;
 
 namespace Diplom.Mappers
 {
     public class CommentToDtoMapper
     {
-        public static CommentDto Map(Comment comment, IUserDirectoryService userDirectoryService)
+        public static CommentDto Map(Comment comment)
         {
             return new CommentDto
             {
                 ID = comment.ID,
-                Version = comment.Version?.Id ?? comment.VersionID,
+                SchemeID = comment.SchemeID, 
                 ElementID = comment.ElementID,
                 Date = comment.Date,
-                UserID = userDirectoryService.ResolveDisplayName(comment.UserID),
-                Text = comment.Text,
-                X = comment.X,
-                Y = comment.Y,
+                UserID = comment.UserID,
+                Text = comment.Text, 
+                CompletionDate = comment.CompletionDate, 
+                X = comment.X, 
+                Y = comment.Y
             };
         }
     }

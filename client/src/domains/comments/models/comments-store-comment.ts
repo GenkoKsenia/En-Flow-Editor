@@ -14,5 +14,6 @@ export interface CommentsStoreComment {
   authorId?: string
   author: string
   createdAt: string
+  completionDate: string | null
   status: CommentStatus
 }

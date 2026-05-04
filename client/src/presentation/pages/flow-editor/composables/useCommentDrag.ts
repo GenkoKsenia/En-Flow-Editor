@@ -10,6 +10,7 @@ type CommentLike = {
 
 type CommentStoreApi = {
   updateCommentPosition(commentId: string, position: Position): void
+  commitCommentPosition(commentId: string): void | Promise<void>
 }
 
 type UseCommentDragOptions<TComment extends CommentLike> = {
@@ -45,6 +46,7 @@ export function useCommentDrag<TComment extends CommentLike>({
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
+      void documentStore.commitCommentPosition(commentId)
     }
 
     document.addEventListener('mousemove', onMouseMove)

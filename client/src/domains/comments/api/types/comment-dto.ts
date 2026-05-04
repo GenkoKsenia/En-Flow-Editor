@@ -1,10 +1,11 @@
 export interface CommentDto {
   id: number
-  version: number
+  schemeId: number
   elementId: string
   user: string
-  dateTime: string
+  creationDate: string
   text: string
+  completionDate: string | null
   x: number
   y: number
 }

@@ -143,16 +143,16 @@
             :comment="comment"
             :show-delete="canDeleteComment(comment)"
             :style-object="getCommentStyle(comment)"
-            :is-editable="comment.status !== 'sending'"
-            :show-actions="comment.status === 'draft' || comment.status === 'error'"
+            :is-editable="canEditComment(comment)"
+            :show-actions="showCommentActions(comment.id)"
             :auto-focus="comment.status === 'draft' || comment.status === 'error'"
             :is-resolved="isCommentResolved(comment.id)"
-            :show-resolve-toggle="comment.status === 'synced'"
+            :show-resolve-toggle="canResolveComment(comment)"
             @drag-start="startCommentDrag"
             @update:text="updateCommentText"
             @save="submitComment"
-            @cancel="removeComment"
-            @delete="removeComment"
+            @cancel="cancelComment"
+            @delete="deleteComment"
             @toggle-resolved="toggleCommentResolved"
           />
         </div>
@@ -224,6 +224,9 @@ const {
   getChildrenCount,
   getConnectionPosition,
   getCommentStyle,
+  canEditComment,
+  showCommentActions,
+  canResolveComment,
   getAbsoluteNodePosition,
   addNode,
   startConnectionMode,
@@ -254,7 +257,8 @@ const {
   startCommentDrag,
   updateCommentText,
   submitComment,
-  removeComment,
+  cancelComment,
+  deleteComment,
   isCommentResolved,
   toggleCommentResolved,
   canDeleteComment,

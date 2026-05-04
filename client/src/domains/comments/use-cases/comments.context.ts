@@ -17,6 +17,7 @@ export type CommentsContext = {
   loadError: Ref<string | null>
   connectionStatus: Ref<CommentsConnectionStatus>
   activeSchemeId: Ref<number | null>
+  activeVersionId: Ref<number | null>
   subscribedTargets: Ref<CommentTargetKey[]>
   draftCounter: Ref<number>
   initialized: Ref<boolean>

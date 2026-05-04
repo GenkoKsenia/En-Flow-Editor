@@ -1,4 +1,4 @@
-﻿using Diplom.Models.DB;
+﻿using Diplom.Models.DB.Main;
 using Diplom.Models.DTO;
 using Diplom.Models.Requests;
 using System.Text.Json;
@@ -13,12 +13,12 @@ namespace Diplom.Mappers
             {
                 ID = scheme.ID,
                 Name = scheme.Name,
-                IsReadOnly = scheme.IsReadOnly,
                 isFavorite = isFavorite, 
                 UserID = scheme.UserID,
                 Versions = scheme.Versions.Select(v => new VersionResponseDto
                 {
                     Id = v.Id,
+                    IsReadOnly = v.IsReadOnly, 
                     Code = JsonSerializer.Deserialize<CodeRequest>(v.Code),
                     Date = v.Date,
                     SchemeID = v.SchemeID

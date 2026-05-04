@@ -25,6 +25,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const loadError = ref<string | null>(null)
   const connectionStatus = ref<CommentsConnectionStatus>('idle')
   const activeSchemeId = ref<number | null>(null)
+  const activeVersionId = ref<number | null>(null)
   const subscribedTargets = ref<CommentTargetKey[]>([])
   const draftCounter = ref(1)
   const initialized = ref(false)
@@ -40,6 +41,7 @@ export const useCommentsStore = defineStore('comments', () => {
     loadError,
     connectionStatus,
     activeSchemeId,
+    activeVersionId,
     subscribedTargets,
     draftCounter,
     initialized,
@@ -76,11 +78,20 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const syncUseCases = createCommentsSyncUseCases(context)
   const localUseCases = createCommentsLocalUseCases(context, {
-    refreshTarget: syncUseCases.refreshTarget,
+    refreshComments: () => syncUseCases.refreshTarget(),
   })
 
-  const { initializeForScheme, syncTargets, refreshTarget, reset } = syncUseCases
-  const { startDraft, updateDraft, submitDraft, discardDraft, dismissComment } = localUseCases
+  const { initializeForScheme, syncTargets, syncVersion, refreshTarget, reset } = syncUseCases
+  const {
+    startDraft,
+    updateDraft,
+    submitDraft,
+    saveSyncedComment,
+    completeComment,
+    deleteComment,
+    discardDraft,
+    dismissComment,
+  } = localUseCases
 
   return {
     comments,
@@ -91,12 +102,17 @@ export const useCommentsStore = defineStore('comments', () => {
     loadError,
     connectionStatus,
     activeSchemeId,
+    activeVersionId,
     subscribedTargets,
     initializeForScheme,
     syncTargets,
+    syncVersion,
     startDraft,
     updateDraft,
     submitDraft,
+    saveSyncedComment,
+    completeComment,
+    deleteComment,
     discardDraft,
     dismissComment,
     refreshTarget,

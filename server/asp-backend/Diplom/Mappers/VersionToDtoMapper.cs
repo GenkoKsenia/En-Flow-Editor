@@ -6,11 +6,12 @@ namespace Diplom.Mappers
 {
     public class VersionToDtoMapper
     {
-        public static VersionResponseDto Map(Models.DB.Version version)
+        public static VersionResponseDto Map(Models.DB.Main.Version version)
         {
             return new VersionResponseDto
             {
                 Id = version.Id,
+                IsReadOnly = version.IsReadOnly, 
                 Code = JsonSerializer.Deserialize<CodeRequest>(version.Code),
                 Date = version.Date,
                 SchemeID = version.SchemeID

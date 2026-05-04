@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
-namespace Diplom.Models.DB
+namespace Diplom.Models.DB.Main
 {
     public class Access_Group_Schema_Right
     {
