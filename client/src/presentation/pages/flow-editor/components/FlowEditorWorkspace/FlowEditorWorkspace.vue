@@ -79,7 +79,7 @@
       </div>
 
       <div class="canvas-content-sizer" :style="canvasContentSizerStyle">
-        <div ref="canvasContent" class="canvas-content" :style="canvasTransformStyle">
+        <div ref="canvasContent" class="canvas-content" :style="canvasContentStyle">
           <div
             v-if="isMarqueeSelecting && marqueeRect"
             class="marquee-selection"
@@ -275,6 +275,9 @@ const hasDiagnosticsPanel = computed(() => schemeDiagnostics.value.length > 0)
 const hasPropertiesPanel = computed(() => Boolean(selectedObject.value))
 const hasSidePanels = computed(() => hasDiagnosticsPanel.value || hasPropertiesPanel.value)
 const CANVAS_CONTENT_PADDING = 24
+const CANVAS_GROWTH_BUFFER = 480
+const MIN_CANVAS_LOGICAL_WIDTH = 2400
+const MIN_CANVAS_LOGICAL_HEIGHT = 1600
 const COMMENT_WIDTH_ESTIMATE = 260
 const COMMENT_HEIGHT_ESTIMATE = 160
 const canvasContentLogicalSize = computed(() => {
@@ -307,13 +310,24 @@ const canvasContentLogicalSize = computed(() => {
   })
 
   return {
-    width: Math.max(maxRight + CANVAS_CONTENT_PADDING * 2, CANVAS_CONTENT_PADDING * 2 + 1),
-    height: Math.max(maxBottom + CANVAS_CONTENT_PADDING * 2, CANVAS_CONTENT_PADDING * 2 + 1),
+    width: Math.max(
+      maxRight + CANVAS_CONTENT_PADDING * 2 + CANVAS_GROWTH_BUFFER,
+      MIN_CANVAS_LOGICAL_WIDTH,
+    ),
+    height: Math.max(
+      maxBottom + CANVAS_CONTENT_PADDING * 2 + CANVAS_GROWTH_BUFFER,
+      MIN_CANVAS_LOGICAL_HEIGHT,
+    ),
   }
 })
 const canvasContentSizerStyle = computed(() => ({
   width: `${Math.max(canvasContentLogicalSize.value.width * zoom.value, 1)}px`,
   height: `${Math.max(canvasContentLogicalSize.value.height * zoom.value, 1)}px`,
+}))
+const canvasContentStyle = computed(() => ({
+  ...canvasTransformStyle.value,
+  width: `${canvasContentLogicalSize.value.width}px`,
+  height: `${canvasContentLogicalSize.value.height}px`,
 }))
 let zoomFlashTimeout: number | null = null
 
@@ -419,17 +433,15 @@ const { onDownloadPng } = useFlowEditorPngExport({
   position: absolute;
   top: 0;
   left: 0;
-  width: max-content;
-  height: max-content;
   transform-origin: 0 0;
   padding: 24px;
+  box-sizing: border-box;
 }
 
 .canvas-content-sizer {
   position: relative;
-  min-width: 1px;
-  min-height: 1px;
-  overflow: hidden;
+  min-width: 100%;
+  min-height: 100%;
 }
 
 .marquee-selection {

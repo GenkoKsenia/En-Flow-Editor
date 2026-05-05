@@ -38,3 +38,11 @@ export async function updateSchemeName(id: string | number, name: string): Promi
 export async function deleteScheme(id: string | number): Promise<void> {
   await http.delete(`/Scheme/delete/${id}`)
 }
+
+export async function addSchemeToFavorites(id: string | number): Promise<void> {
+  await http.post(`/FavoriteScheme/post/${id}`)
+}
+
+export async function removeSchemeFromFavorites(id: string | number): Promise<void> {
+  await http.delete(`/FavoriteScheme/delete/${id}`)
+}
