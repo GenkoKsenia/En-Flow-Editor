@@ -100,6 +100,7 @@
             :data-edge-id="edge.id"
             :nodes="nodes"
             :is-selected="selectedEdgeIds.includes(edge.id)"
+            :is-comment-target-highlighted="highlightedCommentTarget?.type === 'edge' && highlightedCommentTarget.id === edge.id"
             :show-drag-handle="showDragHandles"
             :get-connection-position="getConnectionPosition"
             :force-three-segments="edgeRequiresPassThrough[edge.id]"
@@ -118,6 +119,7 @@
             :node="node"
             :data-node-id="node.id"
             :selected="selectedNodeIds.includes(node.id)"
+            :is-comment-target-highlighted="highlightedCommentTarget?.type === 'node' && highlightedCommentTarget.id === node.id"
             :is-connection-source="isConnectionSource(node.id)"
             :is-connection-target="isConnectionTarget(node.id)"
             :is-dragging="isDragging && selectedNodeIds.includes(node.id)"
@@ -142,18 +144,22 @@
             :key="comment.id"
             :comment="comment"
             :show-delete="canDeleteComment(comment)"
+            :show-target-jump="comment.targetType !== 'canvas' && Boolean(comment.targetId)"
             :style-object="getCommentStyle(comment)"
             :is-editable="canEditComment(comment)"
             :show-actions="showCommentActions(comment.id)"
             :auto-focus="comment.status === 'draft' || comment.status === 'error'"
             :is-resolved="isCommentResolved(comment.id)"
             :show-resolve-toggle="canResolveComment(comment)"
+            @mouseenter="setCommentTargetHighlight(comment.targetType, comment.targetId)"
+            @mouseleave="clearCommentTargetHighlight"
             @drag-start="startCommentDrag"
             @update:text="updateCommentText"
             @save="submitComment"
             @cancel="cancelComment"
             @delete="deleteComment"
             @toggle-resolved="toggleCommentResolved"
+            @focus-target="focusCommentTarget(comment)"
           />
         </div>
       </div>
@@ -163,6 +169,8 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+
+import type { CommentsStoreComment } from '@/domains/comments'
 
 import ArrowDefinitions from './ArrowDefinitions.vue'
 import CommentBubble from './CommentBubble.vue'
@@ -270,6 +278,7 @@ const includeCommentsInPng = ref(false)
 const commentsVisible = ref(true)
 const showZoomControl = ref(false)
 const isZoomControlHovered = ref(false)
+const highlightedCommentTarget = ref<{ type: 'node' | 'edge'; id: string } | null>(null)
 const visibleComments = computed(() => (commentsVisible.value ? comments.value : []))
 const hasDiagnosticsPanel = computed(() => schemeDiagnostics.value.length > 0)
 const hasPropertiesPanel = computed(() => Boolean(selectedObject.value))
@@ -330,6 +339,7 @@ const canvasContentStyle = computed(() => ({
   height: `${canvasContentLogicalSize.value.height}px`,
 }))
 let zoomFlashTimeout: number | null = null
+let commentTargetFlashTimeout: number | null = null
 
 watch(zoomPercent, (_, previousValue) => {
   if (typeof previousValue === 'undefined') return
@@ -339,6 +349,7 @@ watch(zoomPercent, (_, previousValue) => {
 
 onBeforeUnmount(() => {
   clearZoomHideTimeout()
+  clearCommentTargetHideTimeout()
 })
 
 function clearZoomHideTimeout(): void {
@@ -372,6 +383,79 @@ function onZoomControlMouseEnter(): void {
 function onZoomControlMouseLeave(): void {
   isZoomControlHovered.value = false
   scheduleZoomControlHide(900)
+}
+
+function clearCommentTargetHideTimeout(): void {
+  if (commentTargetFlashTimeout !== null) {
+    window.clearTimeout(commentTargetFlashTimeout)
+    commentTargetFlashTimeout = null
+  }
+}
+
+function setCommentTargetHighlight(
+  targetType: CommentsStoreComment['targetType'],
+  targetId: string | null,
+): void {
+  if ((targetType !== 'node' && targetType !== 'edge') || !targetId) {
+    return
+  }
+
+  clearCommentTargetHideTimeout()
+  highlightedCommentTarget.value = {
+    type: targetType,
+    id: targetId,
+  }
+}
+
+function clearCommentTargetHighlight(): void {
+  clearCommentTargetHideTimeout()
+  highlightedCommentTarget.value = null
+}
+
+function flashCommentTarget(
+  targetType: CommentsStoreComment['targetType'],
+  targetId: string | null,
+  delay = 1800,
+): void {
+  setCommentTargetHighlight(targetType, targetId)
+  clearCommentTargetHideTimeout()
+
+  commentTargetFlashTimeout = window.setTimeout(() => {
+    highlightedCommentTarget.value = null
+    commentTargetFlashTimeout = null
+  }, delay)
+}
+
+function scrollCanvasToRect(targetRect: DOMRect): void {
+  if (!canvas.value) return
+
+  const canvasRect = canvas.value.getBoundingClientRect()
+  const deltaX = (targetRect.left + targetRect.width / 2) - (canvasRect.left + canvas.value.clientWidth / 2)
+  const deltaY = (targetRect.top + targetRect.height / 2) - (canvasRect.top + canvas.value.clientHeight / 2)
+
+  canvas.value.scrollLeft += deltaX
+  canvas.value.scrollTop += deltaY
+}
+
+function focusCommentTarget(comment: CommentsStoreComment): void {
+  if (!canvas.value || !comment.targetId) return
+
+  if (comment.targetType === 'node') {
+    const targetNode = canvas.value.querySelector<HTMLElement>(`[data-node-id="${comment.targetId}"]`)
+    if (!targetNode) return
+
+    scrollCanvasToRect(targetNode.getBoundingClientRect())
+    flashCommentTarget(comment.targetType, comment.targetId)
+    return
+  }
+
+  if (comment.targetType === 'edge') {
+    const targetEdgePath = canvas.value.querySelector<SVGPathElement>(`[data-edge-path-id="${comment.targetId}"]`)
+    if (!targetEdgePath) return
+
+    scrollCanvasToRect(targetEdgePath.getBoundingClientRect())
+    flashCommentTarget(comment.targetType, comment.targetId)
+  }
 }
 
 const { onDownloadPng } = useFlowEditorPngExport({
@@ -512,7 +596,7 @@ const { onDownloadPng } = useFlowEditorPngExport({
 }
 
 :deep(.node.potential-parent) {
-  box-shadow: 0 0 0 3px #28a745;
-  background: rgba(40, 167, 69, 0.1);
+  box-shadow: 0 0 0 3px #1f9d55;
+  background: rgba(31, 157, 85, 0.1);
 }
 </style>

@@ -51,6 +51,11 @@ type UseNodeDragOptions = {
   containerPadding?: number
 }
 
+type CommentTargetDescriptor = {
+  type: 'node' | 'edge'
+  id: string
+}
+
 export function useNodeDrag({
   nodes,
   edges,
@@ -93,6 +98,36 @@ export function useNodeDrag({
     return Array.from(ids)
   }
 
+  function setCommentTransforms(targets: CommentTargetDescriptor[], deltaX: number, deltaY: number): void {
+    if (targets.length === 0) return
+
+    const targetSet = new Set(targets.map(target => `${target.type}:${target.id}`))
+    document.querySelectorAll<HTMLElement>('.comment-bubble').forEach(commentElement => {
+      const targetType = commentElement.dataset.commentTargetType
+      const targetId = commentElement.dataset.commentTargetId
+      if (!targetType || !targetId) return
+      if (!targetSet.has(`${targetType}:${targetId}`)) return
+
+      commentElement.style.setProperty('--drag-dx', `${deltaX}px`)
+      commentElement.style.setProperty('--drag-dy', `${deltaY}px`)
+    })
+  }
+
+  function clearCommentTransforms(targets: CommentTargetDescriptor[]): void {
+    if (targets.length === 0) return
+
+    const targetSet = new Set(targets.map(target => `${target.type}:${target.id}`))
+    document.querySelectorAll<HTMLElement>('.comment-bubble').forEach(commentElement => {
+      const targetType = commentElement.dataset.commentTargetType
+      const targetId = commentElement.dataset.commentTargetId
+      if (!targetType || !targetId) return
+      if (!targetSet.has(`${targetType}:${targetId}`)) return
+
+      commentElement.style.removeProperty('--drag-dx')
+      commentElement.style.removeProperty('--drag-dy')
+    })
+  }
+
   function setTemporaryTransforms(nodeIds: string[], edgeIds: string[], deltaX: number, deltaY: number): void {
     nodeIds.forEach(nodeId => {
       const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null
@@ -107,6 +142,11 @@ export function useNodeDrag({
       edgeElement.style.setProperty('--drag-dx', `${deltaX}px`)
       edgeElement.style.setProperty('--drag-dy', `${deltaY}px`)
     })
+
+    setCommentTransforms([
+      ...nodeIds.map(id => ({ type: 'node' as const, id })),
+      ...edgeIds.map(id => ({ type: 'edge' as const, id })),
+    ], deltaX, deltaY)
   }
 
   function clearTemporaryTransforms(nodeIds: string[], edgeIds: string[]): void {
@@ -123,6 +163,11 @@ export function useNodeDrag({
       edgeElement?.style.removeProperty('--drag-dx')
       edgeElement?.style.removeProperty('--drag-dy')
     })
+
+    clearCommentTransforms([
+      ...nodeIds.map(id => ({ type: 'node' as const, id })),
+      ...edgeIds.map(id => ({ type: 'edge' as const, id })),
+    ])
   }
 
   async function startGroupDrag(nodeId: string, event: MouseEvent): Promise<void> {
@@ -250,6 +295,7 @@ export function useNodeDrag({
     }
 
     let potentialParentId: string | null = node.parentId ?? null
+    const draggedNodeIds = [nodeId, ...children.map(child => child.id)]
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const scale = zoom.value || 1
@@ -258,20 +304,7 @@ export function useNodeDrag({
 
       tempNode.dx = deltaX
       tempNode.dy = deltaY
-
-      const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null
-      if (nodeElement) {
-        nodeElement.style.setProperty('--drag-dx', `${deltaX}px`)
-        nodeElement.style.setProperty('--drag-dy', `${deltaY}px`)
-      }
-
-      children.forEach(child => {
-        const childElement = document.querySelector(`[data-node-id="${child.id}"]`) as HTMLElement | null
-        if (childElement) {
-          childElement.style.setProperty('--drag-dx', `${deltaX}px`)
-          childElement.style.setProperty('--drag-dy', `${deltaY}px`)
-        }
-      })
+      setTemporaryTransforms(draggedNodeIds, [], deltaX, deltaY)
 
       const currentX = startNodeX + deltaX
       const currentY = startNodeY + deltaY
@@ -284,19 +317,7 @@ export function useNodeDrag({
       const newAbsoluteX = roundCoord(Math.max(0, startNodeX + tempNode.dx))
       const newAbsoluteY = roundCoord(Math.max(0, startNodeY + tempNode.dy))
 
-      const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null
-      if (nodeElement) {
-        nodeElement.style.removeProperty('--drag-dx')
-        nodeElement.style.removeProperty('--drag-dy')
-      }
-
-      children.forEach(child => {
-        const childElement = document.querySelector(`[data-node-id="${child.id}"]`) as HTMLElement | null
-        if (childElement) {
-          childElement.style.removeProperty('--drag-dx')
-          childElement.style.removeProperty('--drag-dy')
-        }
-      })
+      clearTemporaryTransforms(draggedNodeIds, [])
 
       uiStore.setDragging(false)
       uiStore.setPotentialParentId(null)

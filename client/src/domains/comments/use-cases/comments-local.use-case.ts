@@ -210,7 +210,8 @@ export function createCommentsLocalUseCases(
         versionId: scope.versionId,
         commentId: syncedComment.serverId!,
       })
-      await dependencies.refreshComments()
+      context.comments.value = context.comments.value.filter(item => item.id !== commentId)
+      void dependencies.refreshComments()
     } catch (error) {
       context.loadError.value = error instanceof Error ? error.message : 'Не удалось удалить комментарий'
       throw error

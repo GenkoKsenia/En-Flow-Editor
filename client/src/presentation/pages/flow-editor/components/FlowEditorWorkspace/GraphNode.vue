@@ -14,6 +14,7 @@
       'data-flow-error': hasDataError,
       'missing-target': hasMissingTarget,
       'forbidden-outgoing': hasForbiddenOutgoing,
+      'comment-target-highlighted': isCommentTargetHighlighted,
       'locked-self': lockState === 'self',
       'locked-other': lockState === 'other',
       [nodeBorderClass]: true
@@ -43,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { ConnectionSide, Node, Position } from '@/domains/graph'
 
 interface Props {
@@ -60,6 +61,7 @@ interface Props {
   hasDataError?: boolean
   hasMissingTarget?: boolean
   hasForbiddenOutgoing?: boolean
+  isCommentTargetHighlighted?: boolean
   errorMessage?: string | null
   warningMessage?: string | null
   lockedBy?: string | null
@@ -78,6 +80,7 @@ const props = withDefaults(defineProps<Props>(), {
   hasDataError: false,
   hasMissingTarget: false,
   hasForbiddenOutgoing: false,
+  isCommentTargetHighlighted: false,
   errorMessage: null,
   warningMessage: null,
   lockedBy: null,
@@ -90,6 +93,15 @@ const emit = defineEmits<{
 }>()
 
 const hoveredSide = ref<ConnectionSide | null>(null)
+
+watch(
+  () => props.showConnectionHints,
+  isVisible => {
+    if (!isVisible) {
+      hoveredSide.value = null
+    }
+  },
+)
 
 // Вычисляем абсолютную позицию узла с учетом родителя
 function getAbsolutePosition(node: Node, nodes: Node[]): Position {
@@ -161,13 +173,13 @@ const tooltipText = computed<string | undefined>(() => {
 
 function getBorderColor(): string {
   if (props.isConnectionSource) {
-    return '#28a745'
+    return '#1f9d55'
   }
   if (props.isConnectionTarget) {
-    return '#ffc107'
+    return '#1f9d55'
   }
   if (props.selected) {
-    return '#007bff'
+    return '#0b6bcb'
   }
   return props.node.borderColor ?? '#4CAF50'
 }
@@ -302,18 +314,18 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 .node.selected {
-  --border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+  --border-color: #0b6bcb;
+  box-shadow: 0 0 0 3px rgba(11, 107, 203, 0.25);
 }
 
 .node.connection-source {
-  --border-color: #28a745;
-  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.25);
+  --border-color: #1f9d55;
+  box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.22);
 }
 
 .node.connection-target {
-  --border-color: #ffc107;
-  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.25);
+  --border-color: #1f9d55;
+  box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.22);
 }
 
 .node.dragging {
@@ -338,39 +350,40 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 .side-hint.active {
-  background: #e75629;
+  background: #1f9d55;
+  box-shadow: 0 0 0 1px rgba(31, 157, 85, 0.18);
 }
 
 .side-hint.top {
-  top: -2px;
-  left: 10px;
-  right: 10px;
-  height: 2px;
+  top: -4px;
+  left: 8px;
+  right: 8px;
+  height: 4px;
 }
 
 .side-hint.right {
-  top: 10px;
-  right: -2px;
-  bottom: 10px;
-  width: 2px;
+  top: 8px;
+  right: -4px;
+  bottom: 8px;
+  width: 4px;
 }
 
 .side-hint.bottom {
-  bottom: -2px;
-  left: 10px;
-  right: 10px;
-  height: 2px;
+  bottom: -4px;
+  left: 8px;
+  right: 8px;
+  height: 4px;
 }
 
 .side-hint.left {
-  top: 10px;
-  left: -2px;
-  bottom: 10px;
-  width: 2px;
+  top: 8px;
+  left: -4px;
+  bottom: 8px;
+  width: 4px;
 }
 
 .node.potential-parent {
-  box-shadow: 0 0 0 3px #28a745;
+  box-shadow: 0 0 0 3px #1f9d55;
 }
 
 .node.has-children {
@@ -381,19 +394,26 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 .node.pass-through-error {
-  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.55);
+  box-shadow: 0 0 0 3px rgba(217, 72, 95, 0.55);
 }
 
 .node.data-flow-error {
-  box-shadow: 0 0 0 3px rgba(224, 49, 49, 0.55);
+  box-shadow: 0 0 0 3px rgba(217, 72, 95, 0.55);
 }
 
 .node.missing-target {
-  box-shadow: 0 0 0 3px rgba(255, 196, 0, 0.55);
+  box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.45);
 }
 
 .node.forbidden-outgoing {
-  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.55);
+  box-shadow: 0 0 0 3px rgba(217, 72, 95, 0.55);
+}
+
+.node.comment-target-highlighted {
+  --border-color: #0b6bcb;
+  box-shadow:
+    0 0 0 4px rgba(11, 107, 203, 0.22),
+    0 0 18px rgba(11, 107, 203, 0.3);
 }
 
 .node.locked-self {

@@ -2,6 +2,7 @@
   <svg
     class="edge"
     :class="{
+      'comment-target-highlighted': isCommentTargetHighlighted,
       'locked-self': lockState === 'self',
       'locked-other': lockState === 'other',
     }"
@@ -26,9 +27,11 @@
       :stroke-dasharray="dashPattern || undefined"
       :stroke-linecap="strokeLinecap"
       :marker-end="markerUrl || undefined"
+      :data-edge-path-id="edge.id"
       @mousedown="onPathMouseDown"
       :class="{
         selected: isSelected,
+        'comment-target-highlighted': isCommentTargetHighlighted,
         'pass-through-error': hasPassThroughError,
         'locked-self': lockState === 'self',
         'locked-other': lockState === 'other',
@@ -54,7 +57,7 @@
       :cx="breakpoint.x"
       :cy="breakpoint.y"
       r="4"
-      fill="#007bff"
+      fill="#0b6bcb"
       class="drag-handle-marker"
     />
 
@@ -100,6 +103,7 @@ interface Props {
   forceThreeSegments?: boolean
   hasPassThroughError?: boolean
   isPassThrough?: boolean
+  isCommentTargetHighlighted?: boolean
   errorMessage?: string | null
   warningMessage?: string | null
   lockedBy?: string | null
@@ -113,6 +117,7 @@ const props = withDefaults(defineProps<Props>(), {
   forceThreeSegments: false,
   hasPassThroughError: false,
   isPassThrough: false,
+  isCommentTargetHighlighted: false,
   errorMessage: null,
   warningMessage: null,
   lockedBy: null,
@@ -169,7 +174,7 @@ const markerUrl = computed(() => {
 
 const strokeColor = computed(() => {
   const base = props.edge.color ?? '#666'
-  const selectedColor = '#007bff'
+  const selectedColor = '#0b6bcb'
   const colors = {
     default: props.isSelected ? selectedColor : base,
     selected: selectedColor, 
@@ -564,8 +569,8 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
 
 .edge path.pass-through-error {
   filter:
-    drop-shadow(0 0 0 rgba(224, 49, 49))   
-    drop-shadow(0 0 3px rgba(224, 49, 49)); 
+    drop-shadow(0 0 0 rgba(217, 72, 95))   
+    drop-shadow(0 0 3px rgba(217, 72, 95)); 
 }
 
 .edge-hit-area {
@@ -573,8 +578,14 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
 }
 
 .edge path.selected {
-  stroke: #007bff;
+  stroke: #0b6bcb;
   stroke-width: 3;
+}
+
+.edge path.comment-target-highlighted {
+  stroke: #0b6bcb;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 4px rgba(11, 107, 203, 0.42));
 }
 
 .edge path.locked-self {
