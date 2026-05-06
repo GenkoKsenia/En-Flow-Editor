@@ -238,7 +238,7 @@ onBeforeUnmount(() => {
 .avatar-circle {
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: 999px;
   background: #dbe4ff;
   color: #1d4ed8;
   display: inline-flex;
@@ -273,7 +273,7 @@ onBeforeUnmount(() => {
   right: 0;
   min-width: 240px;
   border: 1px solid #d8dce3;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
   padding: 6px;

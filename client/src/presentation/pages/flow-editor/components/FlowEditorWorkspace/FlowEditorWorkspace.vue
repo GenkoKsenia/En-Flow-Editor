@@ -30,36 +30,29 @@
       @download-png="onDownloadPng"
     />
 
-    <div
-      ref="canvas"
-      class="canvas"
-      :style="canvasGridStyle"
-      @mousedown="onCanvasMouseDown"
-      @click="onCanvasClick"
-      @wheel.prevent="onCanvasWheel"
-    >
-      <div
-        v-if="showZoomControl"
-        class="canvas-zoom-controls canvas-zoom-controls--floating"
-        @mouseenter="onZoomControlMouseEnter"
-        @mouseleave="onZoomControlMouseLeave"
-      >
-        <button type="button" aria-label="Уменьшить масштаб" @click="zoomOut">-</button>
-        <div class="zoom-indicator">{{ zoomPercent }}%</div>
-        <button type="button" aria-label="Увеличить масштаб" @click="zoomIn">+</button>
-      </div>
-
+    <div class="workspace-shell">
       <div
         v-if="hasSidePanels"
         class="side-panels"
-        :class="{ 'side-panels--split': hasDiagnosticsPanel && hasPropertiesPanel }"
+        :class="{ 'side-panels--split': showDiagnosticsPanel && hasPropertiesPanel }"
         @wheel.stop
       >
-        <div v-if="hasDiagnosticsPanel" class="side-panels__item" @wheel.stop>
-          <DiagnosticsPanel :diagnostics="schemeDiagnostics" />
+        <div
+          v-if="showDiagnosticsPanel"
+          class="side-panels__item side-panels__item--diagnostics"
+          @wheel.stop
+        >
+          <DiagnosticsPanel
+            :diagnostics="schemeDiagnostics"
+            @toggle-collapse="collapseDiagnosticsPanel"
+          />
         </div>
 
-        <div v-if="hasPropertiesPanel" class="side-panels__item" @wheel.stop>
+        <div
+          v-if="hasPropertiesPanel"
+          class="side-panels__item side-panels__item--properties"
+          @wheel.stop
+        >
           <PropertiesPanel
             :selected-object="selectedObject"
             :edges="edges"
@@ -78,89 +71,135 @@
         </div>
       </div>
 
-      <div class="canvas-content-sizer" :style="canvasContentSizerStyle">
-        <div ref="canvasContent" class="canvas-content" :style="canvasContentStyle">
-          <div
-            v-if="isMarqueeSelecting && marqueeRect"
-            class="marquee-selection"
-            :style="{
-              left: `${marqueeRect.x}px`,
-              top: `${marqueeRect.y}px`,
-              width: `${marqueeRect.width}px`,
-              height: `${marqueeRect.height}px`,
-            }"
+      <button
+        v-if="hasDiagnosticsPanel && isDiagnosticsCollapsed"
+        type="button"
+        class="diagnostics-restore-btn"
+        :class="{
+          'diagnostics-restore-btn--with-properties': hasPropertiesPanel,
+          'diagnostics-restore-btn--error': hasDiagnosticsErrors,
+          'diagnostics-restore-btn--warning': !hasDiagnosticsErrors && hasDiagnosticsWarnings,
+        }"
+        aria-label="Развернуть панель ошибок"
+        title="Развернуть панель ошибок"
+        @click="expandDiagnosticsPanel"
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4" />
+          <path
+            d="M8 5.5v4.1"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-width="1.6"
           />
+          <circle cx="8" cy="12" r="1" fill="currentColor" />
+        </svg>
+      </button>
 
-          <ArrowDefinitions />
+      <div
+        ref="canvas"
+        class="canvas"
+        :style="canvasGridStyle"
+        @mousedown="onCanvasMouseDown"
+        @click="onCanvasClick"
+        @wheel.prevent="onCanvasWheel"
+      >
+        <div
+          v-if="showZoomControl"
+          class="canvas-zoom-controls canvas-zoom-controls--floating"
+          @mouseenter="onZoomControlMouseEnter"
+          @mouseleave="onZoomControlMouseLeave"
+        >
+          <button type="button" aria-label="Уменьшить масштаб" @click="zoomOut">-</button>
+          <div class="zoom-indicator">{{ zoomPercent }}%</div>
+          <button type="button" aria-label="Увеличить масштаб" @click="zoomIn">+</button>
+        </div>
 
-          <GraphEdge
-            v-for="edge in edges"
-            :key="edge.id"
-            :edge="edge"
-            :data-edge-id="edge.id"
-            :nodes="nodes"
-            :is-selected="selectedEdgeIds.includes(edge.id)"
-            :is-comment-target-highlighted="highlightedCommentTarget?.type === 'edge' && highlightedCommentTarget.id === edge.id"
-            :show-drag-handle="showDragHandles"
-            :get-connection-position="getConnectionPosition"
-            :force-three-segments="edgeRequiresPassThrough[edge.id]"
-            :has-pass-through-error="edgePassThroughErrors[edge.id]"
-            :is-pass-through="edgeRequiresPassThrough[edge.id]"
-            :error-message="edgeErrorMessages[edge.id]"
-            :warning-message="edgeWarningMessages[edge.id]"
-            :locked-by="lockedEdgeOwners[edge.id]"
-            @edge-click="onEdgeClick"
-            @breakpoint-drag-start="onBreakpointDragStart"
-          />
+        <div class="canvas-content-sizer" :style="canvasContentSizerStyle">
+          <div ref="canvasContent" class="canvas-content" :style="canvasContentStyle">
+            <div
+              v-if="isMarqueeSelecting && marqueeRect"
+              class="marquee-selection"
+              :style="{
+                left: `${marqueeRect.x}px`,
+                top: `${marqueeRect.y}px`,
+                width: `${marqueeRect.width}px`,
+                height: `${marqueeRect.height}px`,
+              }"
+            />
 
-          <GraphNode
-            v-for="node in nodes"
-            :key="node.id"
-            :node="node"
-            :data-node-id="node.id"
-            :selected="selectedNodeIds.includes(node.id)"
-            :is-comment-target-highlighted="highlightedCommentTarget?.type === 'node' && highlightedCommentTarget.id === node.id"
-            :is-connection-source="isConnectionSource(node.id)"
-            :is-connection-target="isConnectionTarget(node.id)"
-            :is-dragging="isDragging && selectedNodeIds.includes(node.id)"
-            :show-connection-hints="showConnectionHints"
-            :children-count="getChildrenCount(node.id)"
-            :is-potential-parent="potentialParentId === node.id"
-            :all-nodes="nodes"
-            :has-pass-through-error="nodePassThroughErrors[node.id]"
-            :has-data-error="nodeDataErrors[node.id]"
-            :has-missing-target="nodeMissingTarget[node.id]"
-            :has-forbidden-outgoing="nodeForbiddenOutgoing[node.id]"
-            :error-message="nodeErrorMessages[node.id]"
-            :warning-message="nodeWarningMessages[node.id]"
-            :locked-by="lockedNodeOwners[node.id]"
-            @node-mousedown="onNodeMouseDown"
-            @node-click="onNodeClick"
-            @node-hover-side="onNodeHoverSide"
-          />
+            <ArrowDefinitions />
 
-          <CommentBubble
-            v-for="comment in visibleComments"
-            :key="comment.id"
-            :comment="comment"
-            :show-delete="canDeleteComment(comment)"
-            :show-target-jump="comment.targetType !== 'canvas' && Boolean(comment.targetId)"
-            :style-object="getCommentStyle(comment)"
-            :is-editable="canEditComment(comment)"
-            :show-actions="showCommentActions(comment.id)"
-            :auto-focus="comment.status === 'draft' || comment.status === 'error'"
-            :is-resolved="isCommentResolved(comment.id)"
-            :show-resolve-toggle="canResolveComment(comment)"
-            @mouseenter="setCommentTargetHighlight(comment.targetType, comment.targetId)"
-            @mouseleave="clearCommentTargetHighlight"
-            @drag-start="startCommentDrag"
-            @update:text="updateCommentText"
-            @save="submitComment"
-            @cancel="cancelComment"
-            @delete="deleteComment"
-            @toggle-resolved="toggleCommentResolved"
-            @focus-target="focusCommentTarget(comment)"
-          />
+            <GraphEdge
+              v-for="edge in edges"
+              :key="edge.id"
+              :edge="edge"
+              :data-edge-id="edge.id"
+              :nodes="nodes"
+              :is-selected="selectedEdgeIds.includes(edge.id)"
+              :is-comment-target-highlighted="highlightedCommentTarget?.type === 'edge' && highlightedCommentTarget.id === edge.id"
+              :show-drag-handle="showDragHandles"
+              :get-connection-position="getConnectionPosition"
+              :force-three-segments="edgeRequiresPassThrough[edge.id]"
+              :has-pass-through-error="edgePassThroughErrors[edge.id]"
+              :is-pass-through="edgeRequiresPassThrough[edge.id]"
+              :error-message="edgeErrorMessages[edge.id]"
+              :warning-message="edgeWarningMessages[edge.id]"
+              :locked-by="lockedEdgeOwners[edge.id]"
+              @edge-click="onEdgeClick"
+              @breakpoint-drag-start="onBreakpointDragStart"
+            />
+
+            <GraphNode
+              v-for="node in nodes"
+              :key="node.id"
+              :node="node"
+              :data-node-id="node.id"
+              :selected="selectedNodeIds.includes(node.id)"
+              :is-comment-target-highlighted="highlightedCommentTarget?.type === 'node' && highlightedCommentTarget.id === node.id"
+              :is-connection-source="isConnectionSource(node.id)"
+              :is-connection-target="isConnectionTarget(node.id)"
+              :is-dragging="draggedNodeIds.has(node.id)"
+              :show-connection-hints="showConnectionHints"
+              :children-count="getChildrenCount(node.id)"
+              :is-potential-parent="potentialParentId === node.id"
+              :all-nodes="nodes"
+              :has-pass-through-error="nodePassThroughErrors[node.id]"
+              :has-data-error="nodeDataErrors[node.id]"
+              :has-missing-target="nodeMissingTarget[node.id]"
+              :has-forbidden-outgoing="nodeForbiddenOutgoing[node.id]"
+              :error-message="nodeErrorMessages[node.id]"
+              :warning-message="nodeWarningMessages[node.id]"
+              :locked-by="lockedNodeOwners[node.id]"
+              @node-mousedown="onNodeMouseDown"
+              @node-click="onNodeClick"
+              @node-hover-side="onNodeHoverSide"
+            />
+
+            <CommentBubble
+              v-for="comment in visibleComments"
+              :key="comment.id"
+              :comment="comment"
+              :show-delete="canDeleteComment(comment)"
+              :show-target-jump="comment.targetType !== 'canvas' && Boolean(comment.targetId)"
+              :style-object="getCommentStyle(comment)"
+              :is-editable="canEditComment(comment)"
+              :show-actions="showCommentActions(comment.id)"
+              :auto-focus="comment.status === 'draft' || comment.status === 'error'"
+              :is-resolved="isCommentResolved(comment.id)"
+              :show-resolve-toggle="canResolveComment(comment)"
+              @mouseenter="setCommentTargetHighlight(comment.targetType, comment.targetId)"
+              @mouseleave="clearCommentTargetHighlight"
+              @drag-start="startCommentDrag"
+              @update:text="updateCommentText"
+              @save="submitComment"
+              @cancel="cancelComment"
+              @delete="deleteComment"
+              @toggle-resolved="toggleCommentResolved"
+              @focus-target="focusCommentTarget(comment)"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -278,11 +317,26 @@ const includeCommentsInPng = ref(false)
 const commentsVisible = ref(true)
 const showZoomControl = ref(false)
 const isZoomControlHovered = ref(false)
+const isDiagnosticsCollapsed = ref(false)
 const highlightedCommentTarget = ref<{ type: 'node' | 'edge'; id: string } | null>(null)
 const visibleComments = computed(() => (commentsVisible.value ? comments.value : []))
 const hasDiagnosticsPanel = computed(() => schemeDiagnostics.value.length > 0)
+const hasDiagnosticsErrors = computed(() => schemeDiagnostics.value.some(item => item.level === 'error'))
+const hasDiagnosticsWarnings = computed(() => schemeDiagnostics.value.some(item => item.level === 'warning'))
+const showDiagnosticsPanel = computed(() => hasDiagnosticsPanel.value && !isDiagnosticsCollapsed.value)
 const hasPropertiesPanel = computed(() => Boolean(selectedObject.value))
-const hasSidePanels = computed(() => hasDiagnosticsPanel.value || hasPropertiesPanel.value)
+const hasSidePanels = computed(() => showDiagnosticsPanel.value || hasPropertiesPanel.value)
+const draggedNodeIds = computed(() => {
+  if (!isDragging.value) return new Set<string>()
+
+  const ids = new Set<string>()
+  selectedNodeIds.value.forEach(nodeId => {
+    ids.add(nodeId)
+    getDescendantNodes(nodeId).forEach(descendant => ids.add(descendant.id))
+  })
+
+  return ids
+})
 const CANVAS_CONTENT_PADDING = 24
 const CANVAS_GROWTH_BUFFER = 480
 const MIN_CANVAS_LOGICAL_WIDTH = 2400
@@ -347,6 +401,12 @@ watch(zoomPercent, (_, previousValue) => {
   revealZoomControl()
 })
 
+watch(hasDiagnosticsPanel, value => {
+  if (!value) {
+    isDiagnosticsCollapsed.value = false
+  }
+})
+
 onBeforeUnmount(() => {
   clearZoomHideTimeout()
   clearCommentTargetHideTimeout()
@@ -383,6 +443,14 @@ function onZoomControlMouseEnter(): void {
 function onZoomControlMouseLeave(): void {
   isZoomControlHovered.value = false
   scheduleZoomControlHide(900)
+}
+
+function collapseDiagnosticsPanel(): void {
+  isDiagnosticsCollapsed.value = true
+}
+
+function expandDiagnosticsPanel(): void {
+  isDiagnosticsCollapsed.value = false
 }
 
 function clearCommentTargetHideTimeout(): void {
@@ -477,8 +545,16 @@ const { onDownloadPng } = useFlowEditorPngExport({
   min-height: 0;
 }
 
-.canvas {
+.workspace-shell {
+  position: relative;
   flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
   position: relative;
   background:
     linear-gradient(90deg, #f0f0f0 1px, transparent 1px),
@@ -493,7 +569,7 @@ const { onDownloadPng } = useFlowEditorPngExport({
 .side-panels {
   position: absolute;
   top: 16px;
-  right: 16px;
+  right: 24px;
   bottom: 16px;
   width: 320px;
   display: flex;
@@ -510,7 +586,16 @@ const { onDownloadPng } = useFlowEditorPngExport({
 }
 
 .side-panels--split .side-panels__item {
-  flex: 1;
+  min-height: 0;
+}
+
+.side-panels--split .side-panels__item--diagnostics {
+  flex: 0 1 auto;
+  max-height: calc(50% - 6px);
+}
+
+.side-panels--split .side-panels__item--properties {
+  flex: 1 1 0;
 }
 
 .canvas-content {
@@ -562,7 +647,7 @@ const { onDownloadPng } = useFlowEditorPngExport({
   background: #ffffff;
   color: #000000;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
@@ -581,6 +666,68 @@ const { onDownloadPng } = useFlowEditorPngExport({
 .canvas-zoom-controls .zoom-indicator {
   font-size: 14px;
   color: #343a40;
+}
+
+.diagnostics-restore-btn {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  z-index: 8;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #495057;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diagnostics-restore-btn:hover {
+  border-color: #0b6bcb;
+  color: #0b6bcb;
+}
+
+.diagnostics-restore-btn--error {
+  border-color: rgba(217, 72, 95, 0.38);
+  color: #d9485f;
+  background: rgba(217, 72, 95, 0.08);
+}
+
+.diagnostics-restore-btn--error:hover {
+  border-color: #d9485f;
+  color: #d9485f;
+}
+
+.diagnostics-restore-btn--warning {
+  border-color: rgba(234, 179, 8, 0.4);
+  color: #eab308;
+  background: rgba(234, 179, 8, 0.1);
+}
+
+.diagnostics-restore-btn--warning:hover {
+  border-color: #eab308;
+  color: #eab308;
+}
+
+.diagnostics-restore-btn--with-properties {
+  right: 356px;
+}
+
+.diagnostics-restore-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+@media (max-width: 768px) {
+  .diagnostics-restore-btn--with-properties {
+    right: 16px;
+    top: 60px;
+  }
 }
 
 @keyframes zoom-control-enter {

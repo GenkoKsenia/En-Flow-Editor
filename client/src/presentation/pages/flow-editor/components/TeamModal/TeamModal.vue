@@ -82,7 +82,7 @@ const closeTeamModal = () => uiStore.setShowTeamModal(false)
 .modal-window {
   width: min(640px, 100%);
   background: #fff;
-  border-radius: 16px;
+  border-radius: 8px;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
   overflow: hidden;
 }
@@ -140,7 +140,7 @@ const closeTeamModal = () => uiStore.setShowTeamModal(false)
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .member-info {
@@ -168,7 +168,7 @@ const closeTeamModal = () => uiStore.setShowTeamModal(false)
 .avatar-circle {
   width: 30px;
   height: 30px;
-  border-radius: 50%;
+  border-radius: 999px;
   background: #dbe4ff;
   color: #1d4ed8;
   display: inline-flex;
@@ -190,7 +190,7 @@ const closeTeamModal = () => uiStore.setShowTeamModal(false)
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .invite-row {

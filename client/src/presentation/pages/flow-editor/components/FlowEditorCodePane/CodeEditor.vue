@@ -257,7 +257,7 @@ watch(isActive, (active) => {
 
 .code-textarea::-webkit-scrollbar-thumb {
   background: #c5cbd3;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .code-textarea::-webkit-scrollbar-thumb:hover {

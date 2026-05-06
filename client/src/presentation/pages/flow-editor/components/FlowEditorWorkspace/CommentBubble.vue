@@ -300,7 +300,7 @@ function onInput(event: Event): void {
   width: 100%;
   min-height: 60px;
   border: 1px solid #e1e5ea;
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 6px;
   font-size: 13px;
   resize: vertical;
@@ -314,7 +314,7 @@ function onInput(event: Event): void {
 
 .comment-action {
   border: 1px solid #d0d7de;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;

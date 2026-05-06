@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 
 import type { Edge, Node } from '@/domains/graph'
-import { roundCoord } from '@/domains/diagram'
+import { getRelativePositionWithinParent, roundCoord } from '@/domains/diagram'
 
 type DiagramDragApi = {
   getAbsoluteNodePosition(node: Node): { x: number; y: number }
@@ -108,8 +108,7 @@ export function useNodeDrag({
       if (!targetType || !targetId) return
       if (!targetSet.has(`${targetType}:${targetId}`)) return
 
-      commentElement.style.setProperty('--drag-dx', `${deltaX}px`)
-      commentElement.style.setProperty('--drag-dy', `${deltaY}px`)
+      commentElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`
     })
   }
 
@@ -123,8 +122,7 @@ export function useNodeDrag({
       if (!targetType || !targetId) return
       if (!targetSet.has(`${targetType}:${targetId}`)) return
 
-      commentElement.style.removeProperty('--drag-dx')
-      commentElement.style.removeProperty('--drag-dy')
+      commentElement.style.removeProperty('transform')
     })
   }
 
@@ -288,6 +286,25 @@ export function useNodeDrag({
     const startNodeX = absolutePos.x
     const startNodeY = absolutePos.y
     const children = documentStore.getDescendantNodes(nodeId)
+    const initialNodePosition = { ...node.position }
+    const draggedNodeIds = [nodeId, ...children.map(child => child.id)]
+    const initialPassThroughBreakpoints = new Map(
+      Array.from(new Set(
+        draggedNodeIds.flatMap(draggedId => {
+          const draggedNode = nodes.value.find(item => item.id === draggedId)
+          return draggedNode?.passThroughEdges ?? []
+        }),
+      )).map(edgeId => {
+        const edge = edges.value.find(item => item.id === edgeId)
+        return [
+          edgeId,
+          {
+            breakpointX: edge?.breakpointX,
+            breakpointY: edge?.breakpointY,
+          },
+        ] as const
+      }),
+    )
 
     const tempNode = {
       dx: 0,
@@ -295,7 +312,45 @@ export function useNodeDrag({
     }
 
     let potentialParentId: string | null = node.parentId ?? null
-    const draggedNodeIds = [nodeId, ...children.map(child => child.id)]
+
+    const applyPreviewPosition = (absoluteX: number, absoluteY: number) => {
+      if (node.parentId) {
+        const parent = nodes.value.find(item => item.id === node.parentId)
+        if (parent) {
+          const parentAbsolute = documentStore.getAbsoluteNodePosition(parent)
+          node.position = getRelativePositionWithinParent(
+            { x: absoluteX, y: absoluteY },
+            parentAbsolute,
+            containerPadding,
+          )
+        } else {
+          node.position = {
+            x: roundCoord(Math.max(0, absoluteX)),
+            y: roundCoord(Math.max(0, absoluteY)),
+          }
+        }
+      } else {
+        node.position = {
+          x: roundCoord(Math.max(0, absoluteX)),
+          y: roundCoord(Math.max(0, absoluteY)),
+        }
+      }
+
+      draggedNodeIds.forEach(draggedId => {
+        documentStore.maintainPassThroughEdges(draggedId)
+      })
+    }
+
+    const restorePreviewState = () => {
+      node.position = initialNodePosition
+
+      initialPassThroughBreakpoints.forEach((breakpoint, edgeId) => {
+        const edge = edges.value.find(item => item.id === edgeId)
+        if (!edge) return
+        edge.breakpointX = breakpoint.breakpointX
+        edge.breakpointY = breakpoint.breakpointY
+      })
+    }
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const scale = zoom.value || 1
@@ -304,7 +359,11 @@ export function useNodeDrag({
 
       tempNode.dx = deltaX
       tempNode.dy = deltaY
-      setTemporaryTransforms(draggedNodeIds, [], deltaX, deltaY)
+
+      applyPreviewPosition(
+        roundCoord(Math.max(0, startNodeX + deltaX)),
+        roundCoord(Math.max(0, startNodeY + deltaY)),
+      )
 
       const currentX = startNodeX + deltaX
       const currentY = startNodeY + deltaY
@@ -317,8 +376,6 @@ export function useNodeDrag({
       const newAbsoluteX = roundCoord(Math.max(0, startNodeX + tempNode.dx))
       const newAbsoluteY = roundCoord(Math.max(0, startNodeY + tempNode.dy))
 
-      clearTemporaryTransforms(draggedNodeIds, [])
-
       uiStore.setDragging(false)
       uiStore.setPotentialParentId(null)
       document.removeEventListener('mousemove', onMouseMove)
@@ -326,7 +383,11 @@ export function useNodeDrag({
 
       if (didMove) {
         documentStore.finalizeNodeDrag(nodeId, potentialParentId, newAbsoluteX, newAbsoluteY, containerPadding)
-        void documentStore.finishNodeUpdate(nodeId, { affectedEdgeIds: [...(node.passThroughEdges ?? [])] })
+        void documentStore.finishNodeUpdate(nodeId, {
+          affectedEdgeIds: Array.from(initialPassThroughBreakpoints.keys()),
+        })
+      } else {
+        restorePreviewState()
       }
 
       void documentStore.endNodeEdit(nodeId)
