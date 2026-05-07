@@ -5,17 +5,27 @@ using System.Net.Mime;
 using System.Security.Claims;
 using System.Security.Principal;
 using System.DirectoryServices.AccountManagement;
+using Diplom.Services;
+using Diplom.DBContexts;
 
 
 namespace Diplom.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class UserController : ControllerBase
+    public class UserController : Controller
     {
+        private IUserContextService userContextService;
+
+        public UserController(IUserContextService _userContextService)
+        {
+            userContextService = _userContextService;
+        }
+
         [HttpGet("current")]
         public IActionResult GetCurrentUser()
         {
+            /*
             var windowsIdentity = HttpContext.User.Identity as WindowsIdentity;
 
             if (windowsIdentity == null || !windowsIdentity.IsAuthenticated)
@@ -49,8 +59,15 @@ namespace Diplom.Controllers
                 authenticationType = windowsIdentity.AuthenticationType,
                 groups = groups, 
             };
+            */
 
-            return Ok(userInfo);
+            var windowsIdentity = userContextService.GetCurrentWindowsIdentity();
+
+            return Ok(new
+            {
+                Sid = windowsIdentity.User?.Value, 
+                Name = windowsIdentity.Name
+            });
         }
 
         private string GetAdUserName(string Sid)
