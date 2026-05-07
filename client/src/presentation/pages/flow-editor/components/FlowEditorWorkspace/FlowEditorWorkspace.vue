@@ -48,7 +48,7 @@
     <VersionComparisonModal
       v-if="isComparisonDialogOpen && selectedVersion"
       :selected-version="selectedVersion"
-      :latest-version="latestVersion"
+      :current-code="currentDiagramCode"
       :changes="comparisonChanges"
       :loading="isLoadingComparison"
       :error="comparisonError"
@@ -429,7 +429,7 @@ const {
   isLoadingVersions,
   versionsError,
   filteredVersions,
-  latestVersion,
+  currentDiagramCode,
   selectedVersion,
   isComparisonDialogOpen,
   comparisonChanges,

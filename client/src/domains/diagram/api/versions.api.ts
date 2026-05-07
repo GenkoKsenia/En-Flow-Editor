@@ -15,7 +15,19 @@ export async function getVersionsByScheme(schemeId: string | number): Promise<Sc
 }
 
 export async function getLatestVersionChanges(schemeId: string | number): Promise<CodeDifferenceDto[]> {
-  const response = await http.get<CodeDifferenceDto[]>(`/Scheme/changes/${schemeId}`)
+  const response = await http.get<CodeDifferenceDto[]>(`/Scheme/last-changes/${schemeId}`)
+  return response.data.map(item => ({
+    propertyName: item.propertyName,
+    firstObjectValue: item.firstObjectValue ?? null,
+    secondObjectValue: item.secondObjectValue ?? null,
+  }))
+}
+
+export async function getVersionChanges(
+  schemeId: string | number,
+  versionId: string | number,
+): Promise<CodeDifferenceDto[]> {
+  const response = await http.get<CodeDifferenceDto[]>(`/Scheme/changes/${schemeId}-${versionId}`)
   return response.data.map(item => ({
     propertyName: item.propertyName,
     firstObjectValue: item.firstObjectValue ?? null,

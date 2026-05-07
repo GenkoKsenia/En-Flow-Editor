@@ -43,16 +43,16 @@
         </div>
       </section>
 
-      <section v-if="latestVersion" class="comparison-column">
+      <section class="comparison-column">
         <header class="comparison-column__header">
           <div>
-            <h3>{{ formatVersionDate(latestVersion.date) }}</h3>
-            <p>Последняя версия</p>
+            <h3>Текущее состояние</h3>
+            <p>То, что сейчас на экране</p>
           </div>
         </header>
 
         <div class="comparison-column__preview">
-          <VersionSnapshotImage :code="latestVersion.code" />
+          <VersionSnapshotImage :code="currentCode" />
         </div>
       </section>
     </div>
@@ -70,7 +70,7 @@ import { parseVersionSnapshotGraph } from './versionSnapshotGraph'
 
 const props = defineProps<{
   selectedVersion: SchemeVersion
-  latestVersion: SchemeVersion | null
+  currentCode: unknown
   changes: CodeDifferenceDto[]
   loading: boolean
   error: string | null
@@ -143,9 +143,7 @@ const versionDiffMaps = computed<VersionDiffMaps>(() => {
   }
 
   collectFromCode(props.selectedVersion.code)
-  if (props.latestVersion) {
-    collectFromCode(props.latestVersion.code)
-  }
+  collectFromCode(props.currentCode)
 
   return {
     blockLabels,
@@ -155,10 +153,10 @@ const versionDiffMaps = computed<VersionDiffMaps>(() => {
 })
 
 const selectedVersionCode = computed<ParsedVersionCode>(() => parseVersionCode(props.selectedVersion.code))
-const latestVersionCode = computed<ParsedVersionCode>(() => parseVersionCode(props.latestVersion?.code ?? null))
+const currentVersionCode = computed<ParsedVersionCode>(() => parseVersionCode(props.currentCode))
 
 const displayedChanges = computed<DisplayedChange[]>(() => {
-  const summaryRows = buildCollectionSummaryRows(selectedVersionCode.value, latestVersionCode.value)
+  const summaryRows = buildCollectionSummaryRows(selectedVersionCode.value, currentVersionCode.value)
   const summaryKeys = new Set(summaryRows.map(change => change.propertyName))
 
   const filteredRows = props.changes.filter(change => {
@@ -241,21 +239,21 @@ function getVersionCodeCounts(code: ParsedVersionCode): VersionCodeCounts {
 function createSummaryChange(propertyName: string, before: number, after: number): DisplayedChange {
   return {
     propertyName,
-    firstObjectValue: String(after),
-    secondObjectValue: String(before),
+    firstObjectValue: String(before),
+    secondObjectValue: String(after),
   }
 }
 
 function buildCollectionSummaryRows(
   selectedCode: ParsedVersionCode,
-  latestCode: ParsedVersionCode,
+  currentCode: ParsedVersionCode,
 ): DisplayedChange[] {
-  if (!selectedCode || !latestCode) {
+  if (!selectedCode || !currentCode) {
     return []
   }
 
   const before = getVersionCodeCounts(selectedCode)
-  const after = getVersionCodeCounts(latestCode)
+  const after = getVersionCodeCounts(currentCode)
   const rows: DisplayedChange[] = []
 
   if (before.blocks !== after.blocks) {
@@ -321,11 +319,11 @@ function formatPropertyName(propertyName: string): string {
 }
 
 function formatBeforeValue(change: CodeDifferenceDto): string {
-  return formatCompactValue(change.secondObjectValue)
+  return formatCompactValue(change.firstObjectValue)
 }
 
 function formatAfterValue(change: CodeDifferenceDto): string {
-  return formatCompactValue(change.firstObjectValue)
+  return formatCompactValue(change.secondObjectValue)
 }
 </script>
 
