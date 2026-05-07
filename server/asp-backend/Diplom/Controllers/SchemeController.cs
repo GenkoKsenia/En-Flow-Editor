@@ -177,14 +177,16 @@ namespace Diplom.Controllers
             return Ok();
         }
 
-        [HttpGet("changes/{schemeID}")]
+        [HttpGet("last-changes/{schemeID}")]
         public async Task<IEnumerable<CodeDifference>> GetLastChanges(int schemeID)
         {
             string Sid = userContextService.GetCurrentUserSid();
             var groups = userContextService.GetCurrentUserGroups();
 
             Scheme scheme = await context.Schemes
-                .Include(s => s.Versions)
+                .Include(s => s.Versions
+                    .OrderByDescending(v => v.Date)
+                    .Take(2))
                 .Include(s => s.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
                 .Include(s => s.Access_Group_Schema_Rights)
@@ -194,6 +196,9 @@ namespace Diplom.Controllers
                 s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
                 .FirstOrDefaultAsync(s => s.ID == schemeID);
 
+            if (scheme == null)
+                throw new UnauthorizedAccessException("Scheme is not available");
+
             if (scheme.Versions == null
                 || !scheme.Versions.Any()
                 || scheme.Versions.Count < 2)
@@ -201,14 +206,50 @@ namespace Diplom.Controllers
                 return new List<CodeDifference>();
             }
 
-            var allVersions = scheme.Versions.OrderByDescending(v => v.Date);
+            var latestVersion = scheme.Versions.First();
 
+            var secondToLatestVersion = scheme.Versions.Skip(1).First();
+            
 
-            var latestVersion = allVersions.First();
-            var latestVersionDto = VersionToDtoMapper.Map(latestVersion);
+            return CompareVersions(latestVersion, secondToLatestVersion);
+        }
 
-            var secondToLatestVersion = allVersions.Skip(1).First();
-            var secondToLatestVersionDto = VersionToDtoMapper.Map(secondToLatestVersion);
+        [HttpGet("changes/{schemeId}-{versionId}")]
+        public async Task<IEnumerable<CodeDifference>> GetLastChanges(int schemeId, int versionId)
+        {
+            string Sid = userContextService.GetCurrentUserSid();
+            var groups = userContextService.GetCurrentUserGroups();
+
+            Scheme scheme = await context.Schemes
+                .Include(s => s.Versions
+                    .OrderByDescending(v => v.Date)
+                    .Take(1))
+                .Include(s => s.Access_User_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Include(s => s.Access_Group_Schema_Rights)
+                    .ThenInclude(r => r.Access_Right)
+                .Where(s => s.UserID == Sid ||
+                    s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
+                    s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
+                .FirstOrDefaultAsync(s => s.ID == schemeId);
+
+            if (scheme == null)
+                throw new UnauthorizedAccessException("Scheme is not available");
+
+            Models.DB.Main.Version latestVersion = scheme.Versions.First();
+            Models.DB.Main.Version versionToCompare = await context.Versions
+                .FirstOrDefaultAsync(v => v.Id == versionId);
+
+            if (versionToCompare == null)
+                throw new Exception("Verrsion not found");
+
+            return CompareVersions(versionToCompare, latestVersion);
+        }
+
+        private static List<CodeDifference> CompareVersions(Models.DB.Main.Version versionToCompare, Models.DB.Main.Version secondVersionToCompare)
+        {
+            var versionToCompareDto = VersionToDtoMapper.Map(versionToCompare);
+            var secondVersionToCompareDto = VersionToDtoMapper.Map(secondVersionToCompare);
 
             CompareLogic compareLogic = new CompareLogic();
 
@@ -227,8 +268,8 @@ namespace Diplom.Controllers
                 };
 
             ComparisonResult result = compareLogic.Compare(
-                latestVersionDto.Code,
-                secondToLatestVersionDto.Code);
+                versionToCompareDto.Code,
+                secondVersionToCompareDto.Code);
 
             List<CodeDifference> differences = new List<CodeDifference>();
 
@@ -239,11 +280,23 @@ namespace Diplom.Controllers
 
             foreach (var difference in result.Differences)
             {
+                var propertyName = difference.PropertyName;
+
+                if (propertyName == "Blocks" ||
+                    propertyName == "DataFlows" ||
+                    propertyName == "Connections" ||
+                    propertyName == "Styles")
+                {
+                    continue;
+                }
+
                 var codeDiffernce = new CodeDifference
                 {
                     PropertyName = difference.PropertyName,
-                    FirstObjectValue = difference.Object1Value,
-                    SecondObjectValue = difference.Object2Value
+                    FirstObjectValue = difference.Object1, 
+                    SecondObjectValue = difference.Object2
+                    //FirstObjectValue = difference.Object1Value,
+                    //SecondObjectValue = difference.Object2Value
                 };
 
                 differences.Add(codeDiffernce);
