@@ -30,6 +30,31 @@
       @download-png="onDownloadPng"
     />
 
+    <VersionBrowserModal
+      v-if="isVersionsDialogOpen"
+      :from="versionFilterFrom"
+      :to="versionFilterTo"
+      :versions="filteredVersions"
+      :loading="isLoadingVersions"
+      :error="versionsError"
+      :has-requested="hasRequestedVersions"
+      @close="closeVersionsDialog"
+      @submit="requestVersions"
+      @update:from="versionFilterFrom = $event"
+      @update:to="versionFilterTo = $event"
+      @open-version="openComparison"
+    />
+
+    <VersionComparisonModal
+      v-if="isComparisonDialogOpen && selectedVersion"
+      :selected-version="selectedVersion"
+      :latest-version="latestVersion"
+      :changes="comparisonChanges"
+      :loading="isLoadingComparison"
+      :error="comparisonError"
+      @close="closeComparison"
+    />
+
     <div class="workspace-shell">
       <div
         v-if="hasSidePanels"
@@ -217,8 +242,11 @@ import DiagnosticsPanel from './DiagnosticsPanel.vue'
 import GraphEdge from './GraphEdge.vue'
 import GraphNode from './GraphNode.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
+import VersionBrowserModal from '../Versioning/VersionBrowserModal.vue'
+import VersionComparisonModal from '../Versioning/VersionComparisonModal.vue'
 import EditorToolbar from '../EditorToolbar/EditorToolbar.vue'
 import { useFlowEditorPngExport } from '../../composables/useFlowEditorPngExport'
+import { useFlowEditorVersions } from '../../composables/useFlowEditorVersions'
 import { useFlowEditorWorkspace } from '../../composables/useFlowEditorWorkspace'
 
 const canvas = ref<HTMLElement | null>(null)
@@ -275,6 +303,7 @@ const {
   showCommentActions,
   canResolveComment,
   getAbsoluteNodePosition,
+  getDescendantNodes,
   addNode,
   startConnectionMode,
   toggleCommentMode,
@@ -392,6 +421,25 @@ const canvasContentStyle = computed(() => ({
   width: `${canvasContentLogicalSize.value.width}px`,
   height: `${canvasContentLogicalSize.value.height}px`,
 }))
+const {
+  isVersionsDialogOpen,
+  versionFilterFrom,
+  versionFilterTo,
+  hasRequestedVersions,
+  isLoadingVersions,
+  versionsError,
+  filteredVersions,
+  latestVersion,
+  selectedVersion,
+  isComparisonDialogOpen,
+  comparisonChanges,
+  isLoadingComparison,
+  comparisonError,
+  closeVersionsDialog,
+  requestVersions,
+  openComparison,
+  closeComparison,
+} = useFlowEditorVersions()
 let zoomFlashTimeout: number | null = null
 let commentTargetFlashTimeout: number | null = null
 

@@ -39,6 +39,16 @@ type DiagramNodeSnapshot = Pick<Node, 'id'>
 
 type DiagramCollaborationStore = ReturnType<typeof useDiagramCollaborationStore>
 
+function summarizeRequest(request: SchemeHubCodeRequest) {
+  return {
+    blocks: request.blocks?.length ?? 0,
+    dataFlows: request.dataFlows?.length ?? 0,
+    connections: request.connections?.length ?? 0,
+    blockStyles: request.styles?.blocks?.length ?? 0,
+    connectionStyles: request.styles?.connections?.length ?? 0,
+  }
+}
+
 function normalizeLockScope(scope: DiagramOwnedLockScope): DiagramOwnedLockScope {
   return {
     kind: scope.kind,
@@ -241,8 +251,27 @@ export function createDiagramCollaborationUseCases(
     const schemeId = getNumericSchemeId()
     if (!schemeId || !collaborationStore) return
 
-    await collaborationStore.sendChanges(schemeId, request)
-    queuePendingUpdate(request)
+    const summary = summarizeRequest(request)
+    console.debug('[diagram] sendPatch:start', {
+      schemeId,
+      summary,
+    })
+
+    try {
+      await collaborationStore.sendChanges(schemeId, request)
+      queuePendingUpdate(request)
+      console.debug('[diagram] sendPatch:success', {
+        schemeId,
+        summary,
+      })
+    } catch (error) {
+      console.error('[diagram] sendPatch:error', {
+        schemeId,
+        summary,
+        error,
+      })
+      throw error
+    }
   }
 
   async function flushPendingUpdatesOnRequest(schemeId?: number): Promise<void> {

@@ -21,6 +21,16 @@ export type DiagramOwnedLockScope = {
   edges: string[]
 }
 
+function summarizeRequest(changes: SchemeHubCodeRequest) {
+  return {
+    blocks: changes.blocks?.length ?? 0,
+    dataFlows: changes.dataFlows?.length ?? 0,
+    connections: changes.connections?.length ?? 0,
+    blockStyles: changes.styles?.blocks?.length ?? 0,
+    connectionStyles: changes.styles?.connections?.length ?? 0,
+  }
+}
+
 export const useDiagramCollaborationStore = defineStore('diagramCollaboration', () => {
   const client = createSchemeHubClient()
 
@@ -293,7 +303,32 @@ export const useDiagramCollaborationStore = defineStore('diagramCollaboration', 
   }
 
   async function sendChanges(schemeId: number, changes: SchemeHubCodeRequest): Promise<void> {
-    await client.sendChanges(schemeId, changes)
+    const summary = summarizeRequest(changes)
+    console.debug('[diagram-collab] sendChanges:start', {
+      schemeId,
+      connectionStatus: connectionStatus.value,
+      joinedSchemeId: joinedSchemeId.value,
+      summary,
+    })
+
+    try {
+      await client.sendChanges(schemeId, changes)
+      console.debug('[diagram-collab] sendChanges:success', {
+        schemeId,
+        connectionStatus: connectionStatus.value,
+        joinedSchemeId: joinedSchemeId.value,
+        summary,
+      })
+    } catch (error) {
+      console.error('[diagram-collab] sendChanges:error', {
+        schemeId,
+        connectionStatus: connectionStatus.value,
+        joinedSchemeId: joinedSchemeId.value,
+        summary,
+        error,
+      })
+      throw error
+    }
   }
 
   async function lockElement(schemeId: number, elementType: string, elementId: string): Promise<void> {
