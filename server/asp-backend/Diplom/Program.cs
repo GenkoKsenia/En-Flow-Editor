@@ -46,7 +46,8 @@ builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddSingleton<IUserTracker, UserTrackerDB>();
-builder.Services.AddHostedService<VersionCreatorService>();
+
+//builder.Services.AddHostedService<VersionCreatorService>();
 
 builder.Services.AddHttpClient();
 
@@ -75,7 +76,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("VueApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+        policy.WithOrigins("http://localhost:5173")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
