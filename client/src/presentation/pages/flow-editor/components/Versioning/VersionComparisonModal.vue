@@ -11,18 +11,26 @@
         <div v-else-if="displayedChanges.length" class="comparison-sidebar__content">
           <div class="comparison-diff-list">
             <div
-              v-for="(change, index) in displayedChanges"
-              :key="`${change.propertyName}-${index}`"
+              v-for="change in displayedChanges"
+              :key="change.propertyName"
               class="comparison-diff-row"
             >
               <div class="comparison-diff-row__path">{{ formatPropertyName(change.propertyName) }}</div>
-              <div class="comparison-diff-row__preview">
-                <span class="comparison-diff-row__preview-label comparison-diff-row__preview-label--before">Было</span>
-                <span class="comparison-diff-row__preview-value">{{ formatBeforeValue(change) }}</span>
-              </div>
-              <div class="comparison-diff-row__preview">
-                <span class="comparison-diff-row__preview-label comparison-diff-row__preview-label--after">Стало</span>
-                <span class="comparison-diff-row__preview-value">{{ formatAfterValue(change) }}</span>
+              <div class="comparison-diff-row__table">
+                <div class="comparison-diff-row__table-header">
+                  <span class="comparison-diff-row__table-spacer" />
+                  <span class="comparison-diff-row__preview-label comparison-diff-row__preview-label--before">Было</span>
+                  <span class="comparison-diff-row__preview-label comparison-diff-row__preview-label--after">Стало</span>
+                </div>
+                <div
+                  v-for="(entry, index) in change.entries"
+                  :key="`${change.propertyName}-${index}`"
+                  class="comparison-diff-row__table-row"
+                >
+                  <span class="comparison-diff-row__entry-label">{{ entry.label || 'Значение' }}</span>
+                  <span class="comparison-diff-row__entry-value comparison-diff-row__entry-value--before">{{ entry.before }}</span>
+                  <span class="comparison-diff-row__entry-value comparison-diff-row__entry-value--after">{{ entry.after }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -43,16 +51,16 @@
         </div>
       </section>
 
-      <section class="comparison-column">
+      <section v-if="latestVersion" class="comparison-column">
         <header class="comparison-column__header">
           <div>
-            <h3>Текущее состояние</h3>
-            <p>То, что сейчас на экране</p>
+            <h3>{{ formatVersionDate(latestVersion.date) }}</h3>
+            <p>Последняя версия</p>
           </div>
         </header>
 
         <div class="comparison-column__preview">
-          <VersionSnapshotImage :code="currentCode" />
+          <VersionSnapshotImage :code="latestVersion.code" />
         </div>
       </section>
     </div>
@@ -70,7 +78,7 @@ import { parseVersionSnapshotGraph } from './versionSnapshotGraph'
 
 const props = defineProps<{
   selectedVersion: SchemeVersion
-  currentCode: unknown
+  latestVersion: SchemeVersion | null
   changes: CodeDifferenceDto[]
   loading: boolean
   error: string | null
@@ -86,7 +94,16 @@ type VersionDiffMaps = {
   dataFlowLabels: Map<string, string>
 }
 
-type DisplayedChange = CodeDifferenceDto
+type DisplayedChangeEntry = {
+  label: string
+  before: string
+  after: string
+}
+
+type DisplayedChange = {
+  propertyName: string
+  entries: DisplayedChangeEntry[]
+}
 
 type VersionCodeCounts = {
   blocks: number
@@ -143,7 +160,9 @@ const versionDiffMaps = computed<VersionDiffMaps>(() => {
   }
 
   collectFromCode(props.selectedVersion.code)
-  collectFromCode(props.currentCode)
+  if (props.latestVersion) {
+    collectFromCode(props.latestVersion.code)
+  }
 
   return {
     blockLabels,
@@ -153,10 +172,10 @@ const versionDiffMaps = computed<VersionDiffMaps>(() => {
 })
 
 const selectedVersionCode = computed<ParsedVersionCode>(() => parseVersionCode(props.selectedVersion.code))
-const currentVersionCode = computed<ParsedVersionCode>(() => parseVersionCode(props.currentCode))
+const latestVersionCode = computed<ParsedVersionCode>(() => parseVersionCode(props.latestVersion?.code ?? null))
 
 const displayedChanges = computed<DisplayedChange[]>(() => {
-  const summaryRows = buildCollectionSummaryRows(selectedVersionCode.value, currentVersionCode.value)
+  const summaryRows = buildCollectionSummaryRows(selectedVersionCode.value, latestVersionCode.value)
   const summaryKeys = new Set(summaryRows.map(change => change.propertyName))
 
   const filteredRows = props.changes.filter(change => {
@@ -167,7 +186,7 @@ const displayedChanges = computed<DisplayedChange[]>(() => {
     return !isObjectLevelCollectionChange(change.propertyName)
   })
 
-  return [...summaryRows, ...filteredRows]
+  return groupChangesByElement([...summaryRows, ...filteredRows])
 })
 
 function pad(value: number): string {
@@ -246,14 +265,14 @@ function createSummaryChange(propertyName: string, before: number, after: number
 
 function buildCollectionSummaryRows(
   selectedCode: ParsedVersionCode,
-  currentCode: ParsedVersionCode,
+  latestCode: ParsedVersionCode,
 ): DisplayedChange[] {
-  if (!selectedCode || !currentCode) {
+  if (!selectedCode || !latestCode) {
     return []
   }
 
   const before = getVersionCodeCounts(selectedCode)
-  const after = getVersionCodeCounts(currentCode)
+  const after = getVersionCodeCounts(latestCode)
   const rows: DisplayedChange[] = []
 
   if (before.blocks !== after.blocks) {
@@ -295,6 +314,77 @@ function formatCompactValue(value: string | null): string {
   return `${normalized.slice(0, 46)}...`
 }
 
+function splitChangeProperty(propertyName: string): { groupKey: string; fieldLabel: string } {
+  const collectionMatch = propertyName.match(
+    /^(Blocks\[Id:[^\]]+\]|Connections\[Id:[^\]]+\]|DataFlows\[DataKey:[^\]]+\]|Styles\.Blocks\[ElementId:[^\]]+\]|Styles\.Connections\[ElementId:[^\]]+\])(?:\.(.+))?$/,
+  )
+
+  if (!collectionMatch) {
+    return {
+      groupKey: propertyName,
+      fieldLabel: '',
+    }
+  }
+
+  return {
+    groupKey: collectionMatch[1],
+    fieldLabel: collectionMatch[2] ?? '',
+  }
+}
+
+function formatEntryLabel(label: string): string {
+  if (!label) return ''
+
+  const labels: Record<string, string> = {
+    Name: 'Название',
+    'Position.X': 'Координата X',
+    'Position.Y': 'Координата Y',
+    Width: 'Ширина',
+    Height: 'Высота',
+    ParentId: 'Родитель',
+    Label: 'Подпись',
+    StartBlock: 'Начальный блок',
+    EndBlock: 'Конечный блок',
+    StartSide: 'Сторона начала',
+    EndSide: 'Сторона конца',
+    DataName: 'Название данных',
+    BorderColor: 'Цвет рамки',
+    BorderWidth: 'Толщина рамки',
+    BorderRadius: 'Радиус рамки',
+    BorderStyle: 'Стиль рамки',
+    Color: 'Цвет',
+    Type: 'Тип',
+  }
+
+  return labels[label] ?? label
+}
+
+function groupChangesByElement(changes: CodeDifferenceDto[]): DisplayedChange[] {
+  const grouped = new Map<string, DisplayedChange>()
+
+  changes.forEach(change => {
+    const { groupKey, fieldLabel } = splitChangeProperty(change.propertyName)
+    const entry: DisplayedChangeEntry = {
+      label: formatEntryLabel(fieldLabel),
+      before: formatCompactValue(change.firstObjectValue),
+      after: formatCompactValue(change.secondObjectValue),
+    }
+
+    const existing = grouped.get(groupKey)
+    if (existing) {
+      existing.entries.push(entry)
+      return
+    }
+
+    grouped.set(groupKey, {
+      propertyName: groupKey,
+      entries: [entry],
+    })
+  })
+
+  return Array.from(grouped.values())
+}
+
 function formatPropertyName(propertyName: string): string {
   const { blockLabels, edgeLabels, dataFlowLabels } = versionDiffMaps.value
 
@@ -318,13 +408,6 @@ function formatPropertyName(propertyName: string): string {
     .replace(/Styles\.Connections\[ElementId:([^\]]+)\]/g, (_, id: string) => `Styles.Connections[${edgeLabels.get(id) ?? id}]`)
 }
 
-function formatBeforeValue(change: CodeDifferenceDto): string {
-  return formatCompactValue(change.firstObjectValue)
-}
-
-function formatAfterValue(change: CodeDifferenceDto): string {
-  return formatCompactValue(change.secondObjectValue)
-}
 </script>
 
 <style scoped>
@@ -420,15 +503,29 @@ function formatAfterValue(change: CodeDifferenceDto): string {
   word-break: break-word;
 }
 
-.comparison-diff-row__preview {
+.comparison-diff-row__table {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comparison-diff-row__table-header,
+.comparison-diff-row__table-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 120px) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.comparison-diff-row__table-header {
+  padding-bottom: 2px;
+}
+
+.comparison-diff-row__table-spacer {
+  display: block;
 }
 
 .comparison-diff-row__preview-label {
-  flex: 0 0 38px;
   font-size: 11px;
   font-weight: 700;
 }
@@ -441,13 +538,41 @@ function formatAfterValue(change: CodeDifferenceDto): string {
   color: #1f9d55;
 }
 
-.comparison-diff-row__preview-value {
+.comparison-diff-row__entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
-  color: #475569;
+}
+
+.comparison-diff-row__entry-label {
   font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.01em;
+}
+
+.comparison-diff-row__entry-value {
+  min-width: 0;
+  color: #1f2937;
+  font-size: 12px;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.comparison-diff-row__entry-value--before,
+.comparison-diff-row__entry-value--after {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.comparison-diff-row__entry-value--before {
+  border: 1px solid #f3d0d5;
+}
+
+.comparison-diff-row__entry-value--after {
+  border: 1px solid #cfe8d6;
 }
 
 .comparison-column__header {
@@ -475,6 +600,15 @@ function formatAfterValue(change: CodeDifferenceDto): string {
 
   .comparison-column {
     min-height: 520px;
+  }
+
+  .comparison-diff-row__table-header,
+  .comparison-diff-row__table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-diff-row__table-spacer {
+    display: none;
   }
 }
 </style>

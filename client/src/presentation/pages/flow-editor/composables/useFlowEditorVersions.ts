@@ -49,7 +49,7 @@ export function useFlowEditorVersions() {
   const diagramStore = useDiagramStore()
   const uiStore = useEditorUiStore()
 
-  const { schemeId, currentVersionId, lastPersistedJson, lastSerializedJson } = storeToRefs(diagramStore)
+  const { schemeId, currentVersionId } = storeToRefs(diagramStore)
 
   const initialRange = createDefaultVersionRange()
   const versionFilterFrom = ref(initialRange.from)
@@ -70,13 +70,13 @@ export function useFlowEditorVersions() {
   const selectedVersion = computed(() =>
     fetchedVersions.value.find(version => version.id === selectedVersionId.value) ?? null,
   )
-  const currentDiagramCode = computed(() => lastSerializedJson.value || null)
+  const latestVersion = computed(() => fetchedVersions.value[0] ?? null)
   const filteredVersions = computed(() => {
     if (!hasRequestedVersions.value) return []
 
     const from = normalizeDateTimeLocal(versionFilterFrom.value)
     const to = normalizeDateTimeLocal(versionFilterTo.value)
-    const activeVersionId = currentVersionId.value ?? fetchedVersions.value[0]?.id ?? null
+    const activeVersionId = currentVersionId.value ?? latestVersion.value?.id ?? null
 
     return fetchedVersions.value.filter(version =>
       version.id !== activeVersionId
@@ -154,10 +154,6 @@ export function useFlowEditorVersions() {
     comparisonChanges.value = []
 
     try {
-      if (lastSerializedJson.value !== lastPersistedJson.value) {
-        await diagramStore.saveCurrentVersion()
-      }
-
       comparisonChanges.value = await getVersionChanges(currentSchemeId, versionId)
     } catch (error) {
       comparisonError.value = error instanceof Error ? error.message : 'Не удалось загрузить изменения между версиями'
@@ -199,7 +195,7 @@ export function useFlowEditorVersions() {
     isLoadingVersions,
     versionsError,
     filteredVersions,
-    currentDiagramCode,
+    latestVersion,
     selectedVersion,
     isComparisonDialogOpen,
     comparisonChanges,
