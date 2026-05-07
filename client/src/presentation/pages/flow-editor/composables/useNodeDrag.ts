@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 
 import type { Edge, Node } from '@/domains/graph'
-import { roundCoord } from '@/domains/diagram'
+import { getRelativePositionWithinParent, roundCoord } from '@/domains/diagram'
 
 type DiagramDragApi = {
   getAbsoluteNodePosition(node: Node): { x: number; y: number }
@@ -51,6 +51,11 @@ type UseNodeDragOptions = {
   containerPadding?: number
 }
 
+type CommentTargetDescriptor = {
+  type: 'node' | 'edge'
+  id: string
+}
+
 export function useNodeDrag({
   nodes,
   edges,
@@ -93,6 +98,34 @@ export function useNodeDrag({
     return Array.from(ids)
   }
 
+  function setCommentTransforms(targets: CommentTargetDescriptor[], deltaX: number, deltaY: number): void {
+    if (targets.length === 0) return
+
+    const targetSet = new Set(targets.map(target => `${target.type}:${target.id}`))
+    document.querySelectorAll<HTMLElement>('.comment-bubble').forEach(commentElement => {
+      const targetType = commentElement.dataset.commentTargetType
+      const targetId = commentElement.dataset.commentTargetId
+      if (!targetType || !targetId) return
+      if (!targetSet.has(`${targetType}:${targetId}`)) return
+
+      commentElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`
+    })
+  }
+
+  function clearCommentTransforms(targets: CommentTargetDescriptor[]): void {
+    if (targets.length === 0) return
+
+    const targetSet = new Set(targets.map(target => `${target.type}:${target.id}`))
+    document.querySelectorAll<HTMLElement>('.comment-bubble').forEach(commentElement => {
+      const targetType = commentElement.dataset.commentTargetType
+      const targetId = commentElement.dataset.commentTargetId
+      if (!targetType || !targetId) return
+      if (!targetSet.has(`${targetType}:${targetId}`)) return
+
+      commentElement.style.removeProperty('transform')
+    })
+  }
+
   function setTemporaryTransforms(nodeIds: string[], edgeIds: string[], deltaX: number, deltaY: number): void {
     nodeIds.forEach(nodeId => {
       const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null
@@ -107,6 +140,11 @@ export function useNodeDrag({
       edgeElement.style.setProperty('--drag-dx', `${deltaX}px`)
       edgeElement.style.setProperty('--drag-dy', `${deltaY}px`)
     })
+
+    setCommentTransforms([
+      ...nodeIds.map(id => ({ type: 'node' as const, id })),
+      ...edgeIds.map(id => ({ type: 'edge' as const, id })),
+    ], deltaX, deltaY)
   }
 
   function clearTemporaryTransforms(nodeIds: string[], edgeIds: string[]): void {
@@ -123,6 +161,11 @@ export function useNodeDrag({
       edgeElement?.style.removeProperty('--drag-dx')
       edgeElement?.style.removeProperty('--drag-dy')
     })
+
+    clearCommentTransforms([
+      ...nodeIds.map(id => ({ type: 'node' as const, id })),
+      ...edgeIds.map(id => ({ type: 'edge' as const, id })),
+    ])
   }
 
   async function startGroupDrag(nodeId: string, event: MouseEvent): Promise<void> {
@@ -243,6 +286,25 @@ export function useNodeDrag({
     const startNodeX = absolutePos.x
     const startNodeY = absolutePos.y
     const children = documentStore.getDescendantNodes(nodeId)
+    const initialNodePosition = { ...node.position }
+    const draggedNodeIds = [nodeId, ...children.map(child => child.id)]
+    const initialPassThroughBreakpoints = new Map(
+      Array.from(new Set(
+        draggedNodeIds.flatMap(draggedId => {
+          const draggedNode = nodes.value.find(item => item.id === draggedId)
+          return draggedNode?.passThroughEdges ?? []
+        }),
+      )).map(edgeId => {
+        const edge = edges.value.find(item => item.id === edgeId)
+        return [
+          edgeId,
+          {
+            breakpointX: edge?.breakpointX,
+            breakpointY: edge?.breakpointY,
+          },
+        ] as const
+      }),
+    )
 
     const tempNode = {
       dx: 0,
@@ -250,6 +312,45 @@ export function useNodeDrag({
     }
 
     let potentialParentId: string | null = node.parentId ?? null
+
+    const applyPreviewPosition = (absoluteX: number, absoluteY: number) => {
+      if (node.parentId) {
+        const parent = nodes.value.find(item => item.id === node.parentId)
+        if (parent) {
+          const parentAbsolute = documentStore.getAbsoluteNodePosition(parent)
+          node.position = getRelativePositionWithinParent(
+            { x: absoluteX, y: absoluteY },
+            parentAbsolute,
+            containerPadding,
+          )
+        } else {
+          node.position = {
+            x: roundCoord(Math.max(0, absoluteX)),
+            y: roundCoord(Math.max(0, absoluteY)),
+          }
+        }
+      } else {
+        node.position = {
+          x: roundCoord(Math.max(0, absoluteX)),
+          y: roundCoord(Math.max(0, absoluteY)),
+        }
+      }
+
+      draggedNodeIds.forEach(draggedId => {
+        documentStore.maintainPassThroughEdges(draggedId)
+      })
+    }
+
+    const restorePreviewState = () => {
+      node.position = initialNodePosition
+
+      initialPassThroughBreakpoints.forEach((breakpoint, edgeId) => {
+        const edge = edges.value.find(item => item.id === edgeId)
+        if (!edge) return
+        edge.breakpointX = breakpoint.breakpointX
+        edge.breakpointY = breakpoint.breakpointY
+      })
+    }
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const scale = zoom.value || 1
@@ -259,19 +360,10 @@ export function useNodeDrag({
       tempNode.dx = deltaX
       tempNode.dy = deltaY
 
-      const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null
-      if (nodeElement) {
-        nodeElement.style.setProperty('--drag-dx', `${deltaX}px`)
-        nodeElement.style.setProperty('--drag-dy', `${deltaY}px`)
-      }
-
-      children.forEach(child => {
-        const childElement = document.querySelector(`[data-node-id="${child.id}"]`) as HTMLElement | null
-        if (childElement) {
-          childElement.style.setProperty('--drag-dx', `${deltaX}px`)
-          childElement.style.setProperty('--drag-dy', `${deltaY}px`)
-        }
-      })
+      applyPreviewPosition(
+        roundCoord(Math.max(0, startNodeX + deltaX)),
+        roundCoord(Math.max(0, startNodeY + deltaY)),
+      )
 
       const currentX = startNodeX + deltaX
       const currentY = startNodeY + deltaY
@@ -284,20 +376,6 @@ export function useNodeDrag({
       const newAbsoluteX = roundCoord(Math.max(0, startNodeX + tempNode.dx))
       const newAbsoluteY = roundCoord(Math.max(0, startNodeY + tempNode.dy))
 
-      const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null
-      if (nodeElement) {
-        nodeElement.style.removeProperty('--drag-dx')
-        nodeElement.style.removeProperty('--drag-dy')
-      }
-
-      children.forEach(child => {
-        const childElement = document.querySelector(`[data-node-id="${child.id}"]`) as HTMLElement | null
-        if (childElement) {
-          childElement.style.removeProperty('--drag-dx')
-          childElement.style.removeProperty('--drag-dy')
-        }
-      })
-
       uiStore.setDragging(false)
       uiStore.setPotentialParentId(null)
       document.removeEventListener('mousemove', onMouseMove)
@@ -305,7 +383,11 @@ export function useNodeDrag({
 
       if (didMove) {
         documentStore.finalizeNodeDrag(nodeId, potentialParentId, newAbsoluteX, newAbsoluteY, containerPadding)
-        void documentStore.finishNodeUpdate(nodeId, { affectedEdgeIds: [...(node.passThroughEdges ?? [])] })
+        void documentStore.finishNodeUpdate(nodeId, {
+          affectedEdgeIds: Array.from(initialPassThroughBreakpoints.keys()),
+        })
+      } else {
+        restorePreviewState()
       }
 
       void documentStore.endNodeEdit(nodeId)

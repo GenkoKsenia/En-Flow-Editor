@@ -7,6 +7,9 @@
       'comment-bubble--resolved': isResolved,
     }"
     :style="styleObject"
+    :data-comment-id="comment.id"
+    :data-comment-target-type="comment.targetType"
+    :data-comment-target-id="comment.targetId ?? ''"
     @mousedown.stop
     @click.stop
   >
@@ -15,6 +18,15 @@
         <span class="comment-author">{{ comment.author }}</span>
         <span class="comment-time">{{ formattedCreatedAt }}</span>
       </div>
+      <button
+        v-if="showTargetJump"
+        class="comment-target-link"
+        type="button"
+        aria-label="Перейти к элементу"
+        @click.stop="$emit('focus-target', comment.id)"
+      >
+        ↗
+      </button>
       <button
         v-if="showResolveToggle"
         class="comment-resolve"
@@ -80,6 +92,7 @@ interface Props {
   autoFocus?: boolean
   isResolved?: boolean
   showResolveToggle?: boolean
+  showTargetJump?: boolean
 }
 
 const props = defineProps<Props>()
@@ -90,6 +103,7 @@ const emit = defineEmits<{
   cancel: [commentId: string]
   delete: [commentId: string]
   'toggle-resolved': [commentId: string]
+  'focus-target': [commentId: string]
 }>()
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
@@ -97,6 +111,7 @@ const isEditable = computed(() => props.isEditable ?? (props.comment.status === 
 const showActions = computed(() => props.showActions ?? (props.comment.status === 'draft' || props.comment.status === 'error'))
 const isResolved = computed(() => props.isResolved ?? false)
 const showResolveToggle = computed(() => props.showResolveToggle ?? true)
+const showTargetJump = computed(() => props.showTargetJump ?? (props.comment.targetType !== 'canvas' && Boolean(props.comment.targetId)))
 const canSave = computed(() => props.comment.text.trim().length > 0)
 const formattedCreatedAt = computed(() => formatCommentDateTime(props.comment.createdAt))
 
@@ -163,6 +178,7 @@ function onInput(event: Event): void {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  transform: translate(var(--drag-dx, 0px), var(--drag-dy, 0px));
 }
 
 .comment-bubble--readonly {
@@ -180,7 +196,7 @@ function onInput(event: Event): void {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-right: 52px;
+  padding-right: 78px;
   font-size: 12px;
   color: #6c757d;
   cursor: move;
@@ -222,6 +238,22 @@ function onInput(event: Event): void {
   line-height: 1;
 }
 
+.comment-target-link {
+  position: absolute;
+  top: 0;
+  right: 48px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #495057;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .comment-resolve {
   position: absolute;
   top: 0;
@@ -239,9 +271,9 @@ function onInput(event: Event): void {
 }
 
 .comment-resolve--active {
-  border-color: #0f766e;
-  background: rgba(15, 118, 110, 0.14);
-  color: #0f766e;
+  border-color: #1f9d55;
+  background: rgba(31, 157, 85, 0.14);
+  color: #1f9d55;
 }
 
 .comment-resolve:disabled {
@@ -254,16 +286,21 @@ function onInput(event: Event): void {
   color: #c92a2a;
 }
 
+.comment-target-link:hover {
+  border-color: #0b6bcb;
+  color: #0b6bcb;
+}
+
 .comment-resolve:hover:not(:disabled) {
-  border-color: #0f766e;
-  color: #0f766e;
+  border-color: #1f9d55;
+  color: #1f9d55;
 }
 
 .comment-bubble textarea {
   width: 100%;
   min-height: 60px;
   border: 1px solid #e1e5ea;
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 6px;
   font-size: 13px;
   resize: vertical;
@@ -277,7 +314,7 @@ function onInput(event: Event): void {
 
 .comment-action {
   border: 1px solid #d0d7de;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
@@ -294,8 +331,8 @@ function onInput(event: Event): void {
 }
 
 .comment-action--primary {
-  background: #0f766e;
-  border-color: #0f766e;
+  background: #1f9d55;
+  border-color: #1f9d55;
   color: #fff;
 }
 

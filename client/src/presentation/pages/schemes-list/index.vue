@@ -12,7 +12,7 @@
         @toggle-favorites-filter="toggleFavoritesFilter"
         @create="openCreateModal"
       />
-      <div v-if="deleteError" class="inline-error">{{ deleteError }}</div>
+      <div v-if="actionError" class="inline-error">{{ actionError }}</div>
 
       <SchemesList
         :schemes="filteredSchemes"
@@ -49,7 +49,12 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { deleteScheme } from '@/domains/schemes'
+import {
+  addSchemeToFavorites,
+  deleteScheme,
+  removeSchemeFromFavorites,
+  updateSchemeName,
+} from '@/domains/schemes'
 import { useSchemesList } from '@/domains/schemes'
 
 import CreateSchemeModal from './components/CreateSchemeModal.vue'
@@ -67,7 +72,9 @@ const renameDraft = ref('')
 const deletingSchemeId = ref<string | null>(null)
 const isCreateModalOpen = ref(false)
 const isDeleting = ref(false)
-const deleteError = ref('')
+const isSavingRename = ref(false)
+const favoritePendingId = ref<string | null>(null)
+const actionError = ref('')
 const { data: schemes, error, isLoading, refetch } = useSchemesList()
 
 const filteredSchemes = computed(() => {
@@ -114,12 +121,33 @@ function getUpdatedAtTimestamp(isoDate: string | null): number {
   return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp
 }
 
-function toggleFavorite(id: string): void {
-  schemes.value = schemes.value.map(item => (
-    item.id === id
-      ? { ...item, favorite: !item.favorite }
-      : item
-  ))
+async function toggleFavorite(id: string): Promise<void> {
+  if (favoritePendingId.value === id) return
+
+  const scheme = schemes.value.find(item => item.id === id)
+  if (!scheme) return
+
+  favoritePendingId.value = id
+  actionError.value = ''
+
+  try {
+    if (scheme.favorite) {
+      await removeSchemeFromFavorites(id)
+    } else {
+      await addSchemeToFavorites(id)
+    }
+
+    schemes.value = schemes.value.map(item => (
+      item.id === id
+        ? { ...item, favorite: !item.favorite }
+        : item
+    ))
+  } catch (favoriteCause) {
+    console.error('Не удалось обновить избранное', favoriteCause)
+    actionError.value = 'Не удалось обновить избранное'
+  } finally {
+    favoritePendingId.value = null
+  }
 }
 
 function openScheme(schemeId: string): void {
@@ -143,6 +171,7 @@ async function handleSchemeCreated(): Promise<void> {
 
 function toggleMenu(id: string): void {
   if (editingSchemeId.value === id) return
+  actionError.value = ''
   deletingSchemeId.value = null
   openedMenuId.value = openedMenuId.value === id ? null : id
 }
@@ -150,20 +179,48 @@ function toggleMenu(id: string): void {
 function startRename(id: string): void {
   const scheme = schemes.value.find(item => item.id === id)
   if (!scheme) return
+  actionError.value = ''
   deletingSchemeId.value = null
   openedMenuId.value = null
   editingSchemeId.value = id
   renameDraft.value = scheme.name
 }
 
-function saveRename(id: string): void {
+async function saveRename(id: string): Promise<void> {
+  if (isSavingRename.value) return
+
   const scheme = schemes.value.find(item => item.id === id)
   if (!scheme) return
+
   const nextName = renameDraft.value.trim()
   if (!nextName) return
-  scheme.name = nextName
-  editingSchemeId.value = null
-  renameDraft.value = ''
+
+  if (scheme.name === nextName) {
+    editingSchemeId.value = null
+    renameDraft.value = ''
+    return
+  }
+
+  isSavingRename.value = true
+  actionError.value = ''
+
+  try {
+    const updatedScheme = await updateSchemeName(id, nextName)
+
+    schemes.value = schemes.value.map(item => (
+      item.id === id
+        ? { ...item, name: updatedScheme.name }
+        : item
+    ))
+
+    editingSchemeId.value = null
+    renameDraft.value = ''
+  } catch (renameCause) {
+    console.error('Не удалось переименовать схему', renameCause)
+    actionError.value = 'Не удалось переименовать схему'
+  } finally {
+    isSavingRename.value = false
+  }
 }
 
 function cancelRename(): void {
@@ -172,7 +229,7 @@ function cancelRename(): void {
 }
 
 function startDeleteConfirm(id: string): void {
-  deleteError.value = ''
+  actionError.value = ''
   openedMenuId.value = null
   deletingSchemeId.value = id
 }
@@ -186,7 +243,7 @@ async function confirmDelete(id: string): Promise<void> {
   if (isDeleting.value) return
 
   isDeleting.value = true
-  deleteError.value = ''
+  actionError.value = ''
 
   try {
     await deleteScheme(id)
@@ -201,7 +258,7 @@ async function confirmDelete(id: string): Promise<void> {
     openedMenuId.value = null
   } catch (deleteCause) {
     console.error('Не удалось удалить схему', deleteCause)
-    deleteError.value = 'Не удалось удалить схему'
+    actionError.value = 'Не удалось удалить схему'
   } finally {
     isDeleting.value = false
   }

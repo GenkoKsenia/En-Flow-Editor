@@ -34,8 +34,19 @@ export function useFlowEditorActions() {
   }
 
   async function clearSelection(): Promise<void> {
-    await releaseSelectionLock()
+    const selectedEdgeIds = [...uiStore.selectedEdgeIds]
+    const selectedNodeIds = [...uiStore.selectedNodeIds]
+
     uiStore.clearSelection()
+
+    await Promise.all(selectedEdgeIds.map(async edgeId => {
+      await diagramStore.endEdgeEdit(edgeId)
+    }))
+    await Promise.all(selectedNodeIds.map(async nodeId => {
+      await diagramStore.endNodeEdit(nodeId)
+    }))
+
+    await releaseSelectionLock()
   }
 
   const toggleCommentMode = () => uiStore.toggleCommentMode()
@@ -131,6 +142,30 @@ export function useFlowEditorActions() {
       if (previousNodeCount === 0 && previousEdgeCount === 0) return
 
       void releaseSelectionLock()
+    },
+  )
+
+  watch(
+    () => ({
+      nodeIds: [...uiStore.selectedNodeIds],
+      edgeIds: [...uiStore.selectedEdgeIds],
+    }),
+    (nextSelection, previousSelection) => {
+      const releasedNodeIds = previousSelection.nodeIds.filter(nodeId => !nextSelection.nodeIds.includes(nodeId))
+      const releasedEdgeIds = previousSelection.edgeIds.filter(edgeId => !nextSelection.edgeIds.includes(edgeId))
+
+      if (releasedNodeIds.length === 0 && releasedEdgeIds.length === 0) {
+        return
+      }
+
+      void Promise.all([
+        ...releasedEdgeIds.map(async edgeId => {
+          await diagramStore.endEdgeEdit(edgeId)
+        }),
+        ...releasedNodeIds.map(async nodeId => {
+          await diagramStore.endNodeEdit(nodeId)
+        }),
+      ])
     },
   )
 

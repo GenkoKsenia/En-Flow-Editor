@@ -722,29 +722,29 @@ function clearSelection(): void {
 
 .data-row {
   border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 8px;
   background: #fafafa;
 }
 
 .data-row-line {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: start;
   gap: 8px;
   margin-bottom: 6px;
 }
 
 .data-row-line label {
-  min-width: 110px;
+  min-width: 0;
   color: #495057;
   font-size: 13px;
   font-weight: 500;
 }
 
 .data-row-line .property-input {
-  width: 115px;
-  max-width: 115px;
-  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
 }
 
 .data-row-actions {
@@ -757,9 +757,8 @@ function clearSelection(): void {
   border-radius: 4px;
   background: #fff;
   padding: 6px 8px;
-  width: 115px;
-  max-width: 150px;
-  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
 }
 
 .checkbox-dropdown summary {

@@ -56,6 +56,7 @@ export function useFlowEditorWorkspace(
   const viewport = useFlowEditorViewport()
 
   const getAbsoluteNodePosition = (node: Node) => diagramStore.getAbsoluteNodePosition(node)
+  const getDescendantNodes = (nodeId: string) => diagramStore.getDescendantNodes(nodeId)
   const getNodeRect = (node: Node) => diagramStore.getNodeRect(node)
 
   const {
@@ -342,6 +343,7 @@ export function useFlowEditorWorkspace(
     showCommentActions: commentsApi.showCommentActions,
     canResolveComment: commentsApi.canResolveComment,
     getAbsoluteNodePosition,
+    getDescendantNodes,
     addNode: actions.addNode,
     startConnectionMode: connections.startConnectionMode,
     toggleCommentMode: actions.toggleCommentMode,

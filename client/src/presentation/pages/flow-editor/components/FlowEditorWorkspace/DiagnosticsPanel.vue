@@ -1,7 +1,26 @@
 <template>
   <div v-if="diagnostics.length" class="diagnostics-panel">
     <div class="diagnostics-header">
-      <h3>Проблемы схемы</h3>
+      <div class="diagnostics-header-top">
+        <h3>Проблемы схемы</h3>
+        <button
+          type="button"
+          class="collapse-btn"
+          aria-label="Свернуть панель ошибок"
+          title="Свернуть панель ошибок"
+          @click="$emit('toggle-collapse')"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M3 8h10"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-width="1.8"
+            />
+          </svg>
+        </button>
+      </div>
       <div class="diagnostics-summary">
         <span v-if="errorCount" class="summary-badge summary-badge--error">Ошибки: {{ errorCount }}</span>
         <span v-if="warningCount" class="summary-badge summary-badge--warning">Предупреждения: {{ warningCount }}</span>
@@ -37,6 +56,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+defineEmits<{
+  'toggle-collapse': []
+}>()
 
 const errorCount = computed(() => props.diagnostics.filter(item => item.level === 'error').length)
 const warningCount = computed(() => props.diagnostics.filter(item => item.level === 'warning').length)
@@ -65,11 +87,42 @@ const warningCount = computed(() => props.diagnostics.filter(item => item.level 
   background: #f8f9fa;
 }
 
+.diagnostics-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .diagnostics-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: #212529;
+}
+
+.collapse-btn {
+  border: 1px solid #d0d7de;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #495057;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collapse-btn:hover {
+  border-color: #0b6bcb;
+  color: #0b6bcb;
+}
+
+.collapse-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .diagnostics-summary {

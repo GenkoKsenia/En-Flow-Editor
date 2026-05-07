@@ -51,6 +51,7 @@ export function useFlowEditorConnections({
     isConnectionMode,
     connectionStartNode,
     connectionStartSide,
+    hoveredNodeId,
     hoveredNodeSide,
     selectedNodeIds,
     selectedEdgeIds,
@@ -61,7 +62,11 @@ export function useFlowEditorConnections({
   )
 
   const isConnectionTarget = computed(() => (nodeId: string) =>
-    isConnectionMode.value && !!connectionStartNode.value && connectionStartNode.value !== nodeId,
+    isConnectionMode.value
+      && !!connectionStartNode.value
+      && connectionStartNode.value !== nodeId
+      && !edges.value.some(edge => edge.sourceNodeId === connectionStartNode.value && edge.targetNodeId === nodeId)
+      && !(hoveredNodeId.value === nodeId && hoveredNodeSide.value),
   )
 
   const startConnectionMode = () => uiStore.startConnectionMode()

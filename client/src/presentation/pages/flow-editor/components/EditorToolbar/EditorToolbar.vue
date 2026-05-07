@@ -65,32 +65,6 @@
           <History :size="16" />
           <span class="team-label">Версии</span>
         </UiButton>
-        <div v-if="isVersionMenuOpen" class="version-menu" @click.stop>
-          <UiInput
-            :model-value="currentVersionLabel"
-            class="version-current-input"
-            size="sm"
-            block
-            @update:model-value="$emit('update:current-version-label', String($event))"
-          />
-          <UiButton block size="sm" variant="outline" @click="$emit('pin-current-version')">Зафиксировать версию</UiButton>
-          <div class="version-list">
-            <UiButton
-              v-for="version in versionHistory"
-              :key="version.id"
-              class="version-item"
-              block
-              variant="surface"
-              align="start"
-              @click="$emit('open-version', version.id)"
-            >
-              <div class="version-item-meta">
-                <div class="version-item-title">{{ version.label }}</div>
-                <div class="version-item-date">{{ version.date }}</div>
-              </div>
-            </UiButton>
-          </div>
-        </div>
       </div>
 
       <div class="download-wrap" ref="downloadMenuRef">
@@ -127,7 +101,6 @@ import { Database, Eye, EyeOff, GitBranch, Globe, History, MessageSquare, Square
 
 import type { CommentsStoreComment } from '@/domains/comments'
 import UiButton from '@/presentation/ui/UiButton.vue'
-import UiInput from '@/presentation/ui/UiInput.vue'
 import JsonExportButton from './JsonExportButton.vue'
 import type { VersionRecord } from '@/domains/diagram'
 import type { DataFlow, Edge, Node } from '@/domains/graph'
@@ -155,9 +128,6 @@ const emit = defineEmits<{
   'add-boundary': []
   'open-team-modal': []
   'toggle-version-menu': []
-  'pin-current-version': []
-  'open-version': [versionId: string]
-  'update:current-version-label': [value: string]
   'toggle-download-menu': []
   'close-download-menu': []
   'close-version-menu': []
@@ -175,9 +145,6 @@ function onDocumentMouseDown(event: MouseEvent): void {
     emit('close-download-menu')
   }
 
-  if (versionMenuRef.value && target && !versionMenuRef.value.contains(target)) {
-    emit('close-version-menu')
-  }
 }
 
 onMounted(() => {
@@ -238,7 +205,7 @@ onBeforeUnmount(() => {
 .avatar-circle {
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: 999px;
   background: #dbe4ff;
   color: #1d4ed8;
   display: inline-flex;
@@ -273,7 +240,7 @@ onBeforeUnmount(() => {
   right: 0;
   min-width: 240px;
   border: 1px solid #d8dce3;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
   padding: 6px;
