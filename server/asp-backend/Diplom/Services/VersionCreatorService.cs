@@ -21,7 +21,7 @@ namespace Diplom.Services
         private readonly IHubContext<SchemeHub> _hubContext;
         private Timer _timer;
         // TODO ЗАМЕНИТЬ!!!!!
-        private readonly TimeSpan _period = TimeSpan.FromMinutes(2);
+        private readonly TimeSpan _period = TimeSpan.FromMinutes(20);
         private IUserTracker _userTracker;
 
         private Dictionary<int, HashSet<string>> connectedIds = new Dictionary<int, HashSet<string>>();
@@ -282,10 +282,12 @@ namespace Diplom.Services
                 await context.SaveChangesAsync();
                 */
 
+                /*
                 latestVersion.IsReadOnly = true;
                 await context.SaveChangesAsync();
 
                 _logger.LogInformation($"[] Версия ({latestVersion.Id}) схемы ({scheme.ID}) заблокирована.");
+                */
 
                 var latestVersionDto = VersionToDtoMapper.Map(latestVersion);
 
@@ -304,6 +306,13 @@ namespace Diplom.Services
                 if (allUpdates != null && isThereUpdates)
                 {
                     _logger.LogInformation($"[] Изменения есть, начало их применения.");
+
+                    //блокировка версии
+                    latestVersion.IsReadOnly = true;
+                    await context.SaveChangesAsync();
+
+                    _logger.LogInformation($"[] Версия ({latestVersion.Id}) схемы ({scheme.ID}) заблокирована.");
+
 
                     //применяем изменения и записываем в сущность БД
                     CodeUpdater.Update(latestVersionDto.Code, allUpdates);
