@@ -163,6 +163,7 @@
               :data-edge-id="edge.id"
               :nodes="nodes"
               :is-selected="selectedEdgeIds.includes(edge.id)"
+              :is-dragging="draggedEdgeIds.has(edge.id)"
               :is-comment-target-highlighted="highlightedCommentTarget?.type === 'edge' && highlightedCommentTarget.id === edge.id"
               :show-drag-handle="showDragHandles"
               :get-connection-position="getConnectionPosition"
@@ -362,6 +363,25 @@ const draggedNodeIds = computed(() => {
   selectedNodeIds.value.forEach(nodeId => {
     ids.add(nodeId)
     getDescendantNodes(nodeId).forEach(descendant => ids.add(descendant.id))
+  })
+
+  return ids
+})
+const draggedEdgeIds = computed(() => {
+  if (!isDragging.value) return new Set<string>()
+
+  const nodeIds = draggedNodeIds.value
+  const ids = new Set<string>()
+
+  edges.value.forEach(edge => {
+    if (nodeIds.has(edge.sourceNodeId) || nodeIds.has(edge.targetNodeId)) {
+      ids.add(edge.id)
+    }
+  })
+
+  nodes.value.forEach(node => {
+    if (!nodeIds.has(node.id)) return
+    ;(node.passThroughEdges ?? []).forEach(edgeId => ids.add(edgeId))
   })
 
   return ids

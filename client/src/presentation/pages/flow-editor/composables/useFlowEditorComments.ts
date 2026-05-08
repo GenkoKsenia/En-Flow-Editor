@@ -123,12 +123,11 @@ export function useFlowEditorComments({
     localCommentPatches.value = rest
   }
 
-  function hasPendingChanges(commentId: string): boolean {
+  function hasPendingTextChanges(commentId: string): boolean {
     const patch = localCommentPatches.value[commentId]
     if (!patch) return false
 
-    if (typeof patch.text !== 'undefined') return true
-    return Boolean(patch.position)
+    return typeof patch.text !== 'undefined'
   }
 
   function addCommentForNode(nodeId: string): boolean {
@@ -282,7 +281,7 @@ export function useFlowEditorComments({
       return true
     }
 
-    return hasPendingChanges(commentId)
+    return hasPendingTextChanges(commentId)
   }
 
   function canResolveComment(comment: CommentsStoreComment): boolean {

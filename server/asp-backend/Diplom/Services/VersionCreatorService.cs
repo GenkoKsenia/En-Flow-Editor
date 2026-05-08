@@ -42,7 +42,7 @@ namespace Diplom.Services
         {
             _logger.LogInformation("[] Сервис по созданию новых версий схем запущен.");
 
-            _timer = new Timer(async _ => await DoWork(), null, TimeSpan.FromSeconds(50), _period);
+            _timer = new Timer(async _ => await DoWork(), null, TimeSpan.FromSeconds(20), _period);
 
             // Ждем отмены
             try
