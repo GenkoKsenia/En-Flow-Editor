@@ -10,11 +10,11 @@
     </button>
     <div class="user-block">
       <div class="user-avatar">
-        <span class="avatar-main">OP</span>
+        <span class="avatar-main">{{ userInitials }}</span>
       </div>
       <div class="user-info">
-        <div class="user-name">Генько К.П.</div>
-        <div class="user-email">genkoksenia@gmail.ru</div>
+        <div class="user-name">{{ userName }}</div>
+        <div class="user-email">user_name@gmail.com</div>
       </div>
       <div class="user-divider"></div>
       <div class="user-actions">
@@ -25,7 +25,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { LogOut } from 'lucide-vue-next'
+import { getCurrentUser } from '@/domains/user/api/current-user.api'
+import { getUserInitials } from '@/shared/lib/getUserInitials'
 
 defineProps<{
   clickable: boolean
@@ -34,6 +37,20 @@ defineProps<{
 defineEmits<{
   'logo-click': []
 }>()
+
+const userName = ref('Пользователь')
+
+const userInitials = computed(() => getUserInitials(userName.value))
+
+onMounted(async () => {
+  try {
+    const currentUser = await getCurrentUser()
+
+    if (currentUser.name) {
+      userName.value = currentUser.name
+    }
+  } catch {}
+})
 </script>
 
 <style scoped>

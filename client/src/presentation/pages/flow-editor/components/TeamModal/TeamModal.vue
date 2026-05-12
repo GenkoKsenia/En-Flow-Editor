@@ -119,6 +119,7 @@ import UiInput from '@/presentation/ui/UiInput.vue'
 import UiSelect from '@/presentation/ui/UiSelect.vue'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import type { TeamMember } from '@/domains/diagram'
+import { getUserInitials } from '@/shared/lib/getUserInitials'
 
 const EDITOR_ROLE = 'Редактирование'
 const VIEWER_ROLE = 'Просмотр'
@@ -184,6 +185,7 @@ watch(
 
     localMembers.value = teamMembers.value.map(member => ({
       ...member,
+      initials: getUserInitials(member.name),
       role: normalizeRole(member.role),
     }))
     resetInviteForm()
@@ -208,20 +210,6 @@ function normalizeRole(role: string): string {
   }
 
   return EDITOR_ROLE
-}
-
-function getInitials(name: string): string {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-
-  if (!parts.length) return '??'
-
-  return parts
-    .map(part => part[0]?.toUpperCase() ?? '')
-    .join('')
 }
 
 function resetInviteForm(): void {
@@ -272,7 +260,7 @@ function inviteMember(): void {
 
   localMembers.value = [
     {
-      initials: getInitials(selectedInviteUser.value.name),
+      initials: getUserInitials(selectedInviteUser.value.name),
       name: selectedInviteUser.value.name,
       email: selectedInviteUser.value.email,
       role: inviteRole.value,

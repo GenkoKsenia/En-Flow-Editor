@@ -1,12 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import {
-  createMockTeamMembers,
-  createMockVersionHistory,
-  MOCK_CURRENT_VERSION_LABEL,
-  MOCK_SHARE_LINK,
-} from '@/mocks'
 import type { SelectedObject, TeamMember, VersionRecord } from '@/domains/diagram'
 import type { ConnectionSide, Position } from '@/domains/graph'
 import { useDiagramStore } from '@/domains/diagram'
@@ -40,11 +34,11 @@ export const useEditorUiStore = defineStore('editorUi', () => {
   const isCommentMode = ref(false)
   const isDownloadMenuOpen = ref(false)
   const isVersionMenuOpen = ref(false)
-  const versionHistory = ref<VersionRecord[]>(createMockVersionHistory())
-  const currentVersionLabel = ref(MOCK_CURRENT_VERSION_LABEL)
+  const versionHistory = ref<VersionRecord[]>([])
+  const currentVersionLabel = ref('')
   const showTeamModal = ref(false)
-  const teamMembers = ref<TeamMember[]>(createMockTeamMembers())
-  const shareLink = ref(MOCK_SHARE_LINK)
+  const teamMembers = ref<TeamMember[]>([])
+  const shareLink = ref('')
   const zoom = ref(1)
 
   const MIN_ZOOM = 0.25
