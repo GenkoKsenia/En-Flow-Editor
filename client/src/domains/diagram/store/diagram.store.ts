@@ -71,6 +71,7 @@ export const useDiagramStore = defineStore('diagram', () => {
   const versioningUseCases = createDiagramVersioningUseCases(context, {
     resetDiagram: jsonUseCases.resetDiagram,
     setDiagramFromServer: jsonUseCases.setDiagramFromServer,
+    serializeDiagram: jsonUseCases.serializeDiagram,
   })
   const syncUseCases = createDiagramSyncUseCases({
     serializeDiagram: jsonUseCases.serializeDiagram,

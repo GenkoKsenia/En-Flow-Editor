@@ -29,8 +29,13 @@
       {{ lockBadgeLabel }}
     </div>
 
-    <div class="node-title">
-      {{ node.text }}
+    <div class="node-content" :class="{ 'node-content--with-info': informationText }">
+      <div class="node-title">
+        {{ node.text }}
+      </div>
+      <div v-if="informationText" class="node-information">
+        {{ informationText }}
+      </div>
     </div>
 
     <!-- Индикаторы сторон для соединения -->
@@ -136,6 +141,7 @@ const lockBadgeLabel = computed(() => {
   }
   return null
 })
+const informationText = computed(() => props.node.informationText?.trim() ?? '')
 
 const nodeStyle = computed(() => {
   // Вычисляем абсолютную позицию для отображения
@@ -304,9 +310,31 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 
+.node-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: inherit;
+}
+
+.node-content--with-info {
+  gap: 6px;
+}
+
 .node-title {
   width: 100%;
   color: inherit;
+  font-weight: 500;
+}
+
+.node-information {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.2;
+  color: rgba(15, 23, 42, 0.82);
 }
 
 .node:hover {
