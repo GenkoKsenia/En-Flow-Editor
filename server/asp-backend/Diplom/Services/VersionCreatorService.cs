@@ -21,7 +21,7 @@ namespace Diplom.Services
         private readonly IHubContext<SchemeHub> _hubContext;
         private Timer _timer;
         // TODO ЗАМЕНИТЬ!!!!!
-        private readonly TimeSpan _period = TimeSpan.FromMinutes(20);
+        private readonly TimeSpan _period = TimeSpan.FromMinutes(2);
         private IUserTracker _userTracker;
 
         private Dictionary<int, HashSet<string>> connectedIds = new Dictionary<int, HashSet<string>>();
