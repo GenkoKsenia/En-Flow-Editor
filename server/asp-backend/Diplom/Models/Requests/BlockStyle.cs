@@ -4,19 +4,21 @@ namespace Diplom.Models.Requests
 {
     public class BlockStyle
     {
-        [JsonPropertyName("element_id")]
+        [JsonPropertyName("elementId")]
         public string ElementId { get; set; } = "";
 
         [JsonPropertyName("color")]
         public string Color { get; set; } = "";
 
-        [JsonPropertyName("border_color")]
+        [JsonPropertyName("borderColor")]
         public string BorderColor { get; set; } = "";
 
-        [JsonPropertyName("border_width")]
-        public int BorderWidth { get; set; }
+        [JsonPropertyName("borderWidth")]
+        public float BorderWidth { get; set; }
+        [JsonPropertyName("borderRadius")]
+        public float BorderRadius { get; set; }
 
-        [JsonPropertyName("border_style")]
+        [JsonPropertyName("borderStyle")]
         public string BorderStyle { get; set; } = "";
     }
 }

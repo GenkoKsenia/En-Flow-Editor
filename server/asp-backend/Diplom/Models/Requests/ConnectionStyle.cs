@@ -4,14 +4,14 @@ namespace Diplom.Models.Requests
 {
     public class ConnectionStyle
     {
-        [JsonPropertyName("element_id")]
+        [JsonPropertyName("elementId")]
         public string ElementId { get; set; } = "";
 
         [JsonPropertyName("color")]
         public string Color { get; set; } = "";
 
         [JsonPropertyName("width")]
-        public int Width { get; set; }
+        public float Width { get; set; }
 
         [JsonPropertyName("type")]
         public string Type { get; set; } = "";
