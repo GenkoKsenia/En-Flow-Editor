@@ -152,7 +152,6 @@ export const useDiagramStore = defineStore('diagram', () => {
     debounceApplyFromEditor()
   })
   watch(lastSerializedJson, value => {
-    if (!isEditorFocused.value) return
     if (jsonError.value) return
     if (value === lastPersistedJson.value) return
 

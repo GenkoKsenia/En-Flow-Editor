@@ -482,7 +482,7 @@ function avatarClass(role: string): string {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 200px auto;
   gap: 10px;
-  align-items: end;
+  align-items: center;
 }
 
 .user-picker {
@@ -493,12 +493,12 @@ function avatarClass(role: string): string {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px;
   gap: 10px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .user-picker__toggle {
   width: 44px;
-  height: 44px;
+  height: 40px;
   border: 1px solid #d1d5db;
   border-radius: 12px;
   background: #fff;
@@ -508,6 +508,12 @@ function avatarClass(role: string): string {
   align-items: center;
   justify-content: center;
   font-size: 16px;
+}
+
+.invite-panel :deep(.ui-input--md),
+.invite-panel :deep(.ui-select--md),
+.invite-panel :deep(.ui-button--md) {
+  min-height: 40px;
 }
 
 .user-picker__toggle:hover {

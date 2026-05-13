@@ -28,7 +28,7 @@
             <textarea
               v-model="selectedNode.informationText"
               class="property-input multiline"
-              placeholder="Дополнительный текст под названием блока"
+              placeholder="Дополнительный текст"
               @change="onNodeInformationTextChange"
             ></textarea>
           </div>

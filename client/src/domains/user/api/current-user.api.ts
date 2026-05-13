@@ -6,7 +6,7 @@ type CurrentUserDto = {
   name?: string
   Name?: string
   displayName?: string
-  DisplayName?: string
+  DisplayName?: string  
 }
 
 type CurrentUserResponse = CurrentUserDto & {
@@ -21,7 +21,7 @@ export type CurrentUser = {
 function normalizeValue(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null
 
-  const normalized = value.trim()
+  const normalized = value.trim()               
   return normalized.length > 0 ? normalized : null
 }
 
