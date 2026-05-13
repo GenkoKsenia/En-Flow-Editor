@@ -34,7 +34,19 @@ export interface SchemeHubBlockStyleChange {
   actionType?: SchemeHubActionType
   blockStyle: Pick<
     EditorBlockStyleDto,
-    'element_id' | 'element_type' | 'color' | 'border_color' | 'border_width' | 'border_style'
+    | 'elementId'
+    | 'element_id'
+    | 'elementType'
+    | 'element_type'
+    | 'color'
+    | 'borderColor'
+    | 'border_color'
+    | 'borderWidth'
+    | 'border_width'
+    | 'borderRadius'
+    | 'border_radius'
+    | 'borderStyle'
+    | 'border_style'
   >
 }
 
@@ -43,7 +55,7 @@ export interface SchemeHubConnectionStyleChange {
   actionType?: SchemeHubActionType
   connectionStyle: Pick<
     EditorConnectionStyleDto,
-    'element_id' | 'element_type' | 'color' | 'width' | 'type'
+    'elementId' | 'element_id' | 'elementType' | 'element_type' | 'color' | 'width' | 'type'
   >
 }
 

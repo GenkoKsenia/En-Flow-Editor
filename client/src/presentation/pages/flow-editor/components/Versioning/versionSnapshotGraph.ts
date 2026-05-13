@@ -19,10 +19,10 @@ import type { Edge, Node } from '@/domains/graph'
 
 type BlockStyle = {
   color?: string
-  border_color?: string
-  border_width?: number
-  border_radius?: number
-  border_style?: string
+  borderColor?: string
+  borderWidth?: number
+  borderRadius?: number
+  borderStyle?: string
 }
 
 type ConnectionStyle = {
@@ -56,13 +56,18 @@ function readBlockStyles(styles: DiagramDto['styles']): Record<string, BlockStyl
   const blockStyles: Record<string, BlockStyle> = {}
 
   styles?.blocks?.forEach(style => {
-    if (!style?.element_id) return
-    blockStyles[String(style.element_id)] = {
+    const elementId = style?.elementId ?? style?.element_id
+    if (!elementId) return
+    blockStyles[String(elementId)] = {
       color: style.color,
-      border_color: style.border_color,
-      border_width: typeof style.border_width === 'number' ? style.border_width : undefined,
-      border_radius: typeof style.border_radius === 'number' ? style.border_radius : undefined,
-      border_style: style.border_style,
+      borderColor: style.borderColor ?? style.border_color,
+      borderWidth: typeof (style.borderWidth ?? style.border_width) === 'number'
+        ? (style.borderWidth ?? style.border_width)
+        : undefined,
+      borderRadius: typeof (style.borderRadius ?? style.border_radius) === 'number'
+        ? (style.borderRadius ?? style.border_radius)
+        : undefined,
+      borderStyle: style.borderStyle ?? style.border_style,
     }
   })
 
@@ -73,8 +78,9 @@ function readConnectionStyles(styles: DiagramDto['styles']): Record<string, Conn
   const connectionStyles: Record<string, ConnectionStyle> = {}
 
   styles?.connections?.forEach(style => {
-    if (!style?.element_id) return
-    connectionStyles[String(style.element_id)] = {
+    const elementId = style?.elementId ?? style?.element_id
+    if (!elementId) return
+    connectionStyles[String(elementId)] = {
       color: style.color,
       width: typeof style.width === 'number' ? style.width : undefined,
       type: style.type,
@@ -137,10 +143,10 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
         rawParentId: block.parentId,
         passThroughEdges: passThroughByNode[normalizedId] ?? [],
         color: style?.color ?? DEFAULT_NODE_COLOR,
-        borderColor: style?.border_color ?? DEFAULT_BORDER_COLOR,
-        borderWidth: style?.border_width ?? DEFAULT_BORDER_WIDTH,
-        borderRadius: style?.border_radius ?? DEFAULT_BORDER_RADIUS,
-        borderStyle: normalizeBorderStyle(style?.border_style),
+        borderColor: style?.borderColor ?? DEFAULT_BORDER_COLOR,
+        borderWidth: style?.borderWidth ?? DEFAULT_BORDER_WIDTH,
+        borderRadius: style?.borderRadius ?? DEFAULT_BORDER_RADIUS,
+        borderStyle: normalizeBorderStyle(style?.borderStyle),
         informationIds: informationPayload.ids,
         informationText: informationPayload.text,
       }

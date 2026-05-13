@@ -20,6 +20,10 @@ type DiagramSyncDependencies = {
 }
 
 export function createDiagramSyncUseCases(dependencies: DiagramSyncDependencies) {
+  function getStyleElementId(style: { element_id?: string; elementId?: string } | null | undefined): string | undefined {
+    return style?.elementId ?? style?.element_id
+  }
+
   function readCollection<T>(payload: Record<string, unknown>, pascalKey: string, camelKey: string): T[] {
     const value = payload[camelKey] ?? payload[pascalKey]
     return Array.isArray(value) ? value as T[] : []
@@ -139,11 +143,11 @@ export function createDiagramSyncUseCases(dependencies: DiagramSyncDependencies)
     return items.filter(item => item.id !== id)
   }
 
-  function upsertByElementId<T extends { element_id?: string }>(items: T[], incoming: T): T[] {
-    const elementId = incoming.element_id
+  function upsertByElementId<T extends { element_id?: string; elementId?: string }>(items: T[], incoming: T): T[] {
+    const elementId = getStyleElementId(incoming)
     if (!elementId) return items
 
-    const index = items.findIndex(item => item.element_id === elementId)
+    const index = items.findIndex(item => getStyleElementId(item) === elementId)
     if (index === -1) {
       return [...items, incoming]
     }
@@ -151,9 +155,9 @@ export function createDiagramSyncUseCases(dependencies: DiagramSyncDependencies)
     return items.map((item, itemIndex) => (itemIndex === index ? incoming : item))
   }
 
-  function removeByElementId<T extends { element_id?: string }>(items: T[], elementId?: string): T[] {
+  function removeByElementId<T extends { element_id?: string; elementId?: string }>(items: T[], elementId?: string): T[] {
     if (!elementId) return items
-    return items.filter(item => item.element_id !== elementId)
+    return items.filter(item => getStyleElementId(item) !== elementId)
   }
 
   function upsertByDataKey<T extends { dataKey?: string }>(items: T[], incoming: T): T[] {
@@ -226,10 +230,11 @@ export function createDiagramSyncUseCases(dependencies: DiagramSyncDependencies)
     for (const change of normalizedChanges.styles?.blocks ?? []) {
       const actionType = resolveActionType(change)
       const blockStyle = change.blockStyle as EditorBlockStyleDto | undefined
-      if (!blockStyle?.element_id || !actionType) continue
+      const elementId = getStyleElementId(blockStyle)
+      if (!elementId || !actionType) continue
 
       if (actionType === SchemeHubActionType.Delete) {
-        nextBlockStyles = removeByElementId(nextBlockStyles, blockStyle.element_id)
+        nextBlockStyles = removeByElementId(nextBlockStyles, elementId)
         continue
       }
 
@@ -239,10 +244,11 @@ export function createDiagramSyncUseCases(dependencies: DiagramSyncDependencies)
     for (const change of normalizedChanges.styles?.connections ?? []) {
       const actionType = resolveActionType(change)
       const connectionStyle = change.connectionStyle as EditorConnectionStyleDto | undefined
-      if (!connectionStyle?.element_id || !actionType) continue
+      const elementId = getStyleElementId(connectionStyle)
+      if (!elementId || !actionType) continue
 
       if (actionType === SchemeHubActionType.Delete) {
-        nextConnectionStyles = removeByElementId(nextConnectionStyles, connectionStyle.element_id)
+        nextConnectionStyles = removeByElementId(nextConnectionStyles, elementId)
         continue
       }
 

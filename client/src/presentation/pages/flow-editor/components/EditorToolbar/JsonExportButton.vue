@@ -37,17 +37,15 @@ type ExportConnection = {
 
 type ExportStyles = {
   blocks: Array<{
-    element_id: string
-    element_type: 'block'
+    elementId: string
     color: string
-    border_color: string
-    border_width: number
-    border_radius: number
-    border_style: NodeLineStyle
+    borderColor: string
+    borderWidth: number
+    borderRadius: number
+    borderStyle: NodeLineStyle
   }>
   connections: Array<{
-    element_id: string
-    element_type: 'connection'
+    elementId: string
     color: string
     width: number
     type: Edge['lineStyle']
@@ -284,18 +282,16 @@ function toExportConnection(
 
 function buildStyles(nodes: Node[], edges: Edge[]): ExportStyles {
   const blockStyles: ExportStyles['blocks'] = nodes.map((node) => ({
-    element_id: node.id,
-    element_type: 'block',
+    elementId: node.id,
     color: node.color ?? DEFAULTS.DEFAULT_NODE_COLOR,
-    border_color: node.borderColor ?? DEFAULTS.DEFAULT_BORDER_COLOR,
-    border_width: node.borderWidth ?? DEFAULTS.DEFAULT_BORDER_WIDTH,
-    border_radius: node.borderRadius ?? DEFAULTS.DEFAULT_BORDER_RADIUS,
-    border_style: node.borderStyle ?? 'solid'
+    borderColor: node.borderColor ?? DEFAULTS.DEFAULT_BORDER_COLOR,
+    borderWidth: node.borderWidth ?? DEFAULTS.DEFAULT_BORDER_WIDTH,
+    borderRadius: node.borderRadius ?? DEFAULTS.DEFAULT_BORDER_RADIUS,
+    borderStyle: node.borderStyle ?? 'solid'
   }))
 
   const connectionStyles: ExportStyles['connections'] = edges.map((edge) => ({
-    element_id: edge.id,
-    element_type: 'connection',
+    elementId: edge.id,
     color: edge.color ?? DEFAULTS.DEFAULT_EDGE_COLOR,
     width: edge.width ?? DEFAULTS.DEFAULT_EDGE_WIDTH,
     type: edge.lineStyle ?? 'solid'

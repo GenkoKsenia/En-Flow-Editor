@@ -187,6 +187,7 @@ namespace Diplom.Hubs
                                 blockStyleToUpdate.Color = requestBlockStyle.BlockStyle.Color;
                                 blockStyleToUpdate.BorderColor = requestBlockStyle.BlockStyle.BorderColor;
                                 blockStyleToUpdate.BorderWidth = requestBlockStyle.BlockStyle.BorderWidth;
+                                blockStyleToUpdate.BorderRadius = requestBlockStyle.BlockStyle.BorderRadius;
                                 blockStyleToUpdate.BorderStyle = requestBlockStyle.BlockStyle.BorderStyle;
                             }
                             break;

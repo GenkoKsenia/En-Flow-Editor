@@ -34,6 +34,10 @@ export function createDiagramJsonUseCases(
   context: DiagramContext,
   dependencies: DiagramJsonDependencies,
 ) {
+  function readStyleElementId(style: { elementId?: string; element_id?: string } | null | undefined): string | null {
+    return style?.elementId ?? style?.element_id ?? null
+  }
+
   function buildThroughMap(): Record<string, string[]> {
     return context.nodes.value.reduce<Record<string, string[]>>((acc, node) => {
       ;(node.passThroughEdges ?? []).forEach(edgeId => {
@@ -47,17 +51,15 @@ export function createDiagramJsonUseCases(
   function buildStyles() {
     return {
       blocks: context.nodes.value.map(node => ({
-        element_id: node.id,
-        element_type: 'block',
+        elementId: node.id,
         color: node.color ?? context.defaults.DEFAULT_NODE_COLOR,
-        border_color: node.borderColor ?? context.defaults.DEFAULT_BORDER_COLOR,
-        border_width: node.borderWidth ?? context.defaults.DEFAULT_BORDER_WIDTH,
-        border_radius: node.borderRadius ?? context.defaults.DEFAULT_BORDER_RADIUS,
-        border_style: node.borderStyle ?? 'solid',
+        borderColor: node.borderColor ?? context.defaults.DEFAULT_BORDER_COLOR,
+        borderWidth: node.borderWidth ?? context.defaults.DEFAULT_BORDER_WIDTH,
+        borderRadius: node.borderRadius ?? context.defaults.DEFAULT_BORDER_RADIUS,
+        borderStyle: node.borderStyle ?? 'solid',
       })),
       connections: context.edges.value.map(edge => ({
-        element_id: edge.id,
-        element_type: 'connection',
+        elementId: edge.id,
         color: edge.color ?? context.defaults.DEFAULT_EDGE_COLOR,
         width: edge.width ?? context.defaults.DEFAULT_EDGE_WIDTH,
         type: edge.lineStyle ?? 'solid',
@@ -170,24 +172,30 @@ export function createDiagramJsonUseCases(
     const parsedConnections = Array.isArray(parsed.connections) ? parsed.connections : []
     const parsedStyles: EditorStylesDto | null = parsed.styles ?? null
     const parsedDataFlows = Array.isArray(parsed.dataFlows) ? parsed.dataFlows : []
-    const blockStyles: Record<string, { color?: string; border_color?: string; border_width?: number; border_radius?: number; border_style?: string }> = {}
+    const blockStyles: Record<string, { color?: string; borderColor?: string; borderWidth?: number; borderRadius?: number; borderStyle?: string }> = {}
     const connectionStyles: Record<string, { color?: string; width?: number; type?: string }> = {}
     const nodeIdMap: Record<string, string> = {}
 
     parsedStyles?.blocks?.forEach(style => {
-      if (!style?.element_id) return
-      blockStyles[String(style.element_id)] = {
+      const elementId = readStyleElementId(style)
+      if (!elementId) return
+      blockStyles[String(elementId)] = {
         color: style.color,
-        border_color: style.border_color,
-        border_width: typeof style.border_width === 'number' ? style.border_width : undefined,
-        border_radius: typeof style.border_radius === 'number' ? style.border_radius : undefined,
-        border_style: style.border_style,
+        borderColor: style.borderColor ?? style.border_color,
+        borderWidth: typeof (style.borderWidth ?? style.border_width) === 'number'
+          ? (style.borderWidth ?? style.border_width)
+          : undefined,
+        borderRadius: typeof (style.borderRadius ?? style.border_radius) === 'number'
+          ? (style.borderRadius ?? style.border_radius)
+          : undefined,
+        borderStyle: style.borderStyle ?? style.border_style,
       }
     })
 
     parsedStyles?.connections?.forEach(style => {
-      if (!style?.element_id) return
-      connectionStyles[String(style.element_id)] = {
+      const elementId = readStyleElementId(style)
+      if (!elementId) return
+      connectionStyles[String(elementId)] = {
         color: style.color,
         width: typeof style.width === 'number' ? style.width : undefined,
         type: style.type,
@@ -255,10 +263,10 @@ export function createDiagramJsonUseCases(
           parentId: block.parentId ? (nodeIdMap[String(block.parentId)] ?? normalizeNodeId(block.parentId)) ?? undefined : undefined,
           passThroughEdges: passThroughByNode[normalizedId] ?? [],
           color: style?.color ?? context.defaults.DEFAULT_NODE_COLOR,
-          borderColor: style?.border_color ?? context.defaults.DEFAULT_BORDER_COLOR,
-          borderWidth: style?.border_width ?? context.defaults.DEFAULT_BORDER_WIDTH,
-          borderRadius: style?.border_radius ?? context.defaults.DEFAULT_BORDER_RADIUS,
-          borderStyle: normalizeBorderStyle(style?.border_style),
+          borderColor: style?.borderColor ?? context.defaults.DEFAULT_BORDER_COLOR,
+          borderWidth: style?.borderWidth ?? context.defaults.DEFAULT_BORDER_WIDTH,
+          borderRadius: style?.borderRadius ?? context.defaults.DEFAULT_BORDER_RADIUS,
+          borderStyle: normalizeBorderStyle(style?.borderStyle),
           informationIds: information,
           informationText: informationPayload.text,
         } satisfies Node
