@@ -44,7 +44,7 @@
       <template v-else>
         <div class="meta">
           <div class="name">{{ scheme.name }}</div>
-          <div class="time">Изменено {{ formatUpdatedAt(scheme.updatedAt) }}</div>
+          <div class="time">{{ formatUpdatedAt(scheme.updatedAt) }}</div>
         </div>
 
         <div class="menu-wrap">

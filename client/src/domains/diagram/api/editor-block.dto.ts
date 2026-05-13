@@ -4,6 +4,7 @@ export interface EditorBlockDto {
   id: string
   name?: string
   text?: string
+  informationText?: string
   type?: string | null
   position?: DiagramPositionDto
   width?: number

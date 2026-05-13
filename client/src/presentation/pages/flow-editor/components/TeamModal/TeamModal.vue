@@ -119,6 +119,7 @@ import UiInput from '@/presentation/ui/UiInput.vue'
 import UiSelect from '@/presentation/ui/UiSelect.vue'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import type { TeamMember } from '@/domains/diagram'
+import { getUserInitials } from '@/shared/lib/getUserInitials'
 
 const EDITOR_ROLE = 'Редактирование'
 const VIEWER_ROLE = 'Просмотр'
@@ -184,6 +185,7 @@ watch(
 
     localMembers.value = teamMembers.value.map(member => ({
       ...member,
+      initials: getUserInitials(member.name),
       role: normalizeRole(member.role),
     }))
     resetInviteForm()
@@ -208,20 +210,6 @@ function normalizeRole(role: string): string {
   }
 
   return EDITOR_ROLE
-}
-
-function getInitials(name: string): string {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-
-  if (!parts.length) return '??'
-
-  return parts
-    .map(part => part[0]?.toUpperCase() ?? '')
-    .join('')
 }
 
 function resetInviteForm(): void {
@@ -272,7 +260,7 @@ function inviteMember(): void {
 
   localMembers.value = [
     {
-      initials: getInitials(selectedInviteUser.value.name),
+      initials: getUserInitials(selectedInviteUser.value.name),
       name: selectedInviteUser.value.name,
       email: selectedInviteUser.value.email,
       role: inviteRole.value,
@@ -494,7 +482,7 @@ function avatarClass(role: string): string {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 200px auto;
   gap: 10px;
-  align-items: end;
+  align-items: center;
 }
 
 .user-picker {
@@ -505,12 +493,12 @@ function avatarClass(role: string): string {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px;
   gap: 10px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .user-picker__toggle {
   width: 44px;
-  height: 44px;
+  height: 40px;
   border: 1px solid #d1d5db;
   border-radius: 12px;
   background: #fff;
@@ -520,6 +508,12 @@ function avatarClass(role: string): string {
   align-items: center;
   justify-content: center;
   font-size: 16px;
+}
+
+.invite-panel :deep(.ui-input--md),
+.invite-panel :deep(.ui-select--md),
+.invite-panel :deep(.ui-button--md) {
+  min-height: 40px;
 }
 
 .user-picker__toggle:hover {

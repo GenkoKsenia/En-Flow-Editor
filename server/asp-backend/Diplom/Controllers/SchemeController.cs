@@ -90,6 +90,8 @@ namespace Diplom.Controllers
             */
 
             var schemes = await context.Schemes
+                .Include(s => s.Versions.OrderByDescending(v => v.Date).Take(1))
+                .Include(s => s.FavoriteSchemes.Where(f => f.UserID == Sid))
                 .Include(s => s.Access_User_Schema_Rights)
                     .ThenInclude(r => r.Access_Right)
                 .Include(s => s.Access_Group_Schema_Rights)
@@ -97,11 +99,6 @@ namespace Diplom.Controllers
                 .Where(s => s.UserID == Sid ||
                     s.Access_User_Schema_Rights.Any(r => r.UserID == Sid) ||
                     s.Access_Group_Schema_Rights.Any(r => groups.Contains(r.GroupID)))
-                .Select(s => new SchemeDbDTO
-                {
-                    Scheme = s, 
-                    IsFavorite = s.FavoriteSchemes.Any(f => f.UserID == Sid)
-                })
                 .Distinct()
                 .ToListAsync();
 
@@ -116,7 +113,7 @@ namespace Diplom.Controllers
             }
             */
 
-            return Ok(schemes.Select(s => SchemeToDtoMapper.Map(s.Scheme, s.IsFavorite)));
+            return Ok(schemes.Select(s => SchemeToDtoMapper.Map(s, s.FavoriteSchemes.Any())));
         }
 
         [HttpPost("post")]

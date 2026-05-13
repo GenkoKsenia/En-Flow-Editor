@@ -23,6 +23,15 @@
               class="property-input"
             />
           </div>
+          <div class="property property--stacked">
+            <label>Информация:</label>
+            <textarea
+              v-model="selectedNode.informationText"
+              class="property-input multiline"
+              placeholder="Дополнительный текст"
+              @change="onNodeInformationTextChange"
+            ></textarea>
+          </div>
           <div class="property">
             <label>Позиция:</label>
             <div class="position-inputs">
@@ -357,6 +366,13 @@ function onNodeTextChange(): void {
   }
 }
 
+function onNodeInformationTextChange(): void {
+  if (!selectedNode.value) return
+  emit('update:node', selectedNode.value.id, {
+    informationText: selectedNode.value.informationText ?? ''
+  })
+}
+
 function onNodePositionChange(): void {
   if (selectedNode.value) {
     emit('update:node', selectedNode.value.id, {
@@ -687,6 +703,12 @@ function clearSelection(): void {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+}
+
+.property--stacked {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .property label {

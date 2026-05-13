@@ -1,8 +1,6 @@
 import { ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 
-import { MOCK_CURRENT_USER_NAME } from '@/mocks'
-
 import { createCommentsRealtimeClient, getCurrentCommentAuthor, getCurrentCommentAuthorAliases, getCurrentCommentAuthorSid } from '../api'
 import type { CommentTargetKey } from '../lib'
 import type { CommentsStoreComment } from '../models'
@@ -15,7 +13,7 @@ import {
 
 export const useCommentsStore = defineStore('comments', () => {
   const client = createCommentsRealtimeClient()
-  const currentAuthor = ref(MOCK_CURRENT_USER_NAME)
+  const currentAuthor = ref('Пользователь')
   const currentAuthorId = ref<string | null>(null)
   const currentAuthorAliases = ref<string[]>([])
 
@@ -56,9 +54,7 @@ export const useCommentsStore = defineStore('comments', () => {
         currentAuthor.value = author
       }
     })
-    .catch(() => {
-      currentAuthor.value = MOCK_CURRENT_USER_NAME
-    })
+    .catch(() => {})
 
   void getCurrentCommentAuthorSid()
     .then(authorId => {
