@@ -71,6 +71,7 @@ export const useDiagramStore = defineStore('diagram', () => {
   const versioningUseCases = createDiagramVersioningUseCases(context, {
     resetDiagram: jsonUseCases.resetDiagram,
     setDiagramFromServer: jsonUseCases.setDiagramFromServer,
+    serializeDiagram: jsonUseCases.serializeDiagram,
   })
   const syncUseCases = createDiagramSyncUseCases({
     serializeDiagram: jsonUseCases.serializeDiagram,
@@ -151,7 +152,6 @@ export const useDiagramStore = defineStore('diagram', () => {
     debounceApplyFromEditor()
   })
   watch(lastSerializedJson, value => {
-    if (!isEditorFocused.value) return
     if (jsonError.value) return
     if (value === lastPersistedJson.value) return
 

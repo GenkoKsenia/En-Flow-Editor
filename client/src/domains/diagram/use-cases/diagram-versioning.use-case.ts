@@ -5,6 +5,7 @@ import type { DiagramContext } from './diagram.context'
 type DiagramVersioningDependencies = {
   resetDiagram: () => void
   setDiagramFromServer: (code: unknown) => void
+  serializeDiagram: () => DiagramDto
 }
 
 export function createDiagramVersioningUseCases(
@@ -49,9 +50,7 @@ export function createDiagramVersioningUseCases(
 
     if (!context.currentVersionId.value) return
 
-    const payload = typeof context.jsonBuffer.value === 'string'
-      ? JSON.parse(context.jsonBuffer.value) as DiagramDto
-      : JSON.parse(JSON.stringify(context.jsonBuffer.value)) as DiagramDto
+    const payload = dependencies.serializeDiagram()
 
     await context.updateVersion(context.currentVersionId.value, payload)
     context.lastPersistedJson.value = context.lastSerializedJson.value

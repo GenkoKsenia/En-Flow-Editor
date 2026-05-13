@@ -17,6 +17,8 @@
       'comment-target-highlighted': isCommentTargetHighlighted,
       'locked-self': lockState === 'self',
       'locked-other': lockState === 'other',
+      'db-table-node': isDbTableContainer,
+      'db-column-node': isDbTableColumn,
       [nodeBorderClass]: true
     }"
     :title="tooltipText"
@@ -29,8 +31,20 @@
       {{ lockBadgeLabel }}
     </div>
 
-    <div class="node-title">
-      {{ node.text }}
+    <div
+      class="node-content"
+      :class="{
+        'node-content--with-info': informationText,
+        'node-content--table': isDbTableContainer,
+        'node-content--column': isDbTableColumn,
+      }"
+    >
+      <div class="node-title">
+        {{ node.text }}
+      </div>
+      <div v-if="informationText && !isDbTableContainer" class="node-information">
+        {{ informationText }}
+      </div>
     </div>
 
     <!-- Индикаторы сторон для соединения -->
@@ -123,6 +137,32 @@ function getAbsolutePosition(node: Node, nodes: Node[]): Position {
 
 const nodeDepth = computed(() => calculateNodeDepth(props.node, props.allNodes))
 const hasChildren = computed(() => props.childrenCount > 0)
+const directChildren = computed(() => props.allNodes.filter(node => node.parentId === props.node.id))
+const parentNode = computed(() =>
+  props.node.parentId
+    ? props.allNodes.find(node => node.id === props.node.parentId) ?? null
+    : null,
+)
+const isBoundaryNode = computed(() => props.node.text.startsWith('Область '))
+const isDbTableContainer = computed(() => (
+  !isBoundaryNode.value
+  && directChildren.value.length > 0
+  && directChildren.value.every(child =>
+    !props.allNodes.some(node => node.parentId === child.id),
+  )
+))
+const isDbTableColumn = computed(() => {
+  if (!parentNode.value) return false
+
+  const parentChildren = props.allNodes.filter(node => node.parentId === parentNode.value?.id)
+  return (
+    !parentNode.value.text.startsWith('Область ')
+    && parentChildren.length > 0
+    && parentChildren.every(child =>
+      !props.allNodes.some(node => node.parentId === child.id),
+    )
+  )
+})
 const nodeBorderClass = computed(() => `border-style-${props.node.borderStyle ?? 'solid'}`)
 const lockState = computed<'self' | 'other' | null>(() => {
   if (props.lockedBy === 'self') return 'self'
@@ -136,6 +176,7 @@ const lockBadgeLabel = computed(() => {
   }
   return null
 })
+const informationText = computed(() => props.node.informationText?.trim() ?? '')
 
 const nodeStyle = computed(() => {
   // Вычисляем абсолютную позицию для отображения
@@ -304,9 +345,47 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
 }
 
 
+.node-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: inherit;
+}
+
+.node-content--with-info {
+  gap: 6px;
+}
+
 .node-title {
   width: 100%;
   color: inherit;
+  font-weight: 500;
+}
+
+.node-content--table {
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+}
+
+.node-content--table .node-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.node-content--column {
+  justify-content: center;
+}
+
+.node-information {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.2;
+  color: rgba(15, 23, 42, 0.82);
 }
 
 .node:hover {
@@ -391,6 +470,16 @@ function getClosestSide(x: number, y: number, width: number, height: number): Co
   justify-content: flex-start;
   text-align: center;
   padding-top: 2px;
+}
+
+.node.db-table-node {
+  padding: 10px 12px 12px;
+  background: #f8fafc;
+}
+
+.node.db-column-node {
+  padding: 8px 12px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
 }
 
 .node.pass-through-error {

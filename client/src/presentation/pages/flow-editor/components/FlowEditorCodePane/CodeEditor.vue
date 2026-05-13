@@ -1,8 +1,5 @@
 <template>
   <div class="code-editor-container">
-    <div class="editor-header">
-      <h3>Редактор кода</h3>
-    </div>
     <div v-if="error" class="error-banner">
       {{ error }}
     </div>
@@ -176,21 +173,6 @@ watch(isActive, (active) => {
   background: white;
   border-right: 1px solid #e1e5e9;
   position: relative;
-}
-
-.editor-header {
-  padding: 16px;
-  background: #ebebeb;
-  border-bottom: 1px solid #e1e5e9;
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-}
-
-.editor-header h3 {
-  margin: 0;
-  color: #2c3e50;
-  font-size: 16px;
 }
 
 .error-banner {

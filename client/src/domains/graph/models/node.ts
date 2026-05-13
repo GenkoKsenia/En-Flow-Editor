@@ -17,4 +17,5 @@ export interface Node {
   borderStyle?: NodeLineStyle
   meta?: Record<string, unknown> | null
   informationIds?: string[]
+  informationText?: string
 }

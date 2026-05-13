@@ -1,6 +1,7 @@
 import type { DataFlow, Edge, Node } from '@/domains/graph'
 
 import {
+  buildInformationPayload,
   createEmptyDiagram,
   generateEdgeLabel,
   getAbsoluteNodePosition,
@@ -9,7 +10,7 @@ import {
   normalizeBorderStyle,
   normalizeConnectionSide,
   normalizeDataFlow,
-  normalizeInformation,
+  parseInformationPayload,
   normalizeLineStyle,
   normalizeNodeId,
 } from '../lib'
@@ -26,6 +27,8 @@ type DiagramJsonDependencies = {
   buildNodeSendableData: () => Record<string, string[]>
   refreshCounters: () => void
 }
+
+type SerializeMode = 'server' | 'editor'
 
 export function createDiagramJsonUseCases(
   context: DiagramContext,
@@ -95,19 +98,28 @@ export function createDiagramJsonUseCases(
     }]
   }
 
+  function serializeBlocks(mode: SerializeMode): DiagramDto['blocks'] {
+    return context.nodes.value.map(node => ({
+      id: node.id,
+      name: node.text,
+      information: mode === 'server'
+        ? buildInformationPayload(node.informationIds ?? [], node.informationText)
+        : [...(node.informationIds ?? [])],
+      informationText: mode === 'editor' && node.informationText?.trim()
+        ? node.informationText.trim()
+        : undefined,
+      position: { x: node.position.x, y: node.position.y },
+      width: node.width,
+      height: node.height,
+      parentId: node.parentId ?? null,
+    }))
+  }
+
   function serializeDiagram(): DiagramDto {
     const throughByEdgeId = buildThroughMap()
 
     return {
-      blocks: context.nodes.value.map(node => ({
-        id: node.id,
-        name: node.text,
-        information: node.informationIds ?? [],
-        position: { x: node.position.x, y: node.position.y },
-        width: node.width,
-        height: node.height,
-        parentId: node.parentId ?? null,
-      })),
+      blocks: serializeBlocks('server'),
       dataFlows: context.dataFlows.value.map(flow => ({
         dataKey: flow.dataKey,
         dataName: flow.dataName,
@@ -129,8 +141,15 @@ export function createDiagramJsonUseCases(
     }
   }
 
+  function serializeDiagramForEditor(): DiagramDto {
+    return {
+      ...serializeDiagram(),
+      blocks: serializeBlocks('editor'),
+    }
+  }
+
   function syncJsonFromState(): void {
-    const serialized = JSON.stringify(serializeDiagram(), null, 2)
+    const serialized = JSON.stringify(serializeDiagramForEditor(), null, 2)
     context.lastSerializedJson.value = serialized
 
     if (context.isEditorFocused.value && context.jsonBuffer.value !== serialized) {
@@ -201,7 +220,11 @@ export function createDiagramJsonUseCases(
         if (!normalizedId) return null
 
         nodeIdMap[rawId] = normalizedId
-        const information = normalizeInformation((block as any).information)
+        const informationPayload = parseInformationPayload(
+          (block as any).information,
+          (block as any).informationText,
+        )
+        const information = informationPayload.ids
         const style = blockStyles[String(block.id)]
 
         information.forEach(infoId => {
@@ -237,6 +260,7 @@ export function createDiagramJsonUseCases(
           borderRadius: style?.border_radius ?? context.defaults.DEFAULT_BORDER_RADIUS,
           borderStyle: normalizeBorderStyle(style?.border_style),
           informationIds: information,
+          informationText: informationPayload.text,
         } satisfies Node
       })
       .filter(Boolean) as Node[]
@@ -298,7 +322,7 @@ export function createDiagramJsonUseCases(
       return { ...edge, dataKeys: sanitized }
     })
     dependencies.refreshCounters()
-    context.lastSerializedJson.value = JSON.stringify(serializeDiagram(), null, 2)
+    context.lastSerializedJson.value = JSON.stringify(serializeDiagramForEditor(), null, 2)
   }
 
   function applyJson(raw: string): void {
@@ -341,6 +365,7 @@ export function createDiagramJsonUseCases(
 
   return {
     serializeDiagram,
+    serializeDiagramForEditor,
     syncJsonFromState,
     applyParsedDiagram,
     applyJson,

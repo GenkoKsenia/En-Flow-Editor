@@ -25,10 +25,21 @@ export function createCommentsSyncUseCases(context: CommentsContext) {
     return items.filter(item => !hiddenIds.has(item.id))
   }
 
+  function isCurrentAuthorAlias(value: string | undefined): boolean {
+    if (!value) return false
+
+    const normalized = value.trim()
+    if (!normalized) return false
+
+    return context.currentAuthorAliases.value.some(alias => alias.trim() === normalized)
+  }
+
   async function resolveAuthors(items: CommentsStoreComment[]): Promise<CommentsStoreComment[]> {
     return await Promise.all(items.map(async item => ({
       ...item,
-      author: await resolveCommentAuthor(item.author),
+      author: isCurrentAuthorAlias(item.authorId) || isCurrentAuthorAlias(item.author)
+        ? context.getDefaultAuthor()
+        : await resolveCommentAuthor(item.authorId ?? item.author),
     })))
   }
 

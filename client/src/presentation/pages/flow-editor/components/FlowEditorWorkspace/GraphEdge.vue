@@ -98,6 +98,7 @@ interface Props {
   nodes: Node[]
   type?: 'default' | 'selected' | 'error'
   isSelected?: boolean
+  isDragging?: boolean
   showDragHandle?: boolean
   getConnectionPosition?: (nodeId: string, side: ConnectionSide, connectionId: string) => number
   forceThreeSegments?: boolean
@@ -112,6 +113,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   type: 'default',
   isSelected: false,
+  isDragging: false,
   showDragHandle: false,
   getConnectionPosition: () => 0.5,
   forceThreeSegments: false,
@@ -245,7 +247,8 @@ const targetDepth = computed(() => getNodeDepth(props.edge.targetNodeId))
 const edgeLayer = computed(() => Math.max(sourceDepth.value, targetDepth.value))
 const edgeZIndex = computed(() => {
   const base = edgeLayer.value * 100 + 40
-  return props.isPassThrough ? base + 1000 : base
+  const withPassThrough = props.isPassThrough ? base + 1000 : base
+  return props.isDragging ? withPassThrough + 1000 : withPassThrough
 })
 
 const edgeGeometry = computed((): EdgeGeometry => {

@@ -2,7 +2,7 @@ import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import type { SchemeVersion } from '@/domains/schemes'
-import { getLatestVersionChanges, getVersionsByScheme, type CodeDifferenceDto } from '@/domains/diagram'
+import { getVersionChanges, getVersionsByScheme, type CodeDifferenceDto } from '@/domains/diagram'
 import { useDiagramStore } from '@/domains/diagram'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 
@@ -49,7 +49,7 @@ export function useFlowEditorVersions() {
   const diagramStore = useDiagramStore()
   const uiStore = useEditorUiStore()
 
-  const { schemeId } = storeToRefs(diagramStore)
+  const { schemeId, currentVersionId } = storeToRefs(diagramStore)
 
   const initialRange = createDefaultVersionRange()
   const versionFilterFrom = ref(initialRange.from)
@@ -76,10 +76,10 @@ export function useFlowEditorVersions() {
 
     const from = normalizeDateTimeLocal(versionFilterFrom.value)
     const to = normalizeDateTimeLocal(versionFilterTo.value)
-    const latestVersionId = latestVersion.value?.id
+    const activeVersionId = currentVersionId.value ?? latestVersion.value?.id ?? null
 
     return fetchedVersions.value.filter(version =>
-      version.id !== latestVersionId
+      version.id !== activeVersionId
       && isVersionWithinRange(version, from, to),
     )
   })
@@ -154,7 +154,7 @@ export function useFlowEditorVersions() {
     comparisonChanges.value = []
 
     try {
-      comparisonChanges.value = await getLatestVersionChanges(currentSchemeId)
+      comparisonChanges.value = await getVersionChanges(currentSchemeId, versionId)
     } catch (error) {
       comparisonError.value = error instanceof Error ? error.message : 'Не удалось загрузить изменения между версиями'
     } finally {

@@ -14,6 +14,7 @@ type ExportBlock = {
   id: string
   name: string
   information: string[]
+  informationText?: string
   position: Position
   width: number
   height: number
@@ -96,7 +97,8 @@ function toExportBlock(node: Node): ExportBlock {
   return {
     id: node.id,
     name: node.text,
-    information: node.informationIds ?? [],
+    information: [...(node.informationIds ?? [])],
+    informationText: node.informationText?.trim() || undefined,
     position: { x: node.position.x, y: node.position.y },
     width: node.width,
     height: node.height,

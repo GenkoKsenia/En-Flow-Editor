@@ -21,7 +21,7 @@ namespace Diplom.Services
         private readonly IHubContext<SchemeHub> _hubContext;
         private Timer _timer;
         // TODO ЗАМЕНИТЬ!!!!!
-        private readonly TimeSpan _period = TimeSpan.FromMinutes(20);
+        private readonly TimeSpan _period = TimeSpan.FromMinutes(2);
         private IUserTracker _userTracker;
 
         private Dictionary<int, HashSet<string>> connectedIds = new Dictionary<int, HashSet<string>>();
@@ -42,7 +42,7 @@ namespace Diplom.Services
         {
             _logger.LogInformation("[] Сервис по созданию новых версий схем запущен.");
 
-            _timer = new Timer(async _ => await DoWork(), null, TimeSpan.FromSeconds(50), _period);
+            _timer = new Timer(async _ => await DoWork(), null, TimeSpan.FromSeconds(20), _period);
 
             // Ждем отмены
             try

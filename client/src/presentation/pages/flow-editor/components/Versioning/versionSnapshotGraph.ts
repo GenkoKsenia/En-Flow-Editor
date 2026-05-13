@@ -11,7 +11,7 @@ import {
   generateEdgeLabel,
   normalizeBorderStyle,
   normalizeConnectionSide,
-  normalizeInformation,
+  parseInformationPayload,
   normalizeLineStyle,
   normalizeNodeId,
 } from '@/domains/diagram'
@@ -120,6 +120,10 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
 
       nodeIdMap[rawId] = normalizedId
       const style = blockStyles[rawId]
+      const informationPayload = parseInformationPayload(
+        (block as { information?: unknown }).information,
+        (block as { informationText?: unknown }).informationText,
+      )
 
       return {
         id: normalizedId,
@@ -137,7 +141,8 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
         borderWidth: style?.border_width ?? DEFAULT_BORDER_WIDTH,
         borderRadius: style?.border_radius ?? DEFAULT_BORDER_RADIUS,
         borderStyle: normalizeBorderStyle(style?.border_style),
-        informationIds: normalizeInformation((block as { information?: unknown }).information),
+        informationIds: informationPayload.ids,
+        informationText: informationPayload.text,
       }
     })
     .filter(Boolean)
@@ -158,6 +163,7 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
     borderRadius: node.borderRadius,
     borderStyle: node.borderStyle,
     informationIds: node.informationIds,
+    informationText: node.informationText,
   }))
 
   const nodeLabelMap = new Map(nodes.map(node => [node.id, node.text.trim() || node.id]))

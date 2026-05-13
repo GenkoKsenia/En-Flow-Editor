@@ -2,6 +2,8 @@ import type { ConnectionSide, Edge, Node, Position } from '@/domains/graph'
 
 type ConnectionMap = Record<string, Record<ConnectionSide, string[]>>
 
+const PARENT_TITLE_CLEARANCE = 28
+
 export type AbsoluteNodeRect = {
   x: number
   y: number
@@ -173,7 +175,9 @@ export function getRelativePositionWithinParent(
 ): Position {
   return {
     x: roundCoord(Math.max(padding, currentAbsolutePos.x - parentAbsolutePos.x)),
-    y: roundCoord(Math.max(padding, currentAbsolutePos.y - parentAbsolutePos.y)),
+    y: roundCoord(
+      Math.max(padding + PARENT_TITLE_CLEARANCE, currentAbsolutePos.y - parentAbsolutePos.y),
+    ),
   }
 }
 
