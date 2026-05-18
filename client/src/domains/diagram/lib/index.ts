@@ -1,4 +1,5 @@
 export * from './createEmptyDiagram'
+export * from './dslNodeIds'
 export * from './generateEdgeLabel'
 export * from './graph'
 export * from './hierarchy'

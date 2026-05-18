@@ -21,9 +21,9 @@
 
     <CodeEditor
       v-show="activeTab === 'code'"
-      :content="diagramJson"
-      :error="jsonError"
-      @update:content="documentStore.setJsonBuffer($event)"
+      :content="diagramDsl"
+      :error="dslError"
+      @update:content="documentStore.setDslBuffer($event)"
       @focused="documentStore.setEditorFocused(true)"
       @blurred="documentStore.setEditorFocused(false)"
     />
@@ -45,8 +45,8 @@ const documentStore = useDiagramStore()
 const activeTab = ref<'code' | 'db'>('code')
 
 const {
-  jsonError,
-  jsonBuffer: diagramJson,
+  dslError,
+  dslBuffer: diagramDsl,
 } = storeToRefs(documentStore)
 </script>
 

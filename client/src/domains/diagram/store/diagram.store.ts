@@ -9,6 +9,7 @@ import { updateVersion } from '../api'
 import { createEmptyDiagram } from '../lib'
 import {
   createDiagramCollaborationUseCases,
+  createDiagramDslUseCases,
   createDiagramJsonUseCases,
   createDiagramLocalUseCases,
   createDiagramSyncUseCases,
@@ -30,6 +31,9 @@ export const useDiagramStore = defineStore('diagram', () => {
   const nextBoundaryId = ref(1)
   const jsonError = ref<string | null>(null)
   const jsonBuffer = ref('')
+  const dslError = ref<string | null>(null)
+  const dslBuffer = ref('')
+  const isUpdatingFromDsl = ref(false)
   const isUpdatingFromState = ref(false)
   const isEditorFocused = ref(false)
   const lastSerializedJson = ref('')
@@ -38,7 +42,7 @@ export const useDiagramStore = defineStore('diagram', () => {
   const loadError = ref<string | null>(null)
   const applyTimeout = ref<number | null>(null)
   const codeSaveTimeout = ref<number | null>(null)
-  const isDirty = computed(() => jsonBuffer.value !== lastSerializedJson.value)
+  const isDirty = computed(() => dslBuffer.value.trim().length > 0 && dslError.value !== null)
 
   const context: DiagramContext = {
     schemeId,
@@ -51,6 +55,9 @@ export const useDiagramStore = defineStore('diagram', () => {
     nextBoundaryId,
     jsonError,
     jsonBuffer,
+    dslError,
+    dslBuffer,
+    isUpdatingFromDsl,
     isUpdatingFromState,
     isEditorFocused,
     lastSerializedJson,
@@ -67,6 +74,10 @@ export const useDiagramStore = defineStore('diagram', () => {
   const jsonUseCases = createDiagramJsonUseCases(context, {
     buildNodeSendableData: localUseCases.buildNodeSendableData,
     refreshCounters: localUseCases.refreshCounters,
+  })
+  const dslUseCases = createDiagramDslUseCases(context, {
+    applyParsedDiagram: jsonUseCases.applyParsedDiagram,
+    applyJson: jsonUseCases.applyJson,
   })
   const versioningUseCases = createDiagramVersioningUseCases(context, {
     resetDiagram: jsonUseCases.resetDiagram,
@@ -104,6 +115,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     resetDiagram,
     debounceApplyFromEditor,
   } = jsonUseCases
+  const { syncDslFromState, applyDsl, debounceApplyFromDsl } = dslUseCases
   const { loadCurrentVersion, saveCurrentVersion } = versioningUseCases
   const { applyRemoteChanges } = syncUseCases
   const {
@@ -133,7 +145,7 @@ export const useDiagramStore = defineStore('diagram', () => {
   function setEditorFocused(value: boolean): void {
     isEditorFocused.value = value
     if (!value) {
-      syncJsonFromState()
+      syncDslFromState()
     }
   }
 
@@ -141,18 +153,25 @@ export const useDiagramStore = defineStore('diagram', () => {
     jsonBuffer.value = value
   }
 
+  function setDslBuffer(value: string): void {
+    dslBuffer.value = value
+  }
+
   function bindCollaboration(store: ReturnType<typeof useDiagramCollaborationStore>): void {
     connectCollaboration(store)
   }
 
-  watch([nodes, edges, dataFlows], syncJsonFromState, { deep: true, immediate: true })
-  watch(jsonBuffer, (value, previousValue) => {
-    if (isUpdatingFromState.value) return
+  watch([nodes, edges, dataFlows], () => {
+    syncJsonFromState()
+    syncDslFromState()
+  }, { deep: true, immediate: true })
+  watch(dslBuffer, (value, previousValue) => {
+    if (isUpdatingFromDsl.value) return
     if (value === previousValue) return
-    debounceApplyFromEditor()
+    debounceApplyFromDsl()
   })
   watch(lastSerializedJson, value => {
-    if (jsonError.value) return
+    if (dslError.value) return
     if (value === lastPersistedJson.value) return
 
     if (codeSaveTimeout.value) {
@@ -162,7 +181,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     codeSaveTimeout.value = window.setTimeout(() => {
       codeSaveTimeout.value = null
       void saveCurrentVersion().catch(error => {
-        loadError.value = error instanceof Error ? error.message : 'Не удалось сохранить изменения JSON'
+        loadError.value = error instanceof Error ? error.message : 'Не удалось сохранить изменения схемы'
       })
     }, 700)
   })
@@ -178,6 +197,8 @@ export const useDiagramStore = defineStore('diagram', () => {
     nextBoundaryId,
     jsonError,
     jsonBuffer,
+    dslError,
+    dslBuffer,
     isUpdatingFromState,
     isEditorFocused,
     lastSerializedJson,
@@ -187,7 +208,9 @@ export const useDiagramStore = defineStore('diagram', () => {
     isDirty,
     buildNodeSendableData,
     syncJsonFromState,
+    syncDslFromState,
     applyJson,
+    applyDsl,
     setDiagramFromServer,
     loadCurrentVersion,
     saveCurrentVersion,
@@ -217,6 +240,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     createEdgeId,
     setEditorFocused,
     setJsonBuffer,
+    setDslBuffer,
     updateNode,
     updateEdge,
     updateDataFlows,

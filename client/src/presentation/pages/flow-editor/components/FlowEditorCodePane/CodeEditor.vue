@@ -13,7 +13,7 @@
         v-model="code"
         class="code-textarea"
         :class="{ active: isActive }"
-        placeholder="Редактируйте JSON схемы здесь"
+        placeholder="Редактируйте код схемы здесь"
         @focus="isActive = true"
         @blur="handleBlur"
         @keydown.tab="handleTab"
@@ -25,7 +25,7 @@
     
     <!-- Подсказка -->
     <div class="editor-hint" v-if="!isActive && !code">
-      Нажмите чтобы начать писать код...
+      Нажмите, чтобы начать писать код схемы...
     </div>
   </div>
 </template>

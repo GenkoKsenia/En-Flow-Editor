@@ -17,6 +17,9 @@ export type DiagramContext = {
   nextBoundaryId: Ref<number>
   jsonError: Ref<string | null>
   jsonBuffer: Ref<string>
+  dslError: Ref<string | null>
+  dslBuffer: Ref<string>
+  isUpdatingFromDsl: Ref<boolean>
   isUpdatingFromState: Ref<boolean>
   isEditorFocused: Ref<boolean>
   lastSerializedJson: Ref<string>
