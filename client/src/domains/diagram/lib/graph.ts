@@ -14,6 +14,8 @@ export type PassThroughOffsets = Record<string, {
   vertical: Record<string, number>
 }>
 
+const RECT_INTERSECTION_EPSILON = 0.01
+
 export function getNodeConnectionPoint(
   position: Position,
   node: Pick<Node, 'width' | 'height'>,
@@ -66,14 +68,27 @@ export function getOrthogonalDefaultBreakpoint(
   return { x, y }
 }
 
+export function supportsPassThroughEdge(edge: Pick<Edge, 'sourceSide' | 'targetSide'>): boolean {
+  return (
+    (edge.sourceSide === 'left' && edge.targetSide === 'right') ||
+    (edge.sourceSide === 'right' && edge.targetSide === 'left') ||
+    (edge.sourceSide === 'top' && edge.targetSide === 'bottom') ||
+    (edge.sourceSide === 'bottom' && edge.targetSide === 'top') ||
+    (edge.sourceSide === 'left' && edge.targetSide === 'left') ||
+    (edge.sourceSide === 'right' && edge.targetSide === 'right') ||
+    (edge.sourceSide === 'top' && edge.targetSide === 'top') ||
+    (edge.sourceSide === 'bottom' && edge.targetSide === 'bottom')
+  )
+}
+
 export function isHorizontalPassThroughEdge(edge: Edge): boolean {
-  return (edge.sourceSide === 'left' || edge.sourceSide === 'right')
-    && (edge.targetSide === 'left' || edge.targetSide === 'right')
+  return supportsPassThroughEdge(edge)
+    && (edge.sourceSide === 'left' || edge.sourceSide === 'right')
 }
 
 export function isVerticalPassThroughEdge(edge: Edge): boolean {
-  return (edge.sourceSide === 'top' || edge.sourceSide === 'bottom')
-    && (edge.targetSide === 'top' || edge.targetSide === 'bottom')
+  return supportsPassThroughEdge(edge)
+    && (edge.sourceSide === 'top' || edge.sourceSide === 'bottom')
 }
 
 export function collectBoundaryHits(
@@ -90,11 +105,11 @@ export function collectBoundaryHits(
 
   if (isVertical) {
     const x = segment.start.x
-    if (x >= rect.left && x <= rect.right) {
-      if (minY < rect.top && maxY > rect.top) {
+    if (x >= rect.left - RECT_INTERSECTION_EPSILON && x <= rect.right + RECT_INTERSECTION_EPSILON) {
+      if (minY <= rect.top + RECT_INTERSECTION_EPSILON && maxY >= rect.top - RECT_INTERSECTION_EPSILON) {
         boundaries.add('top')
       }
-      if (minY < rect.bottom && maxY > rect.bottom) {
+      if (minY <= rect.bottom + RECT_INTERSECTION_EPSILON && maxY >= rect.bottom - RECT_INTERSECTION_EPSILON) {
         boundaries.add('bottom')
       }
     }
@@ -103,23 +118,53 @@ export function collectBoundaryHits(
 
   if (isHorizontal) {
     const y = segment.start.y
-    if (y >= rect.top && y <= rect.bottom) {
-      if (minX < rect.left && maxX > rect.left) {
+    if (y >= rect.top - RECT_INTERSECTION_EPSILON && y <= rect.bottom + RECT_INTERSECTION_EPSILON) {
+      if (minX <= rect.left + RECT_INTERSECTION_EPSILON && maxX >= rect.left - RECT_INTERSECTION_EPSILON) {
         boundaries.add('left')
       }
-      if (minX < rect.right && maxX > rect.right) {
+      if (minX <= rect.right + RECT_INTERSECTION_EPSILON && maxX >= rect.right - RECT_INTERSECTION_EPSILON) {
         boundaries.add('right')
       }
     }
   }
 }
 
+function segmentPassesThroughRectInterior(
+  segment: Segment,
+  rect: Pick<NodeRect, 'left' | 'right' | 'top' | 'bottom'>,
+): boolean {
+  const isVertical = Math.abs(segment.start.x - segment.end.x) <= RECT_INTERSECTION_EPSILON
+  const isHorizontal = Math.abs(segment.start.y - segment.end.y) <= RECT_INTERSECTION_EPSILON
+
+  if (isVertical) {
+    const x = segment.start.x
+    if (x <= rect.left + RECT_INTERSECTION_EPSILON || x >= rect.right - RECT_INTERSECTION_EPSILON) {
+      return false
+    }
+
+    const minY = Math.min(segment.start.y, segment.end.y)
+    const maxY = Math.max(segment.start.y, segment.end.y)
+    return Math.min(maxY, rect.bottom) - Math.max(minY, rect.top) > RECT_INTERSECTION_EPSILON
+  }
+
+  if (isHorizontal) {
+    const y = segment.start.y
+    if (y <= rect.top + RECT_INTERSECTION_EPSILON || y >= rect.bottom - RECT_INTERSECTION_EPSILON) {
+      return false
+    }
+
+    const minX = Math.min(segment.start.x, segment.end.x)
+    const maxX = Math.max(segment.start.x, segment.end.x)
+    return Math.min(maxX, rect.right) - Math.max(minX, rect.left) > RECT_INTERSECTION_EPSILON
+  }
+
+  return false
+}
+
 export function doesSegmentsPassThroughRect(segments: Segment[], rect: NodeRect): boolean {
   if (!segments.length) return false
 
-  const boundaries = new Set<string>()
-  segments.forEach(segment => collectBoundaryHits(segment, rect, boundaries))
-  return boundaries.size >= 2
+  return segments.some(segment => segmentPassesThroughRectInterior(segment, rect))
 }
 
 export function calculatePassThroughOffsets(nodes: Node[], edges: Edge[]): PassThroughOffsets {

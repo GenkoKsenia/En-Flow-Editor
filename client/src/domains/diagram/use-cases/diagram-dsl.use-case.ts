@@ -65,6 +65,8 @@ type FlowEntry = {
   id: string
   order: number
   name?: string
+  finishBlocks?: string[]
+  finishBlocksDefined?: boolean
 }
 
 type ParsedDsl = {
@@ -326,6 +328,15 @@ export function createDiagramDslUseCases(
           through: connection.props.through?.map(id => idMap.get(id) ?? id),
         },
       })),
+      flows: new Map(
+        parsed.flowOrder.map(flowId => {
+          const entry = parsed.flows.get(flowId)
+          return [flowId, {
+            ...entry,
+            finishBlocks: entry?.finishBlocks?.map(id => idMap.get(id) ?? id),
+          } satisfies FlowEntry]
+        }),
+      ),
     }
   }
 
@@ -416,7 +427,10 @@ export function createDiagramDslUseCases(
       lines.push('')
       lines.push('# Потоки данных')
       context.dataFlows.value.forEach(flow => {
-        lines.push(`flow ${flow.dataKey} ${quoteDsl(flow.dataName || flow.dataKey)}`)
+        const finishBlocks = (flow.finishBlocks ?? [])
+          .map(blockId => toDslNodeId(blockId, dslIdMaps))
+          .join(',')
+        lines.push(`flow ${flow.dataKey} ${quoteDsl(flow.dataName || flow.dataKey)} finish=${finishBlocks}`)
       })
     }
 
@@ -546,6 +560,67 @@ export function createDiagramDslUseCases(
     parsed.flows.set(id, entry)
     parsed.flowOrder.push(id)
     return entry
+  }
+
+  function applyFlowProperty(entry: FlowEntry, key: string, rawValue: string): void {
+    const value = parsePropertyValue(rawValue)
+
+    switch (key) {
+      case 'finish':
+      case 'finishes':
+      case 'finishBlocks':
+      case 'targets':
+      case 'to':
+        entry.finishBlocks = value
+          .split(',')
+          .map(item => item.trim())
+          .filter(Boolean)
+        entry.finishBlocksDefined = true
+        return
+      default:
+        throw new Error(`Неизвестное свойство потока: ${key}`)
+    }
+  }
+
+  function parseFlowLine(parsed: ParsedDsl, line: string): boolean {
+    if (!line.startsWith('flow ')) {
+      return false
+    }
+
+    const tokens = tokenizeDsl(line)
+    if (tokens.length < 3 || tokens[0] !== 'flow') {
+      throw new Error(`Не удалось разобрать строку потока: ${line}`)
+    }
+
+    const id = tokens[1] ?? ''
+    if (!ID_PATTERN.test(id)) {
+      throw new Error(`Некорректный идентификатор потока: ${id}`)
+    }
+
+    const flow = ensureFlowEntry(parsed, id)
+    let nameParsed = false
+
+    tokens.slice(2).forEach(token => {
+      const property = parseKeyValue(token)
+      if (property) {
+        applyFlowProperty(flow, property.key, property.rawValue)
+        return
+      }
+
+      if (!nameParsed && token.startsWith('"') && token.endsWith('"')) {
+        flow.name = parseQuoted(token)
+        nameParsed = true
+        return
+      }
+
+      throw new Error(`Не удалось разобрать строку потока: ${line}`)
+    })
+
+    if (!nameParsed) {
+      throw new Error(`У потока ${id} должно быть указано имя`)
+    }
+
+    return true
   }
 
   function applyBlockProperty(entry: BlockEntry, key: string, rawValue: string): void {
@@ -734,11 +809,7 @@ export function createDiagramDslUseCases(
         return
       }
 
-      const flowMatch = trimmed.match(/^flow\s+([A-Za-z0-9_][\w-]*)\s+(".+")$/)
-      if (flowMatch) {
-        const [, id, nameToken] = flowMatch
-        const flow = ensureFlowEntry(parsed, id)
-        flow.name = parseQuoted(nameToken)
+      if (parseFlowLine(parsed, trimmed)) {
         return
       }
 
@@ -958,8 +1029,10 @@ export function createDiagramDslUseCases(
       declaredFlowMap.set(flowId, {
         dataKey: flowId,
         dataName: entry?.name ?? existing?.dataName ?? flowId,
-        startBlock: existing?.startBlock ?? '',
-        finishBlocks: [...(existing?.finishBlocks ?? [])],
+        startBlock: existing?.startBlock,
+        finishBlocks: entry?.finishBlocksDefined
+          ? [...(entry.finishBlocks ?? [])]
+          : [...(existing?.finishBlocks ?? [])],
       })
     })
 
@@ -990,9 +1063,10 @@ export function createDiagramDslUseCases(
 
       dataKeys.forEach(dataKey => {
         const existing = declaredFlowMap.get(dataKey) ?? existingFlows.get(dataKey)
+        const declaredEntry = parsed.flows.get(dataKey)
         const nextFlow: DataFlow = existing
           ? { ...existing }
-          : { dataKey, dataName: dataKey, startBlock: '', finishBlocks: [] }
+          : { dataKey, dataName: dataKey, finishBlocks: [] }
 
         if (!nextFlow.startBlock) {
           nextFlow.startBlock = connection.sourceId
@@ -1000,9 +1074,11 @@ export function createDiagramDslUseCases(
           throw new Error(`Поток ${dataKey} не может начинаться в нескольких блоках`)
         }
 
-        const finishBlocks = new Set(nextFlow.finishBlocks ?? [])
-        finishBlocks.add(connection.targetId)
-        nextFlow.finishBlocks = Array.from(finishBlocks)
+        if (!declaredEntry?.finishBlocksDefined) {
+          const finishBlocks = new Set(nextFlow.finishBlocks ?? [])
+          finishBlocks.add(connection.targetId)
+          nextFlow.finishBlocks = Array.from(finishBlocks)
+        }
         declaredFlowMap.set(dataKey, nextFlow)
       })
 
@@ -1034,9 +1110,11 @@ export function createDiagramDslUseCases(
     })
 
     const flowList = Array.from(declaredFlowMap.values())
-      .filter(flow => flow.startBlock && parsed.blocks.has(flow.startBlock))
       .map(flow => ({
         ...flow,
+        startBlock: flow.startBlock && parsed.blocks.has(flow.startBlock)
+          ? flow.startBlock
+          : undefined,
         finishBlocks: (flow.finishBlocks ?? []).filter(blockId => parsed.blocks.has(blockId)),
       }))
 

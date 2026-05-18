@@ -14,6 +14,10 @@ export function useFlowEditorActions() {
     }))
   }
 
+  function sameItems(left: string[] = [], right: string[] = []): boolean {
+    return left.length === right.length && left.every((item, index) => item === right[index])
+  }
+
   async function releaseSelectionLock(): Promise<void> {
     await diagramStore.releaseActiveOwnedLockScope()
   }
@@ -100,7 +104,22 @@ export function useFlowEditorActions() {
 
       const previousFlows = cloneFlows(diagramStore.dataFlows)
       diagramStore.updateDataFlows(newFlows)
+      const changedEdgeIds: string[] = []
+
+      diagramStore.edges.forEach(edge => {
+        const previousKeys = [...(edge.dataKeys ?? [])]
+        diagramStore.updateEdge(edge.id, { dataKeys: previousKeys })
+        const nextKeys = [...(edge.dataKeys ?? [])]
+
+        if (!sameItems(previousKeys, nextKeys)) {
+          changedEdgeIds.push(edge.id)
+        }
+      })
+
       await diagramStore.finishDataFlowsUpdate(previousFlows, cloneFlows(newFlows))
+      await Promise.all(changedEdgeIds.map(async edgeId => {
+        await diagramStore.finishEdgeUpdate(edgeId)
+      }))
     })()
   }
 

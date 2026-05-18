@@ -8,19 +8,40 @@
       <div class="line-numbers" ref="lineNumbersRef">
         <div v-for="n in lineCount" :key="n" class="line-number">{{ n }}</div>
       </div>
-      <textarea
-        ref="textareaRef"
-        v-model="code"
-        class="code-textarea"
-        :class="{ active: isActive }"
-        placeholder="Редактируйте код схемы здесь"
-        @focus="isActive = true"
-        @blur="handleBlur"
-        @keydown.tab="handleTab"
-        @keydown.enter.prevent="handleEnter"
-        @input="onInput"
-        @scroll="syncScroll"
-      ></textarea>
+      <div class="editor-surface">
+        <div class="highlight-layer" aria-hidden="true">
+          <pre
+            class="highlight-content"
+            :style="contentLayerStyle"
+            v-html="highlightedCodeHtml"
+          ></pre>
+        </div>
+        <div
+          v-if="autocompleteSuggestion"
+          class="autocomplete-overlay"
+          aria-hidden="true"
+        >
+          <div class="autocomplete-content" :style="contentLayerStyle">
+            <span class="autocomplete-prefix">{{ autocompletePrefix }}</span><span class="autocomplete-suffix">{{ autocompleteSuggestion }}</span>
+          </div>
+        </div>
+        <textarea
+          ref="textareaRef"
+          v-model="code"
+          class="code-textarea"
+          :class="{ active: isActive }"
+          placeholder="Редактируйте код схемы здесь"
+          @focus="handleFocus"
+          @blur="handleBlur"
+          @keydown.tab="handleTab"
+          @keydown.enter.prevent="handleEnter"
+          @input="onInput"
+          @click="updateSelectionState"
+          @keyup="updateSelectionState"
+          @select="updateSelectionState"
+          @scroll="syncScroll"
+        ></textarea>
+      </div>
     </div>
     
     <!-- Подсказка -->
@@ -32,6 +53,59 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
+
+const DSL_KEYWORDS = [
+  'flow',
+  'info',
+  'color',
+  'borderColor',
+  'borderWidth',
+  'borderRadius',
+  'borderStyle',
+  'radius',
+  'width',
+  'height',
+  'x',
+  'y',
+  'label',
+  'through',
+  'breakpointX',
+  'breakpointY',
+  'finish',
+  'left',
+  'right',
+  'top',
+  'bottom',
+] as const
+
+const KEYWORDS_WITH_EQUALS = new Set<string>([
+  'info',
+  'color',
+  'borderColor',
+  'borderWidth',
+  'borderRadius',
+  'borderStyle',
+  'radius',
+  'width',
+  'height',
+  'x',
+  'y',
+  'label',
+  'through',
+  'breakpointX',
+  'breakpointY',
+  'finish',
+])
+
+const DSL_TOKEN_REGEX = new RegExp(
+  [
+    /"([^"\\]|\\.)*"?/.source,
+    `\\b(?:${DSL_KEYWORDS.join('|')})\\b`,
+    /\b-?\d+(?:\.\d+)?\b/.source,
+    /=>|[=,[\]{}()]/.source,
+  ].join('|'),
+  'g'
+)
 
 const props = defineProps<{
   content: string
@@ -49,25 +123,168 @@ const code = ref(props.content ?? '')
 const isActive = ref(false)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const lineNumbersRef = ref<HTMLElement | null>(null)
+const selectionStart = ref(0)
+const selectionEnd = ref(0)
+const scrollTop = ref(0)
+const scrollLeft = ref(0)
 const lineCount = computed(() => Math.max(1, code.value.split('\n').length))
+
+type AutocompleteState = {
+  beforeWord: string
+  currentWord: string
+  suggestion: string
+  fullKeyword: string
+} | null
+
+type CurrentWordState = {
+  beforeWord: string
+  currentWord: string
+} | null
+
+function getCurrentWordState(): CurrentWordState {
+  const beforeCaret = code.value.slice(0, selectionStart.value)
+  const wordMatch = beforeCaret.match(/(^|[\s([{,])([A-Za-z][A-Za-z0-9]*)$/)
+  const currentWord = wordMatch?.[2]
+  if (!currentWord) {
+    return null
+  }
+
+  return {
+    beforeWord: beforeCaret.slice(0, beforeCaret.length - currentWord.length),
+    currentWord,
+  }
+}
+
+const autocompleteState = computed<AutocompleteState>(() => {
+  if (!isActive.value) return null
+  if (selectionStart.value !== selectionEnd.value) return null
+
+  const wordState = getCurrentWordState()
+  if (!wordState) return null
+
+  const { beforeWord, currentWord } = wordState
+  const caretEnd = selectionEnd.value
+  const nextChar = code.value.charAt(caretEnd)
+
+  if (KEYWORDS_WITH_EQUALS.has(currentWord) && nextChar !== '=') {
+    return {
+      beforeWord,
+      currentWord,
+      suggestion: '=',
+      fullKeyword: currentWord,
+    }
+  }
+
+  const matchingKeywords = DSL_KEYWORDS
+    .filter(keyword => keyword.startsWith(currentWord) && keyword !== currentWord)
+    .sort((left, right) => left.localeCompare(right))
+
+  if (matchingKeywords.length !== 1) {
+    return null
+  }
+
+  const fullKeyword = matchingKeywords[0]
+  const suffix = fullKeyword.slice(currentWord.length)
+  return {
+    beforeWord,
+    currentWord,
+    suggestion: KEYWORDS_WITH_EQUALS.has(fullKeyword) ? `${suffix}=` : suffix,
+    fullKeyword,
+  }
+})
+
+const autocompletePrefix = computed(() => {
+  const state = autocompleteState.value
+  return state ? `${state.beforeWord}${state.currentWord}` : ''
+})
+const autocompleteSuggestion = computed(() => autocompleteState.value?.suggestion ?? '')
+const contentLayerStyle = computed(() => ({
+  transform: `translate(${-scrollLeft.value}px, ${-scrollTop.value}px)`,
+}))
+const highlightedCodeHtml = computed(() => highlightCode(code.value))
 
 watch(
   () => props.content,
   (val) => {
     if (val !== code.value) {
       code.value = val ?? ''
+      nextTick(() => updateSelectionState())
     }
   }
 )
 
 function onInput(): void {
+  updateSelectionState()
   emit('update:content', code.value)
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
+function wrapToken(token: string): string {
+  const escapedToken = escapeHtml(token)
+
+  if (token.startsWith('"')) {
+    return `<span class="token token-string">${escapedToken}</span>`
+  }
+
+  if (DSL_KEYWORDS.includes(token as (typeof DSL_KEYWORDS)[number])) {
+    return `<span class="token token-keyword">${escapedToken}</span>`
+  }
+
+  if (/^-?\d+(?:\.\d+)?$/.test(token)) {
+    return `<span class="token token-number">${escapedToken}</span>`
+  }
+
+  return `<span class="token token-operator">${escapedToken}</span>`
+}
+
+function highlightCode(value: string): string {
+  if (!value) {
+    return '&nbsp;'
+  }
+
+  let lastIndex = 0
+  let result = ''
+
+  for (const match of value.matchAll(DSL_TOKEN_REGEX)) {
+    const index = match.index ?? 0
+    const token = match[0]
+    result += escapeHtml(value.slice(lastIndex, index))
+    result += wrapToken(token)
+    lastIndex = index + token.length
+  }
+
+  result += escapeHtml(value.slice(lastIndex))
+
+  if (value.endsWith('\n')) {
+    result += '\n'
+  }
+
+  return result
+}
+
 function syncScroll(): void {
+  if (textareaRef.value) {
+    scrollTop.value = textareaRef.value.scrollTop
+    scrollLeft.value = textareaRef.value.scrollLeft
+  }
+
   if (lineNumbersRef.value && textareaRef.value) {
     lineNumbersRef.value.scrollTop = textareaRef.value.scrollTop
   }
+}
+
+function updateSelectionState(): void {
+  const textarea = textareaRef.value
+  if (!textarea) return
+
+  selectionStart.value = textarea.selectionStart
+  selectionEnd.value = textarea.selectionEnd
 }
 
 // Обработчик потери фокуса
@@ -82,11 +299,74 @@ function handleBlur(event: FocusEvent): void {
   }, 10)
 }
 
+function handleFocus(): void {
+  isActive.value = true
+  updateSelectionState()
+}
+
+function applyAutocomplete(): boolean {
+  const textarea = textareaRef.value
+  const state = autocompleteState.value
+  if (!textarea || !state) return false
+
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const newValue = code.value.slice(0, start) + state.suggestion + code.value.slice(end)
+  code.value = newValue
+
+  const newPos = start + state.suggestion.length
+  nextTick(() => {
+    textarea.selectionStart = textarea.selectionEnd = newPos
+    updateSelectionState()
+  })
+
+  emit('update:content', code.value)
+  return true
+}
+
+function applyKeywordEquals(): boolean {
+  const textarea = textareaRef.value
+  const wordState = getCurrentWordState()
+  if (!textarea || !wordState) return false
+
+  const { currentWord } = wordState
+  if (!KEYWORDS_WITH_EQUALS.has(currentWord)) return false
+
+  const start = textarea.selectionStart
+  const nextChar = code.value.charAt(start)
+  if (nextChar === '=') {
+    nextTick(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + 1
+      updateSelectionState()
+    })
+    return true
+  }
+
+  code.value = code.value.slice(0, start) + '=' + code.value.slice(start)
+  const newPos = start + 1
+
+  nextTick(() => {
+    textarea.selectionStart = textarea.selectionEnd = newPos
+    updateSelectionState()
+  })
+
+  emit('update:content', code.value)
+  return true
+}
+
 // Обработка Tab для отступов
 function handleTab(event: KeyboardEvent): void {
   event.preventDefault()
   const textarea = textareaRef.value
   if (!textarea) return
+
+  if (applyAutocomplete()) {
+    return
+  }
+
+  if (applyKeywordEquals()) {
+    return
+  }
   
   const start = textarea.selectionStart
   const end = textarea.selectionEnd
@@ -98,6 +378,7 @@ function handleTab(event: KeyboardEvent): void {
   // Устанавливаем курсор после отступа
   nextTick(() => {
     textarea.selectionStart = textarea.selectionEnd = newPos
+    updateSelectionState()
   })
 
   emit('update:content', code.value)
@@ -130,6 +411,7 @@ function handleEnter(event: KeyboardEvent): void {
 
   nextTick(() => {
     textarea.selectionStart = textarea.selectionEnd = newPos
+    updateSelectionState()
   })
 
   emit('update:content', code.value)
@@ -148,6 +430,7 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   if (textareaRef.value === document.activeElement) {
     isActive.value = true
+    updateSelectionState()
     emit('focused')
   }
 })
@@ -190,6 +473,13 @@ watch(isActive, (active) => {
   min-height: 0;
 }
 
+.editor-surface {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .line-numbers {
   background: #f3f4f6;
   border-right: 1px solid #e1e5e9;
@@ -220,11 +510,75 @@ watch(isActive, (active) => {
   resize: none;
   outline: none;
   background: transparent;
-  color: #111;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
   caret-color: #111;
   transition: all 0.2s ease;
   overflow: auto;
   white-space: pre;
+}
+
+.highlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.highlight-content {
+  margin: 0;
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre;
+  color: #111;
+  min-height: 100%;
+  min-width: 100%;
+}
+
+.autocomplete-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.autocomplete-content {
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre;
+  color: transparent;
+  min-height: 100%;
+  min-width: 100%;
+}
+
+.autocomplete-prefix {
+  color: transparent;
+}
+
+.autocomplete-suffix {
+  color: rgba(17, 17, 17, 0.28);
+}
+
+:deep(.token-keyword) {
+  color: #0f6ad8;
+}
+
+:deep(.token-string) {
+  color: #1a7f37;
+}
+
+:deep(.token-number) {
+  color: #c26a00;
+}
+
+:deep(.token-operator) {
+  color: #5c6b7a;
 }
 
 .code-textarea.active {
@@ -247,7 +601,11 @@ watch(isActive, (active) => {
 }
 
 .code-textarea:focus {
-  background: white;
+  background: transparent;
+}
+
+.code-textarea::selection {
+  background: rgba(0, 123, 255, 0.22);
 }
 
 .code-textarea::placeholder {

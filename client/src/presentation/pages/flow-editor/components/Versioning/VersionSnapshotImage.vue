@@ -42,7 +42,6 @@
             :edge="edge"
             :nodes="graph.nodes"
             :get-connection-position="getConnectionPosition"
-            :force-three-segments="edgeRequiresPassThrough[edge.id]"
           />
 
           <GraphNode

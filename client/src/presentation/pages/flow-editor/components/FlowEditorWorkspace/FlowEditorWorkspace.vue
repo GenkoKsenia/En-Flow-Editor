@@ -167,7 +167,6 @@
               :is-comment-target-highlighted="highlightedCommentTarget?.type === 'edge' && highlightedCommentTarget.id === edge.id"
               :show-drag-handle="showDragHandles"
               :get-connection-position="getConnectionPosition"
-              :force-three-segments="edgeRequiresPassThrough[edge.id]"
               :has-pass-through-error="edgePassThroughErrors[edge.id]"
               :is-pass-through="edgeRequiresPassThrough[edge.id]"
               :error-message="edgeErrorMessages[edge.id]"

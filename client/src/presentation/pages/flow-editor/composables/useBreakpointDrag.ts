@@ -86,19 +86,10 @@ export function useBreakpointDrag({
     }
     edge.breakpointLocked = true
 
-    const { sourceSide, targetSide } = edge
-    let axis: 'x' | 'y' = 'x'
-
-    if (
-      (sourceSide === 'left' && targetSide === 'right') ||
-      (sourceSide === 'right' && targetSide === 'left') ||
-      (sourceSide === 'left' && targetSide === 'left') ||
-      (sourceSide === 'right' && targetSide === 'right')
-    ) {
-      axis = 'x'
-    } else {
-      axis = 'y'
-    }
+    const axis: 'x' | 'y' =
+      edge.sourceSide === 'left' || edge.sourceSide === 'right'
+        ? 'x'
+        : 'y'
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingBreakpoint.value || !draggingEdgeId.value || !canvas.value) return

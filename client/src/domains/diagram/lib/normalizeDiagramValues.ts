@@ -78,7 +78,6 @@ export function normalizeDataFlow(flow: EditorDataFlowDto, fallbackStart?: strin
   if (!keyRaw) return null
 
   const startRaw = (flow as any)?.startBlock ?? (flow as any)?.sourceBlock ?? fallbackStart ?? null
-  if (!startRaw) return null
 
   const finishBlocks = Array.isArray((flow as any)?.finishBlocks)
     ? (flow as any).finishBlocks.map((finishBlock: unknown) => String(finishBlock)).filter(Boolean)
@@ -91,7 +90,7 @@ export function normalizeDataFlow(flow: EditorDataFlowDto, fallbackStart?: strin
   return {
     dataKey: String(keyRaw),
     dataName,
-    startBlock: String(startRaw),
+    startBlock: startRaw ? String(startRaw) : undefined,
     finishBlocks,
   }
 }

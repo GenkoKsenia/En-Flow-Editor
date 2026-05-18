@@ -309,14 +309,16 @@ export function createDiagramJsonUseCases(
       .filter(Boolean) as Edge[]
 
     const normalizedDataFlows = Array.from(dataFlowMap.values()).map(flow => {
-      const start = nodeIdMap[String(flow.startBlock)] ?? normalizeNodeId(flow.startBlock)
+      const start = flow.startBlock
+        ? (nodeIdMap[String(flow.startBlock)] ?? normalizeNodeId(flow.startBlock))
+        : undefined
       const finish = Array.isArray(flow.finishBlocks)
         ? flow.finishBlocks.map(id => nodeIdMap[String(id)] ?? normalizeNodeId(id)).filter(Boolean) as string[]
         : []
 
       return {
         ...flow,
-        startBlock: start ?? flow.startBlock,
+        startBlock: start ?? flow.startBlock ?? undefined,
         finishBlocks: finish,
       }
     })

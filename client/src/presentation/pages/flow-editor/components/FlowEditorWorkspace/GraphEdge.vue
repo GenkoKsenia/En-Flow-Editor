@@ -473,15 +473,12 @@ const edgeType = computed(() => {
 const breakpoint = computed(() => {
   if (edgeType.value !== 'threeSegment') return null
   
-  const { sourceSide, targetSide } = props.edge
+  const { sourceSide } = props.edge
   const start = startPoint.value!
   const end = endPoint.value!
   
-  if (sourceSide === 'left' && targetSide === 'right' || 
-      sourceSide === 'right' && targetSide === 'left' ||
-      sourceSide === 'left' && targetSide === 'left' ||
-      sourceSide === 'right' && targetSide === 'right') {
-    // Все горизонтальные 3-сегментные стрелки
+  if (sourceSide === 'left' || sourceSide === 'right') {
+    // Для всех связей с горизонтальным выходом управляющей является X-координата
     return {
       x: props.edge.breakpointX ?? getDefaultBreakpointX(),
       y: (start.y + end.y) / 2
@@ -489,8 +486,8 @@ const breakpoint = computed(() => {
   } else {
     // Вертикальные 3-сегментные стрелки
     const defaultY = (() => {
-      if (sourceSide === 'top' && targetSide === 'top') return Math.min(start.y, end.y) - 40
-      if (sourceSide === 'bottom' && targetSide === 'bottom') return Math.max(start.y, end.y) + 40
+      if (sourceSide === 'top' && props.edge.targetSide === 'top') return Math.min(start.y, end.y) - 40
+      if (sourceSide === 'bottom' && props.edge.targetSide === 'bottom') return Math.max(start.y, end.y) + 40
       return (start.y + end.y) / 2
     })()
     return {
