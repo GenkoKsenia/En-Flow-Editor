@@ -25,7 +25,7 @@ export function useFlowEditorWorkspace(
   const collaborationStore = useDiagramCollaborationStore()
   const uiStore = useEditorUiStore()
 
-  const { nodes, edges, dataFlows } = storeToRefs(diagramStore)
+  const { nodes, edges, dataFlows, isReadOnly } = storeToRefs(diagramStore)
   const {
     selectedNodeIds,
     selectedEdgeIds,
@@ -207,6 +207,7 @@ export function useFlowEditorWorkspace(
   }
 
   function onCanvasMouseDown(event: MouseEvent): void {
+    if (isReadOnly.value) return
     if (isConnectionMode.value || isCommentMode.value) return
 
     const target = event.target as Element | null
@@ -285,7 +286,9 @@ export function useFlowEditorWorkspace(
   const isSelectedObjectLockedByOther = computed(() =>
     selectedObjectLockOwner.value !== null && selectedObjectLockOwner.value !== 'self',
   )
+  const isSelectedObjectReadOnly = computed(() => isReadOnly.value)
   const selectedObjectLockMessage = computed(() => {
+    if (isSelectedObjectReadOnly.value) return 'Схема закрыта для редактирования'
     if (!isSelectedObjectLockedByOther.value) return null
     return selectedObjectLockOwner.value === 'locked'
       ? 'Элемент занят другим пользователем'
@@ -306,7 +309,9 @@ export function useFlowEditorWorkspace(
     marqueeRect,
     lockedNodeOwners,
     lockedEdgeOwners,
+    isReadOnly,
     isSelectedObjectLockedByOther,
+    isSelectedObjectReadOnly,
     selectedObjectLockMessage,
     isDragging,
     potentialParentId,

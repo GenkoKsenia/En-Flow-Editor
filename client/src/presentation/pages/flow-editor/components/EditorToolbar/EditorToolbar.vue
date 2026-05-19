@@ -1,13 +1,14 @@
 <template>
   <div class="toolbar">
     <div class="toolbar-group icon-group">
-      <UiButton size="icon" variant="outline" @click="$emit('add-node')" title="Процесс" aria-label="Процесс">
+      <UiButton size="icon" variant="outline" :disabled="isReadOnly" @click="$emit('add-node')" title="Процесс" aria-label="Процесс">
         <Square class="toolbar-icon" />
       </UiButton>
       <UiButton
         size="icon"
         variant="outline"
         :active="isConnectionMode"
+        :disabled="isReadOnly"
         @click="$emit('start-connection-mode')"
         title="Поток данных"
         aria-label="Связь"
@@ -33,7 +34,7 @@
       >
         <MessageSquare class="toolbar-icon" />
       </UiButton>
-      <UiButton size="icon" variant="outline" @click="$emit('add-boundary')" title="Граница системы" aria-label="Граница системы">
+      <UiButton size="icon" variant="outline" :disabled="isReadOnly" @click="$emit('add-boundary')" title="Граница системы" aria-label="Граница системы">
         <SquareDashed class="toolbar-icon" />
       </UiButton>
     </div>
@@ -118,6 +119,7 @@ defineProps<{
   dataFlows: DataFlow[]
   comments: CommentsStoreComment[]
   includeCommentsInPng: boolean
+  isReadOnly: boolean
 }>()
 
 const emit = defineEmits<{

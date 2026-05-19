@@ -15,6 +15,7 @@ type UiBreakpointApi = {
 }
 
 type DiagramBreakpointApi = {
+  isReadOnly?: boolean
   beginEdgeEdit(edgeId: string): Promise<boolean>
   endEdgeEdit(edgeId: string): Promise<void>
   finishEdgeUpdate(edgeId: string): Promise<void>
@@ -67,6 +68,8 @@ export function useBreakpointDrag({
   }
 
   async function onBreakpointDragStart(edgeId: string, event: MouseEvent): Promise<void> {
+    if (diagramStore.isReadOnly) return
+
     const locked = await diagramStore.beginEdgeEdit(edgeId)
     if (!locked) {
       event.preventDefault()

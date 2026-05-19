@@ -23,16 +23,19 @@ export function useFlowEditorActions() {
   }
 
   function addNode(): void {
+    if (diagramStore.isReadOnly) return
     const node = diagramStore.addNode()
     void diagramStore.finishNodeCreate(node)
   }
 
   function addBoundary(): void {
+    if (diagramStore.isReadOnly) return
     const node = diagramStore.addBoundary()
     void diagramStore.finishNodeCreate(node)
   }
 
   function createEdge(edge: Edge): void {
+    if (diagramStore.isReadOnly) return
     const createdEdge = diagramStore.addEdge(edge)
     void diagramStore.finishEdgeCreate(createdEdge)
   }
@@ -67,6 +70,7 @@ export function useFlowEditorActions() {
   const closeDownloadMenu = () => uiStore.closeDownloadMenu()
 
   function updateNode(nodeId: string, updates: Partial<Node>): void {
+    if (diagramStore.isReadOnly) return
     void (async () => {
       const locked = await diagramStore.beginNodeEdit(nodeId)
       if (!locked) return
@@ -86,6 +90,7 @@ export function useFlowEditorActions() {
   }
 
   function updateEdge(edgeId: string, updates: Partial<Edge>): void {
+    if (diagramStore.isReadOnly) return
     void (async () => {
       const locked = await diagramStore.beginEdgeEdit(edgeId)
       if (!locked) return
@@ -96,6 +101,7 @@ export function useFlowEditorActions() {
   }
 
   function updateDataFlows(newFlows: DataFlow[]): void {
+    if (diagramStore.isReadOnly) return
     void (async () => {
       if (uiStore.selectedNodeIds.length === 1 && uiStore.selectedNodeId) {
         const locked = await diagramStore.beginNodeEdit(uiStore.selectedNodeId)
@@ -124,6 +130,7 @@ export function useFlowEditorActions() {
   }
 
   function deleteNode(nodeId: string): void {
+    if (diagramStore.isReadOnly) return
     const node = diagramStore.nodes.find(item => item.id === nodeId)
     if (!node) return
 
@@ -145,6 +152,7 @@ export function useFlowEditorActions() {
   }
 
   function deleteEdge(edgeId: string): void {
+    if (diagramStore.isReadOnly) return
     const edge = diagramStore.edges.find(item => item.id === edgeId)
     if (!edge) return
 

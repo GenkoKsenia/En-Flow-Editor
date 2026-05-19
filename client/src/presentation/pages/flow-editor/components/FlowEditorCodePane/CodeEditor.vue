@@ -29,12 +29,13 @@
           ref="textareaRef"
           v-model="code"
           class="code-textarea"
-          :class="{ active: isActive }"
+          :class="{ active: isActive, 'code-textarea--readonly': props.readOnly }"
+          :readonly="props.readOnly"
           placeholder="Редактируйте код схемы здесь"
           @focus="handleFocus"
           @blur="handleBlur"
           @keydown.tab="handleTab"
-          @keydown.enter.prevent="handleEnter"
+          @keydown.enter="handleEnter"
           @input="onInput"
           @click="updateSelectionState"
           @keyup="updateSelectionState"
@@ -110,6 +111,7 @@ const DSL_TOKEN_REGEX = new RegExp(
 const props = defineProps<{
   content: string
   error?: string | null
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -220,9 +222,9 @@ function onInput(): void {
 
 function escapeHtml(value: string): string {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
 
 function wrapToken(token: string): string {
@@ -356,6 +358,8 @@ function applyKeywordEquals(): boolean {
 
 // Обработка Tab для отступов
 function handleTab(event: KeyboardEvent): void {
+  if (props.readOnly) return
+
   event.preventDefault()
   const textarea = textareaRef.value
   if (!textarea) return
@@ -385,6 +389,8 @@ function handleTab(event: KeyboardEvent): void {
 }
 
 function handleEnter(event: KeyboardEvent): void {
+  if (props.readOnly) return
+
   event.preventDefault()
   const textarea = textareaRef.value
   if (!textarea) return
@@ -583,6 +589,10 @@ watch(isActive, (active) => {
 
 .code-textarea.active {
   box-shadow: inset 0 0 0 2px #007bff;
+}
+
+.code-textarea--readonly {
+  cursor: default;
 }
 
 .code-textarea::-webkit-scrollbar,

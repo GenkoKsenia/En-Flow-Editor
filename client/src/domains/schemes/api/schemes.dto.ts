@@ -1,5 +1,6 @@
 export interface SchemeVersionDto {
   id: number
+  isReadOnly?: boolean
   date: string
   schemeID: number
   code: unknown

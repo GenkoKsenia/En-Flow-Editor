@@ -28,12 +28,13 @@
       v-show="activeTab === 'code'"
       :content="diagramDsl"
       :error="dslError"
+      :read-only="documentStore.isReadOnly"
       @update:content="documentStore.setDslBuffer($event)"
       @focused="documentStore.setEditorFocused(true)"
       @blurred="documentStore.setEditorFocused(false)"
     />
 
-    <DatabaseSchemaPane v-show="activeTab === 'db'" />
+    <DatabaseSchemaPane v-show="activeTab === 'db'" :read-only="documentStore.isReadOnly" />
 
     <button
       v-if="isDesktop"

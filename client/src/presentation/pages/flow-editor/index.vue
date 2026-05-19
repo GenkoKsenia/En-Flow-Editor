@@ -18,7 +18,7 @@
             block
             maxlength="120"
             placeholder="Введите название схемы"
-            :disabled="isSchemeLoading || isSavingSchemeName"
+            :disabled="isSchemeLoading || isSavingSchemeName || isEditorReadOnly"
             @keydown.esc.prevent="cancelSchemeNameEditing"
           />
           <UiButton
@@ -35,7 +35,7 @@
           v-else
           type="button"
           class="scheme-bar__title-button"
-          :disabled="!scheme || isSchemeLoading"
+          :disabled="!scheme || isSchemeLoading || isEditorReadOnly"
           @click="startSchemeNameEditing"
         >
           {{ scheme?.name || `Схема ${schemeId ?? ''}` }}
@@ -55,19 +55,27 @@
 
     <div class="editor-layout">
       <FlowEditorCodePane />
-      <FlowEditorWorkspace />
+      <FlowEditorWorkspace :is-read-only="isEditorReadOnly" />
     </div>
 
-    <TeamModal />
+    <TeamModal
+      :is-read-only="isEditorReadOnly"
+      :can-toggle-read-only="canToggleReadOnly"
+      :is-toggling-read-only="isTogglingReadOnly"
+      @toggle-read-only="toggleReadOnly"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 
+import { setVersionReadOnly, useDiagramStore } from '@/domains/diagram'
 import { updateSchemeName, useScheme } from '@/domains/schemes'
 import UiButton from '@/presentation/ui/UiButton.vue'
 import UiInput from '@/presentation/ui/UiInput.vue'
+import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 
 import FlowEditorCodePane from './components/FlowEditorCodePane/FlowEditorCodePane.vue'
 import FlowEditorWorkspace from './components/FlowEditorWorkspace/FlowEditorWorkspace.vue'
@@ -76,19 +84,29 @@ import { useFlowEditorRoute } from './composables/useFlowEditorRoute'
 
 const { schemeId } = useFlowEditorRoute()
 const { data: scheme, error: schemeError, isLoading: isSchemeLoading } = useScheme(schemeId)
+const diagramStore = useDiagramStore()
+const editorUiStore = useEditorUiStore()
+const { currentVersionId, isReadOnly } = storeToRefs(diagramStore)
 
 const schemeNameDraft = ref('')
 const isEditingSchemeName = ref(false)
 const isSavingSchemeName = ref(false)
+const isTogglingReadOnly = ref(false)
 const saveErrorMessage = ref('')
 const saveSuccessMessage = ref('')
 
 const normalizedSchemeNameDraft = computed(() => schemeNameDraft.value.trim())
 const currentSchemeName = computed(() => scheme.value?.name ?? '')
+const latestVersionId = computed(() => scheme.value?.versions[0]?.id ?? null)
+const canToggleReadOnly = computed(() =>
+  Boolean(currentVersionId.value && latestVersionId.value && currentVersionId.value === latestVersionId.value),
+)
+const isEditorReadOnly = computed(() => isReadOnly.value)
 const isSaveDisabled = computed(() => (
   !scheme.value
   || isSchemeLoading.value
   || isSavingSchemeName.value
+  || isEditorReadOnly.value
   || !normalizedSchemeNameDraft.value
   || normalizedSchemeNameDraft.value === currentSchemeName.value
 ))
@@ -99,8 +117,6 @@ watch(
   nextScheme => {
     schemeNameDraft.value = nextScheme?.name ?? ''
     isEditingSchemeName.value = false
-    saveErrorMessage.value = ''
-    saveSuccessMessage.value = ''
   },
   { immediate: true },
 )
@@ -112,7 +128,7 @@ watch(schemeId, () => {
 })
 
 function startSchemeNameEditing(): void {
-  if (!scheme.value || isSchemeLoading.value) return
+  if (!scheme.value || isSchemeLoading.value || isEditorReadOnly.value) return
   schemeNameDraft.value = currentSchemeName.value
   isEditingSchemeName.value = true
   saveErrorMessage.value = ''
@@ -144,6 +160,44 @@ async function saveSchemeName(): Promise<void> {
     saveErrorMessage.value = 'Не удалось сохранить новое название схемы'
   } finally {
     isSavingSchemeName.value = false
+  }
+}
+
+async function toggleReadOnly(): Promise<void> {
+  const versionId = currentVersionId.value
+  const currentScheme = scheme.value
+  if (!versionId || !currentScheme || !canToggleReadOnly.value || isTogglingReadOnly.value) return
+
+  const nextReadOnly = !isEditorReadOnly.value
+  isTogglingReadOnly.value = true
+  saveErrorMessage.value = ''
+  saveSuccessMessage.value = ''
+
+  try {
+    await setVersionReadOnly(versionId, nextReadOnly)
+    diagramStore.isReadOnly = nextReadOnly
+    scheme.value = {
+      ...currentScheme,
+      isReadOnly: nextReadOnly,
+      versions: currentScheme.versions.map(version => (
+        version.id === versionId
+          ? { ...version, isReadOnly: nextReadOnly }
+          : version
+      )),
+    }
+
+    if (nextReadOnly) {
+      isEditingSchemeName.value = false
+      await diagramStore.releaseActiveOwnedLockScope()
+      editorUiStore.clearSelection()
+      editorUiStore.resetConnectionMode()
+      editorUiStore.stopCommentMode()
+    }
+  } catch (cause) {
+    console.error('Не удалось переключить режим редактирования схемы', cause)
+    saveErrorMessage.value = 'Не удалось изменить режим редактирования схемы'
+  } finally {
+    isTogglingReadOnly.value = false
   }
 }
 </script>

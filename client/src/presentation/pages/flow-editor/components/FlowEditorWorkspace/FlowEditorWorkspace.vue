@@ -13,6 +13,7 @@
       :data-flows="dataFlows"
       :comments="comments"
       :include-comments-in-png="includeCommentsInPng"
+      :is-read-only="props.isReadOnly"
       @add-node="addNode"
       @start-connection-mode="startConnectionMode"
       @toggle-comment-mode="toggleCommentMode"
@@ -84,7 +85,7 @@
             :nodes="nodes"
             :data-sets="nodeSendableData"
             :data-flows="dataFlows"
-            :is-locked="isSelectedObjectLockedByOther"
+            :is-locked="isSelectedObjectLockedByOther || isSelectedObjectReadOnly"
             :lock-message="selectedObjectLockMessage"
             @update:node="updateNode"
             @update:edge="updateEdge"
@@ -249,6 +250,10 @@ import { useFlowEditorPngExport } from '../../composables/useFlowEditorPngExport
 import { useFlowEditorVersions } from '../../composables/useFlowEditorVersions'
 import { useFlowEditorWorkspace } from '../../composables/useFlowEditorWorkspace'
 
+const props = defineProps<{
+  isReadOnly: boolean
+}>()
+
 const canvas = ref<HTMLElement | null>(null)
 const canvasContent = ref<HTMLElement | null>(null)
 
@@ -266,7 +271,9 @@ const {
   marqueeRect,
   lockedNodeOwners,
   lockedEdgeOwners,
+  isReadOnly,
   isSelectedObjectLockedByOther,
+  isSelectedObjectReadOnly,
   selectedObjectLockMessage,
   isDragging,
   potentialParentId,

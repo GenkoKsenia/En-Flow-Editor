@@ -9,6 +9,7 @@ import type { updateVersion } from '../api'
 export type DiagramContext = {
   schemeId: Ref<string | null>
   currentVersionId: Ref<string | null>
+  isReadOnly: Ref<boolean>
   nodes: Ref<Node[]>
   edges: Ref<Edge[]>
   dataFlows: Ref<DataFlow[]>

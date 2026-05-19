@@ -23,6 +23,7 @@ export const useDiagramStore = defineStore('diagram', () => {
 
   const schemeId = ref<string | null>(null)
   const currentVersionId = ref<string | null>(null)
+  const isReadOnly = ref(false)
   const nodes = ref<Node[]>(defaultDiagram.nodes)
   const edges = ref<Edge[]>(defaultDiagram.edges)
   const dataFlows = ref<DataFlow[]>(defaultDiagram.dataFlows)
@@ -47,6 +48,7 @@ export const useDiagramStore = defineStore('diagram', () => {
   const context: DiagramContext = {
     schemeId,
     currentVersionId,
+    isReadOnly,
     nodes,
     edges,
     dataFlows,
@@ -171,6 +173,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     debounceApplyFromDsl()
   })
   watch(lastSerializedJson, value => {
+    if (isReadOnly.value) return
     if (dslError.value) return
     if (value === lastPersistedJson.value) return
 
@@ -185,10 +188,16 @@ export const useDiagramStore = defineStore('diagram', () => {
       })
     }, 700)
   })
+  watch(isReadOnly, value => {
+    if (!value || !codeSaveTimeout.value) return
+    window.clearTimeout(codeSaveTimeout.value)
+    codeSaveTimeout.value = null
+  })
 
   return {
     schemeId,
     currentVersionId,
+    isReadOnly,
     nodes,
     edges,
     dataFlows,

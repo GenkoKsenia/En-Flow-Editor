@@ -80,6 +80,7 @@
           type="button"
           class="db-table-item"
           :class="{ 'db-table-item--added': isTableAdded(table.tableName) }"
+          :disabled="props.readOnly"
           @click="addTableToDiagram(table)"
         >
           <span class="db-table-item__name">{{ table.tableName }}</span>
@@ -100,6 +101,10 @@ import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import UiButton from '@/presentation/ui/UiButton.vue'
 import UiInput from '@/presentation/ui/UiInput.vue'
 import UiSelect from '@/presentation/ui/UiSelect.vue'
+
+const props = defineProps<{
+  readOnly?: boolean
+}>()
 
 const TABLE_WIDTH = 240
 const TABLE_PADDING = 16
@@ -242,6 +247,8 @@ async function loadTables(): Promise<void> {
 }
 
 async function addTableToDiagram(table: DbTableInfo): Promise<void> {
+  if (props.readOnly) return
+
   const existingNode = findTableNode(table.tableName)
   if (existingNode) {
     editorUiStore.selectNode(existingNode.id)
@@ -443,6 +450,15 @@ async function addTableToDiagram(table: DbTableInfo): Promise<void> {
 
 .db-table-item:hover {
   background: #f8fafc;
+}
+
+.db-table-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.db-table-item:disabled:hover {
+  background: #ffffff;
 }
 
 .db-table-item--added {

@@ -45,7 +45,7 @@ export function useFlowEditorConnections({
   const documentStore = useDiagramStore()
   const uiStore = useEditorUiStore()
 
-  const { nodes, edges } = storeToRefs(documentStore)
+  const { nodes, edges, isReadOnly } = storeToRefs(documentStore)
   const {
     isCommentMode,
     isConnectionMode,
@@ -69,7 +69,10 @@ export function useFlowEditorConnections({
       && !(hoveredNodeId.value === nodeId && hoveredNodeSide.value),
   )
 
-  const startConnectionMode = () => uiStore.startConnectionMode()
+  const startConnectionMode = () => {
+    if (isReadOnly.value) return
+    uiStore.startConnectionMode()
+  }
   const resetConnectionMode = () => uiStore.resetConnectionMode()
 
   function buildPendingEdge(
@@ -135,6 +138,12 @@ export function useFlowEditorConnections({
         return
       }
 
+      if (isReadOnly.value) {
+        await clearSelection()
+        uiStore.selectNode(nodeId)
+        return
+      }
+
       if (uiStore.selectedNodeId === nodeId) {
         const locked = await documentStore.beginNodeEdit(nodeId)
         if (!locked) return
@@ -176,6 +185,12 @@ export function useFlowEditorConnections({
 
     if (!edges.value.some(edge => edge.id === edgeId)) return
     if (selectedEdgeIds.value.length > 1 && selectedEdgeIds.value.includes(edgeId)) {
+      return
+    }
+
+    if (isReadOnly.value) {
+      await clearSelection()
+      uiStore.selectEdge(edgeId)
       return
     }
 

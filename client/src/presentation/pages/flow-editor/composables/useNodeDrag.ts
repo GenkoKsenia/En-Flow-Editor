@@ -404,6 +404,10 @@ export function useNodeDrag({
   }
 
   function onNodeMouseDown(nodeId: string, event: MouseEvent): void {
+    if ('isReadOnly' in documentStore && documentStore.isReadOnly) {
+      return
+    }
+
     if (isConnectionMode.value || isCommentMode.value) {
       event.preventDefault()
       return

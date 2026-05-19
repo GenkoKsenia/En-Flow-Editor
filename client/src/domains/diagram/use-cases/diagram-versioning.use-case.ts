@@ -26,6 +26,7 @@ export function createDiagramVersioningUseCases(
       const scheme = await context.getSchemeById(nextSchemeId)
       const latestVersion = scheme.versions[0]
       context.currentVersionId.value = latestVersion?.id ?? null
+      context.isReadOnly.value = Boolean(scheme.isReadOnly || latestVersion?.isReadOnly)
 
       if (latestVersion) {
         dependencies.setDiagramFromServer(latestVersion.code)
@@ -36,6 +37,7 @@ export function createDiagramVersioningUseCases(
       }
     } catch (error) {
       context.loadError.value = error instanceof Error ? error.message : 'Не удалось загрузить схему'
+      context.isReadOnly.value = false
       dependencies.resetDiagram()
       context.lastPersistedJson.value = context.lastSerializedJson.value
     } finally {
@@ -44,6 +46,8 @@ export function createDiagramVersioningUseCases(
   }
 
   async function saveCurrentVersion(): Promise<void> {
+    if (context.isReadOnly.value) return
+
     if (!context.currentVersionId.value) {
       await loadCurrentVersion(context.schemeId.value)
     }
