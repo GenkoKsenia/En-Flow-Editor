@@ -43,6 +43,11 @@ export const useDiagramStore = defineStore('diagram', () => {
   const loadError = ref<string | null>(null)
   const applyTimeout = ref<number | null>(null)
   const codeSaveTimeout = ref<number | null>(null)
+  const undoStack = ref<string[]>([])
+  const redoStack = ref<string[]>([])
+  const isApplyingHistory = ref(false)
+  const historyBatchDepth = ref(0)
+  const pendingHistorySnapshot = ref<string | null>(null)
   const isDirty = computed(() => dslBuffer.value.trim().length > 0 && dslError.value !== null)
 
   const context: DiagramContext = {
@@ -163,10 +168,91 @@ export const useDiagramStore = defineStore('diagram', () => {
     connectCollaboration(store)
   }
 
+  function resetHistory(snapshot?: string | null): void {
+    const nextSnapshot = snapshot ?? lastSerializedJson.value
+    undoStack.value = nextSnapshot ? [nextSnapshot] : []
+    redoStack.value = []
+    pendingHistorySnapshot.value = null
+  }
+
+  function pushHistorySnapshot(snapshot: string): void {
+    if (!snapshot) return
+
+    if (!undoStack.value.length) {
+      undoStack.value = [snapshot]
+      redoStack.value = []
+      return
+    }
+
+    if (undoStack.value[undoStack.value.length - 1] === snapshot) {
+      return
+    }
+
+    undoStack.value = [...undoStack.value, snapshot].slice(-100)
+    redoStack.value = []
+  }
+
+  function beginHistoryBatch(): void {
+    historyBatchDepth.value += 1
+  }
+
+  function endHistoryBatch(): void {
+    if (historyBatchDepth.value <= 0) return
+    historyBatchDepth.value -= 1
+
+    if (historyBatchDepth.value > 0) return
+
+    const snapshot = pendingHistorySnapshot.value
+    pendingHistorySnapshot.value = null
+    if (snapshot) {
+      pushHistorySnapshot(snapshot)
+    }
+  }
+
+  function undoHistory(): void {
+    if (isReadOnly.value) return
+    if (undoStack.value.length < 2) return
+
+    const currentSnapshot = undoStack.value[undoStack.value.length - 1]
+    const previousSnapshot = undoStack.value[undoStack.value.length - 2]
+    if (!currentSnapshot || !previousSnapshot) return
+
+    undoStack.value = undoStack.value.slice(0, -1)
+    redoStack.value = [...redoStack.value, currentSnapshot].slice(-100)
+    pendingHistorySnapshot.value = null
+    isApplyingHistory.value = true
+    applyJson(previousSnapshot)
+    isApplyingHistory.value = false
+  }
+
+  function redoHistory(): void {
+    if (isReadOnly.value) return
+    const nextSnapshot = redoStack.value[redoStack.value.length - 1]
+    if (!nextSnapshot) return
+
+    redoStack.value = redoStack.value.slice(0, -1)
+    isApplyingHistory.value = true
+    applyJson(nextSnapshot)
+    isApplyingHistory.value = false
+    if (undoStack.value[undoStack.value.length - 1] !== nextSnapshot) {
+      undoStack.value = [...undoStack.value, nextSnapshot].slice(-100)
+    }
+  }
+
   watch([nodes, edges, dataFlows], () => {
     syncJsonFromState()
     syncDslFromState()
   }, { deep: true, immediate: true })
+  watch(lastSerializedJson, value => {
+    if (!value || isApplyingHistory.value) return
+
+    if (historyBatchDepth.value > 0) {
+      pendingHistorySnapshot.value = value
+      return
+    }
+
+    pushHistorySnapshot(value)
+  }, { immediate: true })
   watch(dslBuffer, (value, previousValue) => {
     if (isUpdatingFromDsl.value) return
     if (value === previousValue) return
@@ -193,6 +279,10 @@ export const useDiagramStore = defineStore('diagram', () => {
     window.clearTimeout(codeSaveTimeout.value)
     codeSaveTimeout.value = null
   })
+  watch(schemeId, (value, previousValue) => {
+    if (value === previousValue) return
+    resetHistory(null)
+  })
 
   return {
     schemeId,
@@ -215,11 +305,18 @@ export const useDiagramStore = defineStore('diagram', () => {
     isLoading,
     loadError,
     isDirty,
+    undoStack,
+    redoStack,
     buildNodeSendableData,
     syncJsonFromState,
     syncDslFromState,
     applyJson,
     applyDsl,
+    beginHistoryBatch,
+    endHistoryBatch,
+    resetHistory,
+    undoHistory,
+    redoHistory,
     setDiagramFromServer,
     loadCurrentVersion,
     saveCurrentVersion,

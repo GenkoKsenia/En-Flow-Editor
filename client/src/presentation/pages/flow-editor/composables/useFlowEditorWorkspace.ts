@@ -272,27 +272,37 @@ export function useFlowEditorWorkspace(
       edges.value.map(edge => [edge.id, collaborationStore.getElementLockOwner('connection', edge.id)]),
     ),
   )
-  const selectedObjectLockOwner = computed(() => {
-    if (selectedNodeId.value) {
-      return collaborationStore.getElementLockOwner('block', selectedNodeId.value)
+  const selectedObjectLockOwners = computed(() => {
+    if (selectedNodeIds.value.length > 0 && selectedEdgeIds.value.length === 0) {
+      return selectedNodeIds.value
+        .map(nodeId => collaborationStore.getElementLockOwner('block', nodeId))
+        .filter((owner): owner is string => Boolean(owner))
     }
 
-    if (selectedEdgeId.value) {
-      return collaborationStore.getElementLockOwner('connection', selectedEdgeId.value)
+    if (selectedEdgeIds.value.length > 0 && selectedNodeIds.value.length === 0) {
+      return selectedEdgeIds.value
+        .map(edgeId => collaborationStore.getElementLockOwner('connection', edgeId))
+        .filter((owner): owner is string => Boolean(owner))
     }
 
-    return null
+    return []
   })
   const isSelectedObjectLockedByOther = computed(() =>
-    selectedObjectLockOwner.value !== null && selectedObjectLockOwner.value !== 'self',
+    selectedObjectLockOwners.value.some(owner => owner !== 'self'),
   )
   const isSelectedObjectReadOnly = computed(() => isReadOnly.value)
   const selectedObjectLockMessage = computed(() => {
     if (isSelectedObjectReadOnly.value) return 'Схема закрыта для редактирования'
     if (!isSelectedObjectLockedByOther.value) return null
-    return selectedObjectLockOwner.value === 'locked'
-      ? 'Элемент занят другим пользователем'
-      : `Элемент занят: ${selectedObjectLockOwner.value}`
+
+    if (selectedObjectLockOwners.value.length === 1) {
+      const owner = selectedObjectLockOwners.value[0]
+      return owner === 'locked'
+        ? 'Элемент занят другим пользователем'
+        : `Элемент занят: ${owner}`
+    }
+
+    return 'Один или несколько элементов заняты другим пользователем'
   })
 
   return {
@@ -365,6 +375,11 @@ export function useFlowEditorWorkspace(
     updateNode: actions.updateNode,
     updateEdge: actions.updateEdge,
     updateDataFlows: actions.updateDataFlows,
+    copySelection: actions.copySelection,
+    pasteSelection: actions.pasteSelection,
+    deleteSelection: actions.deleteSelection,
+    undo: actions.undo,
+    redo: actions.redo,
     deleteNode: actions.deleteNode,
     deleteEdge: actions.deleteEdge,
     clearSelection: actions.clearSelection,

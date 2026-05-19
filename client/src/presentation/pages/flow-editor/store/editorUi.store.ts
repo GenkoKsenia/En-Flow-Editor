@@ -92,9 +92,27 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     selectedEdgeIds.value = []
   }
 
+  function toggleNodeSelection(nodeId: string): void {
+    if (selectedNodeIds.value.includes(nodeId)) {
+      selectedNodeIds.value = selectedNodeIds.value.filter(id => id !== nodeId)
+      return
+    }
+
+    selectedNodeIds.value = [...selectedNodeIds.value, nodeId]
+  }
+
   function selectEdge(edgeId: string): void {
     selectedEdgeIds.value = [edgeId]
     selectedNodeIds.value = []
+  }
+
+  function toggleEdgeSelection(edgeId: string): void {
+    if (selectedEdgeIds.value.includes(edgeId)) {
+      selectedEdgeIds.value = selectedEdgeIds.value.filter(id => id !== edgeId)
+      return
+    }
+
+    selectedEdgeIds.value = [...selectedEdgeIds.value, edgeId]
   }
 
   function setSelectedNodes(nodeIds: string[]): void {
@@ -319,7 +337,9 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     canvasGridStyle,
     clearSelection,
     selectNode,
+    toggleNodeSelection,
     selectEdge,
+    toggleEdgeSelection,
     setSelectedNodes,
     setSelectedEdges,
     setSelection,

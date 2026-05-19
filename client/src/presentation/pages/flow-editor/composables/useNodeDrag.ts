@@ -408,6 +408,10 @@ export function useNodeDrag({
       return
     }
 
+    if (event.ctrlKey || event.metaKey) {
+      return
+    }
+
     if (isConnectionMode.value || isCommentMode.value) {
       event.preventDefault()
       return

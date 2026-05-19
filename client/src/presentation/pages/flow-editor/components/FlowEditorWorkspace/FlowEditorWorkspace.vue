@@ -82,6 +82,8 @@
         >
           <PropertiesPanel
             :selected-object="selectedObject"
+            :selected-node-ids="selectedNodeIds"
+            :selected-edge-ids="selectedEdgeIds"
             :edges="edges"
             :nodes="nodes"
             :data-sets="nodeSendableData"
@@ -93,6 +95,7 @@
             @update:dataFlows="updateDataFlows"
             @delete:node="deleteNode"
             @delete:edge="deleteEdge"
+            @delete:selection="deleteSelection"
             @clear-selection="clearSelection"
           />
         </div>
@@ -234,7 +237,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { CommentsStoreComment } from '@/domains/comments'
 
@@ -328,6 +331,11 @@ const {
   updateNode,
   updateEdge,
   updateDataFlows,
+  copySelection,
+  pasteSelection,
+  deleteSelection,
+  undo,
+  redo,
   deleteNode,
   deleteEdge,
   clearSelection,
@@ -362,7 +370,10 @@ const hasDiagnosticsPanel = computed(() => schemeDiagnostics.value.length > 0)
 const hasDiagnosticsErrors = computed(() => schemeDiagnostics.value.some(item => item.level === 'error'))
 const hasDiagnosticsWarnings = computed(() => schemeDiagnostics.value.some(item => item.level === 'warning'))
 const showDiagnosticsPanel = computed(() => hasDiagnosticsPanel.value && !isDiagnosticsCollapsed.value)
-const hasPropertiesPanel = computed(() => Boolean(selectedObject.value))
+const hasPropertiesPanel = computed(() => (
+  (selectedNodeIds.value.length > 0 && selectedEdgeIds.value.length === 0)
+  || (selectedEdgeIds.value.length > 0 && selectedNodeIds.value.length === 0)
+))
 const hasSidePanels = computed(() => showDiagnosticsPanel.value || hasPropertiesPanel.value)
 const draggedNodeIds = computed(() => {
   if (!isDragging.value) return new Set<string>()
@@ -486,6 +497,11 @@ watch(hasDiagnosticsPanel, value => {
 onBeforeUnmount(() => {
   clearZoomHideTimeout()
   clearCommentTargetHideTimeout()
+  document.removeEventListener('keydown', onDocumentKeyDown)
+})
+
+onMounted(() => {
+  document.addEventListener('keydown', onDocumentKeyDown)
 })
 
 function clearZoomHideTimeout(): void {
@@ -504,6 +520,52 @@ function scheduleZoomControlHide(delay = 1600): void {
     showZoomControl.value = false
     zoomFlashTimeout = null
   }, delay)
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+
+  return Boolean(
+    target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]'),
+  )
+}
+
+function onDocumentKeyDown(event: KeyboardEvent): void {
+  if (isEditableTarget(event.target)) return
+
+  const isCopy = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'c'
+  const isPaste = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'v'
+  const isUndo = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'z'
+  const isRedo = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'z'
+
+  if (isCopy) {
+    event.preventDefault()
+    copySelection()
+    return
+  }
+
+  if (isPaste) {
+    event.preventDefault()
+    pasteSelection()
+    return
+  }
+
+  if (isUndo) {
+    event.preventDefault()
+    void undo()
+    return
+  }
+
+  if (isRedo) {
+    event.preventDefault()
+    void redo()
+    return
+  }
+
+  if (event.key === 'Delete') {
+    event.preventDefault()
+    deleteSelection()
+  }
 }
 
 function revealZoomControl(): void {

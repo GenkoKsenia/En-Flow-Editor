@@ -142,6 +142,10 @@ export function useFlowEditorConnections({
 
     if (!isConnectionMode.value) {
       if (!nodes.value.some(node => node.id === nodeId)) return
+      if (event.ctrlKey || event.metaKey) {
+        uiStore.toggleNodeSelection(nodeId)
+        return
+      }
       if (selectedNodeIds.value.length > 1 && selectedNodeIds.value.includes(nodeId)) {
         return
       }
@@ -192,6 +196,10 @@ export function useFlowEditorConnections({
     }
 
     if (!edges.value.some(edge => edge.id === edgeId)) return
+    if (event.ctrlKey || event.metaKey) {
+      uiStore.toggleEdgeSelection(edgeId)
+      return
+    }
     if (selectedEdgeIds.value.length > 1 && selectedEdgeIds.value.includes(edgeId)) {
       return
     }
