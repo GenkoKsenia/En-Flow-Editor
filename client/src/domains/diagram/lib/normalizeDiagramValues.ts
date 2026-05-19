@@ -9,7 +9,7 @@ export function normalizeLineStyle(style: unknown): Edge['lineStyle'] {
 }
 
 export function normalizeBorderStyle(style: unknown): NodeLineStyle {
-  return style === 'dashed' ? 'dashed' : 'solid'
+  return style === 'dashed' || style === 'database' ? style : 'solid'
 }
 
 export function normalizeConnectionSide(side: unknown): ConnectionSide {

@@ -15,7 +15,11 @@ import {
   normalizeLineStyle,
   normalizeNodeId,
 } from '@/domains/diagram'
-import type { Edge, Node } from '@/domains/graph'
+import {
+  normalizeConnectionSideForBorderStyle,
+  type Edge,
+  type Node,
+} from '@/domains/graph'
 
 type BlockStyle = {
   color?: string
@@ -171,6 +175,7 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
     informationIds: node.informationIds,
     informationText: node.informationText,
   }))
+  const nodeBorderStyles = new Map(nodes.map(node => [node.id, node.borderStyle]))
 
   const nodeLabelMap = new Map(nodes.map(node => [node.id, node.text.trim() || node.id]))
   const existingEdgeLabels: string[] = []
@@ -193,8 +198,14 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
         id: String(connection.id),
         sourceNodeId: startId,
         targetNodeId: endId,
-        sourceSide: normalizeConnectionSide(connection.startSide),
-        targetSide: normalizeConnectionSide(connection.endSide),
+        sourceSide: normalizeConnectionSideForBorderStyle(
+          normalizeConnectionSide(connection.startSide),
+          nodeBorderStyles.get(startId),
+        ),
+        targetSide: normalizeConnectionSideForBorderStyle(
+          normalizeConnectionSide(connection.endSide),
+          nodeBorderStyles.get(endId),
+        ),
         label,
         color: style?.color ?? DEFAULT_EDGE_COLOR,
         width: style?.width ?? DEFAULT_EDGE_WIDTH,

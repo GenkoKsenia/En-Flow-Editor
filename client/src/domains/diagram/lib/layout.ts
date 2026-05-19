@@ -1,4 +1,4 @@
-import type { ConnectionSide, Edge, Node, Position } from '@/domains/graph'
+import type { ConnectionSide, Edge, Node, NodeLineStyle, Position } from '@/domains/graph'
 
 type ConnectionMap = Record<string, Record<ConnectionSide, string[]>>
 
@@ -197,7 +197,9 @@ export function getNodeChildrenCount(nodes: Node[], nodeId: string): number {
   return nodes.filter(node => node.parentId === nodeId).length
 }
 
-export function resolveNodeBorderStyle(node: Node, childCount: number): 'solid' | 'dashed' {
+export function resolveNodeBorderStyle(node: Node, childCount: number): NodeLineStyle {
+  if (node.borderStyle === 'database') return 'database'
+
   const isBoundary = node.text?.startsWith('Область ')
   if (isBoundary) return 'dashed'
   return childCount > 0 ? 'dashed' : 'solid'

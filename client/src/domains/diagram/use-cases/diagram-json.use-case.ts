@@ -1,4 +1,9 @@
-import type { DataFlow, Edge, Node } from '@/domains/graph'
+import {
+  normalizeConnectionSideForBorderStyle,
+  type DataFlow,
+  type Edge,
+  type Node,
+} from '@/domains/graph'
 
 import {
   buildInformationPayload,
@@ -272,6 +277,7 @@ export function createDiagramJsonUseCases(
         } satisfies Node
       })
       .filter(Boolean) as Node[]
+    const nodeBorderStyles = new Map(normalizedNodes.map(node => [node.id, node.borderStyle]))
 
     const existingEdgeLabels: string[] = []
     const normalizedEdges = parsedConnections
@@ -292,8 +298,14 @@ export function createDiagramJsonUseCases(
           id: String(connection.id),
           sourceNodeId: startId,
           targetNodeId: endId,
-          sourceSide: normalizeConnectionSide(connection.startSide),
-          targetSide: normalizeConnectionSide(connection.endSide),
+          sourceSide: normalizeConnectionSideForBorderStyle(
+            normalizeConnectionSide(connection.startSide),
+            nodeBorderStyles.get(startId),
+          ),
+          targetSide: normalizeConnectionSideForBorderStyle(
+            normalizeConnectionSide(connection.endSide),
+            nodeBorderStyles.get(endId),
+          ),
           label,
           color: style?.color ?? context.defaults.DEFAULT_EDGE_COLOR,
           width: style?.width ?? context.defaults.DEFAULT_EDGE_WIDTH,

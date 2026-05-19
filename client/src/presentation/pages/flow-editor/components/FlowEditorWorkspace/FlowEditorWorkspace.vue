@@ -15,6 +15,7 @@
       :include-comments-in-png="includeCommentsInPng"
       :is-read-only="props.isReadOnly"
       @add-node="addNode"
+      @add-database-node="addDatabaseNode"
       @start-connection-mode="startConnectionMode"
       @toggle-comment-mode="toggleCommentMode"
       @toggle-comments-visibility="commentsVisible = !commentsVisible"
@@ -312,6 +313,7 @@ const {
   getAbsoluteNodePosition,
   getDescendantNodes,
   addNode,
+  addDatabaseNode,
   startConnectionMode,
   toggleCommentMode,
   addBoundary,

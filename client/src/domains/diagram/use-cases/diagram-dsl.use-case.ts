@@ -12,7 +12,13 @@ import {
   roundCoord,
 } from '@/domains/diagram/lib'
 import type { DiagramDto } from '@/domains/diagram/api'
-import type { ConnectionSide, DataFlow, Edge, Node } from '@/domains/graph'
+import {
+  normalizeConnectionSideForBorderStyle,
+  type ConnectionSide,
+  type DataFlow,
+  type Edge,
+  type Node,
+} from '@/domains/graph'
 
 import type { DiagramContext } from './diagram.context'
 
@@ -1021,6 +1027,7 @@ export function createDiagramDslUseCases(
       node.width = Math.max(node.width, required.width)
       node.height = Math.max(node.height, required.height)
     })
+    const nodeBorderStyles = new Map(resolvedNodes.map(node => [node.id, node.borderStyle]))
 
     const declaredFlowMap = new Map<string, DataFlow>()
     parsed.flowOrder.forEach(flowId => {
@@ -1094,8 +1101,14 @@ export function createDiagramDslUseCases(
         id: matchedEdge?.id ?? `edge-${index + 1}-${connection.sourceId}-${connection.targetId}`,
         sourceNodeId: connection.sourceId,
         targetNodeId: connection.targetId,
-        sourceSide: normalizeConnectionSide(connection.props.sourceSide ?? matchedEdge?.sourceSide),
-        targetSide: normalizeConnectionSide(connection.props.targetSide ?? matchedEdge?.targetSide),
+        sourceSide: normalizeConnectionSideForBorderStyle(
+          normalizeConnectionSide(connection.props.sourceSide ?? matchedEdge?.sourceSide),
+          nodeBorderStyles.get(connection.sourceId),
+        ),
+        targetSide: normalizeConnectionSideForBorderStyle(
+          normalizeConnectionSide(connection.props.targetSide ?? matchedEdge?.targetSide),
+          nodeBorderStyles.get(connection.targetId),
+        ),
         label: edgeLabel,
         color: connection.props.color ?? matchedEdge?.color ?? context.defaults.DEFAULT_EDGE_COLOR,
         width: connection.props.width ?? matchedEdge?.width ?? context.defaults.DEFAULT_EDGE_WIDTH,

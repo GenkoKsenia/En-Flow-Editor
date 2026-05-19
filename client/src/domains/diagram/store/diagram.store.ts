@@ -141,7 +141,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     flushPendingUpdatesOnRequest,
     handleNewVersionCreated,
   } = collaborationUseCases
-  const { addNode, addBoundary, updateNode, deleteNode } = localUseCases
+  const { addNode, addDatabaseNode, addBoundary, updateNode, deleteNode } = localUseCases
   const { addEdge, createEdgeId, updateEdge, deleteEdge } = localUseCases
 
   function setEditorFocused(value: boolean): void {
@@ -244,6 +244,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     flushPendingUpdatesOnRequest,
     handleNewVersionCreated,
     addNode,
+    addDatabaseNode,
     addBoundary,
     addEdge,
     createEdgeId,

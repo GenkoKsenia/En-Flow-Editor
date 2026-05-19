@@ -3,7 +3,11 @@ import { storeToRefs } from 'pinia'
 
 import { useDiagramStore } from '@/domains/diagram'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
-import type { ConnectionSide, Edge } from '@/domains/graph'
+import {
+  normalizeConnectionSideForBorderStyle,
+  type ConnectionSide,
+  type Edge,
+} from '@/domains/graph'
 
 type UseFlowEditorConnectionsOptions = {
   nodeSendableData: ComputedRef<Record<string, string[]>>
@@ -103,12 +107,16 @@ export function useFlowEditorConnections({
     const exists = edges.value.some(edge => edge.sourceNodeId === sourceId && edge.targetNodeId === targetId)
     if (exists) return
 
-    const sourceName = nodes.value.find(node => node.id === sourceId)?.text?.trim() ?? ''
-    const targetName = nodes.value.find(node => node.id === targetId)?.text?.trim() ?? ''
+    const sourceNode = nodes.value.find(node => node.id === sourceId)
+    const targetNode = nodes.value.find(node => node.id === targetId)
+    const sourceName = sourceNode?.text?.trim() ?? ''
+    const targetName = targetNode?.text?.trim() ?? ''
     const label = buildEdgeLabel(sourceId, targetId, edges.value.map(edge => edge.label ?? ''), sourceName, targetName)
+    const normalizedSourceSide = normalizeConnectionSideForBorderStyle(sourceSide, sourceNode?.borderStyle)
+    const normalizedTargetSide = normalizeConnectionSideForBorderStyle(targetSide, targetNode?.borderStyle)
 
     createEdge({
-      ...buildPendingEdge(sourceId, sourceSide, targetId, targetSide),
+      ...buildPendingEdge(sourceId, normalizedSourceSide, targetId, normalizedTargetSide),
       sourceNodeId: sourceId,
       targetNodeId: targetId,
       label,

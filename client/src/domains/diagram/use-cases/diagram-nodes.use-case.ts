@@ -1,4 +1,7 @@
-import type { Node } from '@/domains/graph'
+import {
+  normalizeConnectionSideForBorderStyle,
+  type Node,
+} from '@/domains/graph'
 import { findFreeLeftPlacement } from '@/domains/diagram/lib'
 
 import type { DiagramContext } from './diagram.context'
@@ -40,6 +43,12 @@ export function createDiagramNodesUseCases(
     return node
   }
 
+  function addDatabaseNode(): Node {
+    const node = addNode()
+    node.borderStyle = 'database'
+    return node
+  }
+
   function addBoundary(): Node {
     const index = getNextBoundaryIndex()
     const width = 180
@@ -66,15 +75,49 @@ export function createDiagramNodesUseCases(
     return node
   }
 
-  function updateNode(nodeId: string, updates: Partial<Node>): void {
+  function normalizeConnectedEdgeSides(nodeId: string): string[] {
     const node = context.nodes.value.find(item => item.id === nodeId)
-    if (!node) return
+    if (!node) return []
+
+    const affectedEdgeIds: string[] = []
+
+    context.edges.value.forEach(edge => {
+      let changed = false
+
+      if (edge.sourceNodeId === nodeId) {
+        const nextSourceSide = normalizeConnectionSideForBorderStyle(edge.sourceSide, node.borderStyle)
+        if (nextSourceSide !== edge.sourceSide) {
+          edge.sourceSide = nextSourceSide
+          changed = true
+        }
+      }
+
+      if (edge.targetNodeId === nodeId) {
+        const nextTargetSide = normalizeConnectionSideForBorderStyle(edge.targetSide, node.borderStyle)
+        if (nextTargetSide !== edge.targetSide) {
+          edge.targetSide = nextTargetSide
+          changed = true
+        }
+      }
+
+      if (changed) {
+        affectedEdgeIds.push(edge.id)
+      }
+    })
+
+    return affectedEdgeIds
+  }
+
+  function updateNode(nodeId: string, updates: Partial<Node>): string[] {
+    const node = context.nodes.value.find(item => item.id === nodeId)
+    if (!node) return []
 
     if (updates.informationIds) {
       dependencies.ensureFlowsForInformation(nodeId, updates.informationIds)
     }
 
     Object.assign(node, updates)
+    return normalizeConnectedEdgeSides(nodeId)
   }
 
   function deleteNode(nodeId: string): void {
@@ -91,6 +134,7 @@ export function createDiagramNodesUseCases(
   return {
     getNextBoundaryIndex,
     addNode,
+    addDatabaseNode,
     addBoundary,
     updateNode,
     deleteNode,

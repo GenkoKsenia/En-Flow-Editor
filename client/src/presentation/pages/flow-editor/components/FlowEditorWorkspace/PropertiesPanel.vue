@@ -293,7 +293,7 @@ import UiButton from '@/presentation/ui/UiButton.vue'
 import UiInput from '@/presentation/ui/UiInput.vue'
 import UiSelect from '@/presentation/ui/UiSelect.vue'
 import type { SelectedObject } from '@/domains/diagram'
-import type { DataFlow, Edge, LineStyle, Node } from '@/domains/graph'
+import type { DataFlow, Edge, LineStyle, Node, NodeLineStyle } from '@/domains/graph'
 
 interface Props {
   selectedObject?: SelectedObject | null
@@ -327,9 +327,10 @@ const selectedEdge = computed(() => {
 })
 
 const availableEdges = computed(() => props.edges ?? [])
-const nodeLineStyleOptions: { value: LineStyle, label: string }[] = [
+const nodeLineStyleOptions: { value: NodeLineStyle, label: string }[] = [
   { value: 'solid', label: 'Сплошная' },
-  { value: 'dashed', label: 'Пунктирная' }
+  { value: 'dashed', label: 'Пунктирная' },
+  { value: 'database', label: 'База данных' },
 ]
 const edgeLineStyleOptions: { value: LineStyle, label: string }[] = [
   { value: 'solid', label: 'Сплошная' },
@@ -392,10 +393,10 @@ function onNodeSizeChange(): void {
 
 function onNodeBorderStyleChange(value: string): void {
   if (!selectedNode.value) return
-  const safeValue: LineStyle = value === 'dotted' ? 'dashed' : value
-  selectedNode.value.borderStyle = safeValue
+  const nextValue: NodeLineStyle = value === 'database' || value === 'dashed' ? value : 'solid'
+  selectedNode.value.borderStyle = nextValue
   emit('update:node', selectedNode.value.id, {
-    borderStyle: safeValue
+    borderStyle: nextValue
   })
 }
 

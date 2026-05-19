@@ -350,6 +350,7 @@ export function useFlowEditorWorkspace(
     getAbsoluteNodePosition,
     getDescendantNodes,
     addNode: actions.addNode,
+    addDatabaseNode: actions.addDatabaseNode,
     startConnectionMode: connections.startConnectionMode,
     toggleCommentMode: actions.toggleCommentMode,
     addBoundary: actions.addBoundary,

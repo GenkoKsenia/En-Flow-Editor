@@ -28,6 +28,12 @@ export function useFlowEditorActions() {
     void diagramStore.finishNodeCreate(node)
   }
 
+  function addDatabaseNode(): void {
+    if (diagramStore.isReadOnly) return
+    const node = diagramStore.addDatabaseNode()
+    void diagramStore.finishNodeCreate(node)
+  }
+
   function addBoundary(): void {
     if (diagramStore.isReadOnly) return
     const node = diagramStore.addBoundary()
@@ -83,9 +89,11 @@ export function useFlowEditorActions() {
         ]),
       )
 
-      diagramStore.updateNode(nodeId, updates)
+      const normalizedEdgeIds = diagramStore.updateNode(nodeId, updates) ?? []
       diagramStore.maintainPassThroughEdges(nodeId)
-      await diagramStore.finishNodeUpdate(nodeId, { affectedEdgeIds })
+      await diagramStore.finishNodeUpdate(nodeId, {
+        affectedEdgeIds: Array.from(new Set([...affectedEdgeIds, ...normalizedEdgeIds])),
+      })
     })()
   }
 
@@ -198,6 +206,7 @@ export function useFlowEditorActions() {
 
   return {
     addNode,
+    addDatabaseNode,
     addBoundary,
     createEdge,
     clearSelection,

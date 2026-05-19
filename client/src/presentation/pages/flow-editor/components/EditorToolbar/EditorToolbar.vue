@@ -21,7 +21,7 @@
       <UiButton size="icon" variant="outline" title="Пользователь" aria-label="Пользователь">
         <UserRound class="toolbar-icon" />
       </UiButton>
-      <UiButton size="icon" variant="outline" title="Хранилище данных" aria-label="Хранилище данных">
+      <UiButton size="icon" variant="outline" :disabled="isReadOnly" @click="$emit('add-database-node')" title="Хранилище данных" aria-label="Хранилище данных">
         <Database class="toolbar-icon" />
       </UiButton>
       <UiButton
@@ -124,6 +124,7 @@ defineProps<{
 
 const emit = defineEmits<{
   'add-node': []
+  'add-database-node': []
   'start-connection-mode': []
   'toggle-comment-mode': []
   'toggle-comments-visibility': []
