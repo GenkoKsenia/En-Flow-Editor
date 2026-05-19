@@ -2,7 +2,10 @@ import {
   normalizeConnectionSideForBorderStyle,
   type Node,
 } from '@/domains/graph'
-import { findFreeLeftPlacement } from '@/domains/diagram/lib'
+import {
+  findFreeLeftPlacement,
+  normalizeConnectionEndpointOrders,
+} from '@/domains/diagram/lib'
 
 import type { DiagramContext } from './diagram.context'
 
@@ -105,6 +108,10 @@ export function createDiagramNodesUseCases(
       }
     })
 
+    if (affectedEdgeIds.length) {
+      normalizeConnectionEndpointOrders(context.edges.value)
+    }
+
     return affectedEdgeIds
   }
 
@@ -123,6 +130,7 @@ export function createDiagramNodesUseCases(
   function deleteNode(nodeId: string): void {
     context.nodes.value = context.nodes.value.filter(node => node.id !== nodeId)
     context.edges.value = context.edges.value.filter(edge => edge.sourceNodeId !== nodeId && edge.targetNodeId !== nodeId)
+    normalizeConnectionEndpointOrders(context.edges.value)
     context.dataFlows.value = context.dataFlows.value
       .filter(flow => flow.startBlock !== nodeId)
       .map(flow => ({

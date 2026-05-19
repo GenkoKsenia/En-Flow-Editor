@@ -9,11 +9,12 @@ import {
 import { findFirstValidBreakpoint, type DiagramDto } from '@/domains/diagram'
 import {
   generateEdgeLabel,
+  normalizeConnectionEndpointOrders,
   normalizeBorderStyle,
-  normalizeConnectionSide,
   parseInformationPayload,
   normalizeLineStyle,
   normalizeNodeId,
+  unpackConnectionSide,
 } from '@/domains/diagram'
 import {
   normalizeConnectionSideForBorderStyle,
@@ -192,6 +193,8 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
       const breakpoint = findFirstValidBreakpoint(connection.breakpoints)
       const labelRaw = (connection.label ?? '').trim()
       const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels, nodeId => nodeLabelMap.get(nodeId) ?? nodeId)
+      const sourceEndpoint = unpackConnectionSide(connection.startSide)
+      const targetEndpoint = unpackConnectionSide(connection.endSide)
       existingEdgeLabels.push(label)
 
       return {
@@ -199,12 +202,18 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
         sourceNodeId: startId,
         targetNodeId: endId,
         sourceSide: normalizeConnectionSideForBorderStyle(
-          normalizeConnectionSide(connection.startSide),
+          sourceEndpoint.side,
           nodeBorderStyles.get(startId),
         ),
         targetSide: normalizeConnectionSideForBorderStyle(
-          normalizeConnectionSide(connection.endSide),
+          targetEndpoint.side,
           nodeBorderStyles.get(endId),
+        ),
+        sourceOrder: sourceEndpoint.order ?? (
+          typeof connection.startOrder === 'number' ? connection.startOrder : undefined
+        ),
+        targetOrder: targetEndpoint.order ?? (
+          typeof connection.endOrder === 'number' ? connection.endOrder : undefined
         ),
         label,
         color: style?.color ?? DEFAULT_EDGE_COLOR,
@@ -219,6 +228,8 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
       } satisfies Edge
     })
     .filter((edge): edge is Edge => Boolean(edge))
+
+  normalizeConnectionEndpointOrders(edges)
 
   return { nodes, edges }
 }

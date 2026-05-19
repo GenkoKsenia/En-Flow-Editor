@@ -1,4 +1,5 @@
 import type { Edge } from '@/domains/graph'
+import { normalizeConnectionEndpointOrders } from '@/domains/diagram/lib'
 
 import type { DiagramContext } from './diagram.context'
 
@@ -12,6 +13,7 @@ export function createDiagramEdgesUseCases(
 ) {
   function addEdge(edge: Edge): Edge {
     context.edges.value.push(edge)
+    normalizeConnectionEndpointOrders(context.edges.value)
     const match = edge.id.match(/(\d+)$/)
     const number = match ? Number(match[1]) : Number.NaN
     if (Number.isFinite(number)) {
@@ -38,10 +40,12 @@ export function createDiagramEdgesUseCases(
     }
 
     Object.assign(edge, updates)
+    normalizeConnectionEndpointOrders(context.edges.value)
   }
 
   function deleteEdge(edgeId: string): void {
     context.edges.value = context.edges.value.filter(edge => edge.id !== edgeId)
+    normalizeConnectionEndpointOrders(context.edges.value)
   }
 
   return {

@@ -20,6 +20,28 @@
     />
 
     <path
+      v-if="sourceHandlePath"
+      :d="sourceHandlePath"
+      stroke="transparent"
+      stroke-width="18"
+      fill="none"
+      class="endpoint-drag-handle"
+      :style="{ cursor: sourceHandleCursor }"
+      @mousedown="onSourceHandleMouseDown"
+    />
+
+    <path
+      v-if="targetHandlePath"
+      :d="targetHandlePath"
+      stroke="transparent"
+      stroke-width="18"
+      fill="none"
+      class="endpoint-drag-handle"
+      :style="{ cursor: targetHandleCursor }"
+      @mousedown="onTargetHandleMouseDown"
+    />
+
+    <path
       :d="pathData"
       :stroke="strokeColor"
       :stroke-width="strokeWidth"
@@ -127,7 +149,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'edge-click': [edgeId: string, event: MouseEvent]
-  'breakpoint-drag-start': [edgeId: string, event: MouseEvent] 
+  'breakpoint-drag-start': [edgeId: string, event: MouseEvent]
+  'endpoint-order-drag-start': [edgeId: string, endpoint: 'source' | 'target', event: MouseEvent]
 }>()
 
 const lockState = computed<'self' | 'other' | null>(() => {
@@ -419,6 +442,42 @@ const labelPosition = computed<Position | null>(() => {
   return last ? { ...last.end } : null
 })
 
+function distance(start: Position, end: Position): number {
+  return Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2)
+}
+
+function getHandlePath(start: Position, end: Position, maxLength = 32): string {
+  const segmentLength = distance(start, end)
+  if (!segmentLength) return ''
+
+  const ratio = Math.min(maxLength / segmentLength, 1)
+  const handleEnd = {
+    x: start.x + (end.x - start.x) * ratio,
+    y: start.y + (end.y - start.y) * ratio,
+  }
+
+  return `M ${start.x} ${start.y} L ${handleEnd.x} ${handleEnd.y}`
+}
+
+const sourceHandlePath = computed(() => {
+  const firstSegment = edgeGeometry.value.segments[0]
+  if (!firstSegment) return ''
+  return getHandlePath(firstSegment.start, firstSegment.end)
+})
+
+const targetHandlePath = computed(() => {
+  const lastSegment = edgeGeometry.value.segments[edgeGeometry.value.segments.length - 1]
+  if (!lastSegment) return ''
+  return getHandlePath(lastSegment.end, lastSegment.start)
+})
+
+const sourceHandleCursor = computed(() => (
+  props.edge.sourceSide === 'left' || props.edge.sourceSide === 'right' ? 'ns-resize' : 'ew-resize'
+))
+const targetHandleCursor = computed(() => (
+  props.edge.targetSide === 'left' || props.edge.targetSide === 'right' ? 'ns-resize' : 'ew-resize'
+))
+
 // Функция для вычисления точки излома по умолчанию
 function getDefaultBreakpointX(): number {
   const start = startPoint.value!
@@ -529,6 +588,16 @@ function onDragHandleMouseDown(event: MouseEvent): void {
   event.stopPropagation()
 }
 
+function onSourceHandleMouseDown(event: MouseEvent): void {
+  emit('endpoint-order-drag-start', props.edge.id, 'source', event)
+  event.stopPropagation()
+}
+
+function onTargetHandleMouseDown(event: MouseEvent): void {
+  emit('endpoint-order-drag-start', props.edge.id, 'target', event)
+  event.stopPropagation()
+}
+
 function getAbsolutePosition(node: Node, nodes: Node[]): Position {
   if (!node.parentId) return node.position
   
@@ -616,6 +685,8 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   paint-order: stroke;
   stroke: white;
   stroke-width: 2px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .edge-lock-label {
@@ -624,6 +695,8 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   paint-order: stroke;
   stroke: #ffffff;
   stroke-width: 3px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .edge-lock-label--self {

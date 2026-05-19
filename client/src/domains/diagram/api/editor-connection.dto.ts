@@ -8,6 +8,8 @@ export interface EditorConnectionDto {
   endBlock?: string | null
   startSide?: ConnectionSide | null
   endSide?: ConnectionSide | null
+  startOrder?: number | null
+  endOrder?: number | null
   label?: string | null
   dataKeys?: unknown
   through?: unknown

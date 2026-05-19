@@ -3,6 +3,7 @@ import {
   findFreeLeftPlacement,
   generateEdgeLabel,
   getAbsoluteNodePosition,
+  normalizeConnectionEndpointOrders,
   parseInternalDiagramNodeId,
   getRequiredParentSize,
   normalizeBorderStyle,
@@ -62,6 +63,8 @@ type ConnectionEntry = {
     type?: string
     sourceSide?: string
     targetSide?: string
+    sourceOrder?: number
+    targetOrder?: number
     breakpointX?: number
     breakpointY?: number
   }
@@ -713,6 +716,18 @@ export function createDiagramDslUseCases(
       case 'endSide':
         entry.props.targetSide = value
         return
+      case 'sourceOrder':
+      case 'startOrder': {
+        const parsed = parseNumber(value)
+        if (parsed !== null) entry.props.sourceOrder = parsed
+        return
+      }
+      case 'targetOrder':
+      case 'endOrder': {
+        const parsed = parseNumber(value)
+        if (parsed !== null) entry.props.targetOrder = parsed
+        return
+      }
       case 'breakpointX': {
         const parsed = parseNumber(value)
         if (parsed !== null) entry.props.breakpointX = parsed
@@ -1109,6 +1124,8 @@ export function createDiagramDslUseCases(
           normalizeConnectionSide(connection.props.targetSide ?? matchedEdge?.targetSide),
           nodeBorderStyles.get(connection.targetId),
         ),
+        sourceOrder: connection.props.sourceOrder ?? matchedEdge?.sourceOrder,
+        targetOrder: connection.props.targetOrder ?? matchedEdge?.targetOrder,
         label: edgeLabel,
         color: connection.props.color ?? matchedEdge?.color ?? context.defaults.DEFAULT_EDGE_COLOR,
         width: connection.props.width ?? matchedEdge?.width ?? context.defaults.DEFAULT_EDGE_WIDTH,
@@ -1121,6 +1138,7 @@ export function createDiagramDslUseCases(
         dataKeys,
       } satisfies Edge
     })
+    normalizeConnectionEndpointOrders(resolvedEdges)
 
     const flowList = Array.from(declaredFlowMap.values())
       .map(flow => ({
@@ -1164,6 +1182,8 @@ export function createDiagramDslUseCases(
       endBlock: edge.targetNodeId,
       startSide: edge.sourceSide,
       endSide: edge.targetSide,
+      startOrder: edge.sourceOrder ?? null,
+      endOrder: edge.targetOrder ?? null,
       label: edge.label ?? null,
       dataKeys: edge.dataKeys ?? [],
       through: throughByEdgeId[edge.id] ?? [],

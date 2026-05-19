@@ -16,6 +16,32 @@ export function normalizeConnectionSide(side: unknown): ConnectionSide {
   return side === 'top' || side === 'right' || side === 'bottom' || side === 'left' ? side : 'right'
 }
 
+export function unpackConnectionSide(
+  raw: unknown,
+): { side: ConnectionSide; order?: number } {
+  if (typeof raw !== 'string') {
+    return { side: 'right' }
+  }
+
+  const match = raw.trim().match(/^(top|right|bottom|left)(?:@(-?\d+))?$/)
+  if (!match) {
+    return { side: normalizeConnectionSide(raw) }
+  }
+
+  const [, sideToken, orderToken] = match
+  const order = typeof orderToken === 'string' ? Number(orderToken) : Number.NaN
+
+  return Number.isInteger(order)
+    ? { side: sideToken as ConnectionSide, order }
+    : { side: sideToken as ConnectionSide }
+}
+
+export function packConnectionSide(side: ConnectionSide | null | undefined, order?: number | null): string | null {
+  if (!side) return null
+  if (!Number.isInteger(order)) return side
+  return `${side}@${order}`
+}
+
 function normalizeInformationText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }

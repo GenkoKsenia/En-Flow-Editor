@@ -179,6 +179,7 @@
               :locked-by="lockedEdgeOwners[edge.id]"
               @edge-click="onEdgeClick"
               @breakpoint-drag-start="onBreakpointDragStart"
+              @endpoint-order-drag-start="onEndpointOrderDragStart"
             />
 
             <GraphNode
@@ -344,6 +345,7 @@ const {
   onCanvasWheel,
   onEdgeClick,
   onBreakpointDragStart,
+  onEndpointOrderDragStart,
   onNodeMouseDown,
   onNodeClick,
   onNodeHoverSide,

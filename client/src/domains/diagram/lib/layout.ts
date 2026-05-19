@@ -1,7 +1,6 @@
 import type { ConnectionSide, Edge, Node, NodeLineStyle, Position } from '@/domains/graph'
 
 type ConnectionMap = Record<string, Record<ConnectionSide, string[]>>
-
 const PARENT_TITLE_CLEARANCE = 28
 
 export type AbsoluteNodeRect = {
@@ -12,6 +11,109 @@ export type AbsoluteNodeRect = {
 }
 
 export type NodeBox = Pick<Node, 'width' | 'height'>
+
+function createEmptyConnectionMap(nodes: Node[]): ConnectionMap {
+  const map: ConnectionMap = {}
+
+  nodes.forEach(node => {
+    map[node.id] = {
+      top: [],
+      right: [],
+      bottom: [],
+      left: [],
+    }
+  })
+
+  return map
+}
+
+export function normalizeConnectionEndpointOrders(edges: Edge[]): void {
+  const endpointGroups = new Map<string, Array<{
+    edge: Edge
+    edgeIndex: number
+    endpoint: 'source' | 'target'
+  }>>()
+
+  edges.forEach((edge, edgeIndex) => {
+    const sourceKey = `${edge.sourceNodeId}:${edge.sourceSide}`
+    const targetKey = `${edge.targetNodeId}:${edge.targetSide}`
+
+    if (!endpointGroups.has(sourceKey)) {
+      endpointGroups.set(sourceKey, [])
+    }
+    endpointGroups.get(sourceKey)?.push({ edge, edgeIndex, endpoint: 'source' })
+
+    if (!endpointGroups.has(targetKey)) {
+      endpointGroups.set(targetKey, [])
+    }
+    endpointGroups.get(targetKey)?.push({ edge, edgeIndex, endpoint: 'target' })
+  })
+
+  endpointGroups.forEach(items => {
+    if (!items.length) return
+
+    const hasCompleteOrder = items.every(item => {
+      const order = item.endpoint === 'source' ? item.edge.sourceOrder : item.edge.targetOrder
+      return typeof order === 'number'
+    })
+
+    const orderedItems = hasCompleteOrder
+      ? [...items].sort((left, right) => {
+        const leftOrder = left.endpoint === 'source' ? left.edge.sourceOrder ?? 0 : left.edge.targetOrder ?? 0
+        const rightOrder = right.endpoint === 'source' ? right.edge.sourceOrder ?? 0 : right.edge.targetOrder ?? 0
+        return leftOrder - rightOrder || left.edgeIndex - right.edgeIndex
+      })
+      : items
+
+    orderedItems.forEach((item, index) => {
+      if (item.endpoint === 'source') {
+        item.edge.sourceOrder = index
+        return
+      }
+
+      item.edge.targetOrder = index
+    })
+  })
+}
+
+export function buildConnectionPositionMap(nodes: Node[], edges: Edge[]): ConnectionMap {
+  const map = createEmptyConnectionMap(nodes)
+  const descriptors = new Map<string, Array<{ edgeId: string; order: number; edgeIndex: number }>>()
+
+  edges.forEach((edge, edgeIndex) => {
+    const sourceKey = `${edge.sourceNodeId}:${edge.sourceSide}`
+    const targetKey = `${edge.targetNodeId}:${edge.targetSide}`
+
+    if (!descriptors.has(sourceKey)) {
+      descriptors.set(sourceKey, [])
+    }
+    descriptors.get(sourceKey)?.push({
+      edgeId: edge.id,
+      order: edge.sourceOrder ?? edgeIndex,
+      edgeIndex,
+    })
+
+    if (!descriptors.has(targetKey)) {
+      descriptors.set(targetKey, [])
+    }
+    descriptors.get(targetKey)?.push({
+      edgeId: edge.id,
+      order: edge.targetOrder ?? edgeIndex,
+      edgeIndex,
+    })
+  })
+
+  descriptors.forEach((items, key) => {
+    const [nodeId, side] = key.split(':') as [string, ConnectionSide]
+    if (!map[nodeId]) return
+
+    map[nodeId][side] = [...items]
+      .sort((left, right) => left.order - right.order || left.edgeIndex - right.edgeIndex)
+      .map(item => item.edgeId)
+  })
+
+  return map
+}
 
 export function roundCoord(value: number, precision = 2): number {
   const factor = 10 ** precision

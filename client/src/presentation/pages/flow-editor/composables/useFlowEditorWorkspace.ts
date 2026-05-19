@@ -7,6 +7,7 @@ import type { Edge, Node } from '@/domains/graph'
 
 import { useBreakpointDrag } from './useBreakpointDrag'
 import { useCommentDrag } from './useCommentDrag'
+import { useEdgeEndpointOrderDrag } from './useEdgeEndpointOrderDrag'
 import { useEditorDiagnostics } from './useEditorDiagnostics'
 import { useFlowEditorActions } from './useFlowEditorActions'
 import { useFlowEditorComments } from './useFlowEditorComments'
@@ -177,6 +178,16 @@ export function useFlowEditorWorkspace(
     diagramStore,
     clampXValue,
     clampYValue,
+  })
+
+  const { onEndpointOrderDragStart } = useEdgeEndpointOrderDrag({
+    nodes,
+    edges,
+    zoom,
+    canvas: computed(() => canvas.value),
+    diagramStore,
+    uiStore,
+    getAbsoluteNodePosition,
   })
 
   function getCanvasPoint(event: MouseEvent): { x: number; y: number } | null {
@@ -388,6 +399,7 @@ export function useFlowEditorWorkspace(
     onCanvasWheel: viewport.onCanvasWheel,
     onEdgeClick: connections.onEdgeClick,
     onBreakpointDragStart,
+    onEndpointOrderDragStart,
     onNodeMouseDown,
     onNodeClick: connections.onNodeClick,
     onNodeHoverSide: connections.onNodeHoverSide,

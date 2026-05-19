@@ -8,6 +8,8 @@ export interface Edge {
   targetNodeId: string
   sourceSide: ConnectionSide
   targetSide: ConnectionSide
+  sourceOrder?: number
+  targetOrder?: number
   label?: string
   color?: string
   width?: number

@@ -210,6 +210,7 @@ async function toggleReadOnly(): Promise<void> {
   flex-direction: column;
   background: #f3f4f6;
   min-height: 0;
+  overflow: hidden;
 }
 
 .scheme-bar {
@@ -306,6 +307,7 @@ async function toggleReadOnly(): Promise<void> {
   width: 100%;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {

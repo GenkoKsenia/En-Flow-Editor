@@ -7,14 +7,17 @@ import {
 
 import {
   buildInformationPayload,
+  packConnectionSide,
   createEmptyDiagram,
   generateEdgeLabel,
   getAbsoluteNodePosition,
+  normalizeConnectionEndpointOrders,
   getNodeConnectionPoint,
   getOrthogonalDefaultBreakpoint,
   normalizeBorderStyle,
   normalizeConnectionSide,
   normalizeDataFlow,
+  unpackConnectionSide,
   parseInformationPayload,
   normalizeLineStyle,
   normalizeNodeId,
@@ -137,8 +140,8 @@ export function createDiagramJsonUseCases(
         id: edge.id,
         startBlock: edge.sourceNodeId ?? null,
         endBlock: edge.targetNodeId ?? null,
-        startSide: edge.sourceSide ?? null,
-        endSide: edge.targetSide ?? null,
+        startSide: packConnectionSide(edge.sourceSide, edge.sourceOrder),
+        endSide: packConnectionSide(edge.targetSide, edge.targetOrder),
         label: edge.label ?? null,
         dataKeys: edge.dataKeys ?? [],
         through: throughByEdgeId[edge.id] ?? [],
@@ -292,6 +295,8 @@ export function createDiagramJsonUseCases(
         const breakpoint = findFirstValidBreakpoint(connection.breakpoints)
         const labelRaw = (connection.label ?? '').trim()
         const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels, getNodeLabel)
+        const sourceEndpoint = unpackConnectionSide(connection.startSide)
+        const targetEndpoint = unpackConnectionSide(connection.endSide)
         existingEdgeLabels.push(label)
 
         return {
@@ -299,12 +304,18 @@ export function createDiagramJsonUseCases(
           sourceNodeId: startId,
           targetNodeId: endId,
           sourceSide: normalizeConnectionSideForBorderStyle(
-            normalizeConnectionSide(connection.startSide),
+            sourceEndpoint.side,
             nodeBorderStyles.get(startId),
           ),
           targetSide: normalizeConnectionSideForBorderStyle(
-            normalizeConnectionSide(connection.endSide),
+            targetEndpoint.side,
             nodeBorderStyles.get(endId),
+          ),
+          sourceOrder: sourceEndpoint.order ?? (
+            typeof connection.startOrder === 'number' ? connection.startOrder : undefined
+          ),
+          targetOrder: targetEndpoint.order ?? (
+            typeof connection.endOrder === 'number' ? connection.endOrder : undefined
           ),
           label,
           color: style?.color ?? context.defaults.DEFAULT_EDGE_COLOR,
@@ -337,6 +348,7 @@ export function createDiagramJsonUseCases(
 
     context.nodes.value = normalizedNodes
     context.dataFlows.value = normalizedDataFlows
+    normalizeConnectionEndpointOrders(normalizedEdges)
     context.edges.value = normalizedEdges.map(edge => {
       const allowed = dependencies.buildNodeSendableData()[edge.sourceNodeId] ?? []
       const preferred = edge.dataKeys ?? allowed

@@ -1,6 +1,7 @@
 import { computed, type Ref } from 'vue'
 
 import {
+  buildConnectionPositionMap,
   buildOrthogonalEdgeSegments,
   doesSegmentsPassThroughRect,
 } from '@/domains/diagram'
@@ -40,23 +41,7 @@ export function useFlowGraphView({
   getNodeRect,
 }: UseFlowGraphViewOptions) {
   const connectionPositions = computed(() => {
-    const positions: Record<string, Record<ConnectionSide, string[]>> = {}
-
-    nodes.value.forEach(node => {
-      positions[node.id] = {
-        top: [],
-        right: [],
-        bottom: [],
-        left: [],
-      }
-    })
-
-    edges.value.forEach(edge => {
-      positions[edge.sourceNodeId]?.[edge.sourceSide].push(edge.id)
-      positions[edge.targetNodeId]?.[edge.targetSide].push(edge.id)
-    })
-
-    return positions
+    return buildConnectionPositionMap(nodes.value, edges.value)
   })
 
   function getConnectionPosition(nodeId: string, side: ConnectionSide, connectionId: string): number {
