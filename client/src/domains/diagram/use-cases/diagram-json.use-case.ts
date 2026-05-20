@@ -1,25 +1,33 @@
-import type { DataFlow, Edge, Node } from '@/domains/graph'
+import {
+  normalizeConnectionSideForBorderStyle,
+  type DataFlow,
+  type Edge,
+  type Node,
+} from '@/domains/graph'
 
 import {
+  buildLegacyBreakpointCorners,
   buildInformationPayload,
+  packConnectionSide,
   createEmptyDiagram,
   generateEdgeLabel,
   getAbsoluteNodePosition,
+  normalizeConnectionEndpointOrders,
   getNodeConnectionPoint,
-  getOrthogonalDefaultBreakpoint,
   normalizeBorderStyle,
-  normalizeConnectionSide,
   normalizeDataFlow,
+  unpackConnectionSide,
   parseInformationPayload,
   normalizeLineStyle,
   normalizeNodeId,
+  sanitizeOrthogonalCorners,
 } from '../lib'
 import type {
   DiagramDto,
   DiagramPositionDto,
   EditorStylesDto,
 } from '../api'
-import { findFirstValidBreakpoint } from '../api'
+import { findValidBreakpoints } from '../api'
 
 import type { DiagramContext } from './diagram.context'
 
@@ -34,6 +42,10 @@ export function createDiagramJsonUseCases(
   context: DiagramContext,
   dependencies: DiagramJsonDependencies,
 ) {
+  function readStyleElementId(style: { elementId?: string; element_id?: string } | null | undefined): string | null {
+    return style?.elementId ?? style?.element_id ?? null
+  }
+
   function buildThroughMap(): Record<string, string[]> {
     return context.nodes.value.reduce<Record<string, string[]>>((acc, node) => {
       ;(node.passThroughEdges ?? []).forEach(edgeId => {
@@ -47,17 +59,15 @@ export function createDiagramJsonUseCases(
   function buildStyles() {
     return {
       blocks: context.nodes.value.map(node => ({
-        element_id: node.id,
-        element_type: 'block',
+        elementId: node.id,
         color: node.color ?? context.defaults.DEFAULT_NODE_COLOR,
-        border_color: node.borderColor ?? context.defaults.DEFAULT_BORDER_COLOR,
-        border_width: node.borderWidth ?? context.defaults.DEFAULT_BORDER_WIDTH,
-        border_radius: node.borderRadius ?? context.defaults.DEFAULT_BORDER_RADIUS,
-        border_style: node.borderStyle ?? 'solid',
+        borderColor: node.borderColor ?? context.defaults.DEFAULT_BORDER_COLOR,
+        borderWidth: node.borderWidth ?? context.defaults.DEFAULT_BORDER_WIDTH,
+        borderRadius: node.borderRadius ?? context.defaults.DEFAULT_BORDER_RADIUS,
+        borderStyle: node.borderStyle ?? 'solid',
       })),
       connections: context.edges.value.map(edge => ({
-        element_id: edge.id,
-        element_type: 'connection',
+        elementId: edge.id,
         color: edge.color ?? context.defaults.DEFAULT_EDGE_COLOR,
         width: edge.width ?? context.defaults.DEFAULT_EDGE_WIDTH,
         type: edge.lineStyle ?? 'solid',
@@ -65,19 +75,11 @@ export function createDiagramJsonUseCases(
     }
   }
 
-  function extractBreakpoints(edge: Edge): DiagramPositionDto[] {
-    if (typeof edge.breakpointX === 'number' && typeof edge.breakpointY === 'number') {
-      return [{ x: edge.breakpointX, y: edge.breakpointY }]
-    }
-
-    if (typeof edge.breakpointX !== 'number' && typeof edge.breakpointY !== 'number') {
-      return []
-    }
-
+  function resolveEdgeConnectionPoints(edge: Pick<Edge, 'sourceNodeId' | 'targetNodeId' | 'sourceSide' | 'targetSide'>) {
     const sourceNode = context.nodes.value.find(node => node.id === edge.sourceNodeId)
     const targetNode = context.nodes.value.find(node => node.id === edge.targetNodeId)
     if (!sourceNode || !targetNode) {
-      return []
+      return null
     }
 
     const sourcePoint = getNodeConnectionPoint(
@@ -90,12 +92,67 @@ export function createDiagramJsonUseCases(
       targetNode,
       edge.targetSide,
     )
-    const fallback = getOrthogonalDefaultBreakpoint(edge, sourcePoint, targetPoint)
 
-    return [{
-      x: typeof edge.breakpointX === 'number' ? edge.breakpointX : fallback.x,
-      y: typeof edge.breakpointY === 'number' ? edge.breakpointY : fallback.y,
-    }]
+    return { sourcePoint, targetPoint }
+  }
+
+  function serializeBreakpointList(points: DiagramPositionDto[]): DiagramPositionDto[] {
+    if (points.length !== 1) {
+      return points
+    }
+
+    const point = points[0]
+    return [
+      { x: point.x, y: point.y },
+      { x: point.x, y: point.y },
+    ]
+  }
+
+  function extractBreakpoints(edge: Edge): DiagramPositionDto[] {
+    if (edge.breakpoints?.length) {
+      return serializeBreakpointList(sanitizeOrthogonalCorners(edge.breakpoints))
+    }
+
+    if (typeof edge.breakpointX !== 'number' && typeof edge.breakpointY !== 'number') {
+      return []
+    }
+
+    const connectionPoints = resolveEdgeConnectionPoints(edge)
+    if (!connectionPoints) {
+      return []
+    }
+
+    return serializeBreakpointList(buildLegacyBreakpointCorners(
+      edge,
+      connectionPoints.sourcePoint,
+      connectionPoints.targetPoint,
+    ))
+  }
+
+  function parseBreakpoints(
+    edge: Pick<Edge, 'sourceSide' | 'targetSide' | 'breakpointX' | 'breakpointY'>,
+    breakpoints: unknown,
+    sourcePoint: DiagramPositionDto,
+    targetPoint: DiagramPositionDto,
+  ): DiagramPositionDto[] {
+    const validBreakpoints = findValidBreakpoints(breakpoints)
+    if (!validBreakpoints.length) {
+      return []
+    }
+
+    if (validBreakpoints.length === 1) {
+      return buildLegacyBreakpointCorners(
+        {
+          ...edge,
+          breakpointX: validBreakpoints[0].x,
+          breakpointY: validBreakpoints[0].y,
+        },
+        sourcePoint,
+        targetPoint,
+      )
+    }
+
+    return sanitizeOrthogonalCorners(validBreakpoints)
   }
 
   function serializeBlocks(mode: SerializeMode): DiagramDto['blocks'] {
@@ -130,8 +187,8 @@ export function createDiagramJsonUseCases(
         id: edge.id,
         startBlock: edge.sourceNodeId ?? null,
         endBlock: edge.targetNodeId ?? null,
-        startSide: edge.sourceSide ?? null,
-        endSide: edge.targetSide ?? null,
+        startSide: packConnectionSide(edge.sourceSide, edge.sourceOrder),
+        endSide: packConnectionSide(edge.targetSide, edge.targetOrder),
         label: edge.label ?? null,
         dataKeys: edge.dataKeys ?? [],
         through: throughByEdgeId[edge.id] ?? [],
@@ -170,24 +227,30 @@ export function createDiagramJsonUseCases(
     const parsedConnections = Array.isArray(parsed.connections) ? parsed.connections : []
     const parsedStyles: EditorStylesDto | null = parsed.styles ?? null
     const parsedDataFlows = Array.isArray(parsed.dataFlows) ? parsed.dataFlows : []
-    const blockStyles: Record<string, { color?: string; border_color?: string; border_width?: number; border_radius?: number; border_style?: string }> = {}
+    const blockStyles: Record<string, { color?: string; borderColor?: string; borderWidth?: number; borderRadius?: number; borderStyle?: string }> = {}
     const connectionStyles: Record<string, { color?: string; width?: number; type?: string }> = {}
     const nodeIdMap: Record<string, string> = {}
 
     parsedStyles?.blocks?.forEach(style => {
-      if (!style?.element_id) return
-      blockStyles[String(style.element_id)] = {
+      const elementId = readStyleElementId(style)
+      if (!elementId) return
+      blockStyles[String(elementId)] = {
         color: style.color,
-        border_color: style.border_color,
-        border_width: typeof style.border_width === 'number' ? style.border_width : undefined,
-        border_radius: typeof style.border_radius === 'number' ? style.border_radius : undefined,
-        border_style: style.border_style,
+        borderColor: style.borderColor ?? style.border_color,
+        borderWidth: typeof (style.borderWidth ?? style.border_width) === 'number'
+          ? (style.borderWidth ?? style.border_width)
+          : undefined,
+        borderRadius: typeof (style.borderRadius ?? style.border_radius) === 'number'
+          ? (style.borderRadius ?? style.border_radius)
+          : undefined,
+        borderStyle: style.borderStyle ?? style.border_style,
       }
     })
 
     parsedStyles?.connections?.forEach(style => {
-      if (!style?.element_id) return
-      connectionStyles[String(style.element_id)] = {
+      const elementId = readStyleElementId(style)
+      if (!elementId) return
+      connectionStyles[String(elementId)] = {
         color: style.color,
         width: typeof style.width === 'number' ? style.width : undefined,
         type: style.type,
@@ -255,15 +318,16 @@ export function createDiagramJsonUseCases(
           parentId: block.parentId ? (nodeIdMap[String(block.parentId)] ?? normalizeNodeId(block.parentId)) ?? undefined : undefined,
           passThroughEdges: passThroughByNode[normalizedId] ?? [],
           color: style?.color ?? context.defaults.DEFAULT_NODE_COLOR,
-          borderColor: style?.border_color ?? context.defaults.DEFAULT_BORDER_COLOR,
-          borderWidth: style?.border_width ?? context.defaults.DEFAULT_BORDER_WIDTH,
-          borderRadius: style?.border_radius ?? context.defaults.DEFAULT_BORDER_RADIUS,
-          borderStyle: normalizeBorderStyle(style?.border_style),
+          borderColor: style?.borderColor ?? context.defaults.DEFAULT_BORDER_COLOR,
+          borderWidth: style?.borderWidth ?? context.defaults.DEFAULT_BORDER_WIDTH,
+          borderRadius: style?.borderRadius ?? context.defaults.DEFAULT_BORDER_RADIUS,
+          borderStyle: normalizeBorderStyle(style?.borderStyle),
           informationIds: information,
           informationText: informationPayload.text,
         } satisfies Node
       })
       .filter(Boolean) as Node[]
+    const nodeBorderStyles = new Map(normalizedNodes.map(node => [node.id, node.borderStyle]))
 
     const existingEdgeLabels: string[] = []
     const normalizedEdges = parsedConnections
@@ -275,24 +339,63 @@ export function createDiagramJsonUseCases(
         if (!startId || !endId) return null
 
         const style = connectionStyles[String(connection.id)]
-        const breakpoint = findFirstValidBreakpoint(connection.breakpoints)
         const labelRaw = (connection.label ?? '').trim()
         const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels, getNodeLabel)
+        const sourceEndpoint = unpackConnectionSide(connection.startSide)
+        const targetEndpoint = unpackConnectionSide(connection.endSide)
+        const sourceSide = normalizeConnectionSideForBorderStyle(
+          sourceEndpoint.side,
+          nodeBorderStyles.get(startId),
+        )
+        const targetSide = normalizeConnectionSideForBorderStyle(
+          targetEndpoint.side,
+          nodeBorderStyles.get(endId),
+        )
+        const sourceNode = normalizedNodes.find(node => node.id === startId)
+        const targetNode = normalizedNodes.find(node => node.id === endId)
+        if (!sourceNode || !targetNode) return null
+
+        const sourcePoint = getNodeConnectionPoint(
+          getAbsoluteNodePosition(normalizedNodes, sourceNode),
+          sourceNode,
+          sourceSide,
+        )
+        const targetPoint = getNodeConnectionPoint(
+          getAbsoluteNodePosition(normalizedNodes, targetNode),
+          targetNode,
+          targetSide,
+        )
+        const breakpoints = parseBreakpoints(
+          {
+            sourceSide,
+            targetSide,
+          },
+          connection.breakpoints,
+          sourcePoint,
+          targetPoint,
+        )
         existingEdgeLabels.push(label)
 
         return {
           id: String(connection.id),
           sourceNodeId: startId,
           targetNodeId: endId,
-          sourceSide: normalizeConnectionSide(connection.startSide),
-          targetSide: normalizeConnectionSide(connection.endSide),
+          sourceSide,
+          targetSide,
+          sourceOrder: sourceEndpoint.order ?? (
+            typeof connection.startOrder === 'number' ? connection.startOrder : undefined
+          ),
+          targetOrder: targetEndpoint.order ?? (
+            typeof connection.endOrder === 'number' ? connection.endOrder : undefined
+          ),
           label,
           color: style?.color ?? context.defaults.DEFAULT_EDGE_COLOR,
           width: style?.width ?? context.defaults.DEFAULT_EDGE_WIDTH,
           lineStyle: normalizeLineStyle(style?.type),
           markerType: 'triangle',
-          breakpointX: breakpoint?.x,
-          breakpointY: breakpoint?.y,
+          breakpoints,
+          breakpointX: undefined,
+          breakpointY: undefined,
           breakpointLocked: false,
           geometry: undefined,
           dataKeys: Array.isArray(connection.dataKeys) ? connection.dataKeys.map(key => String(key)) : [],
@@ -301,20 +404,23 @@ export function createDiagramJsonUseCases(
       .filter(Boolean) as Edge[]
 
     const normalizedDataFlows = Array.from(dataFlowMap.values()).map(flow => {
-      const start = nodeIdMap[String(flow.startBlock)] ?? normalizeNodeId(flow.startBlock)
+      const start = flow.startBlock
+        ? (nodeIdMap[String(flow.startBlock)] ?? normalizeNodeId(flow.startBlock))
+        : undefined
       const finish = Array.isArray(flow.finishBlocks)
         ? flow.finishBlocks.map(id => nodeIdMap[String(id)] ?? normalizeNodeId(id)).filter(Boolean) as string[]
         : []
 
       return {
         ...flow,
-        startBlock: start ?? flow.startBlock,
+        startBlock: start ?? flow.startBlock ?? undefined,
         finishBlocks: finish,
       }
     })
 
     context.nodes.value = normalizedNodes
     context.dataFlows.value = normalizedDataFlows
+    normalizeConnectionEndpointOrders(normalizedEdges)
     context.edges.value = normalizedEdges.map(edge => {
       const allowed = dependencies.buildNodeSendableData()[edge.sourceNodeId] ?? []
       const preferred = edge.dataKeys ?? allowed

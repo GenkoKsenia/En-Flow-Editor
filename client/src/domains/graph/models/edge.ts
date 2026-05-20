@@ -1,6 +1,7 @@
 import type { ConnectionSide } from './connection-side'
 import type { EdgeGeometry } from './edge-geometry'
 import type { EdgeMarkerType, LineStyle } from './styles'
+import type { Position } from './position'
 
 export interface Edge {
   id: string
@@ -8,11 +9,14 @@ export interface Edge {
   targetNodeId: string
   sourceSide: ConnectionSide
   targetSide: ConnectionSide
+  sourceOrder?: number
+  targetOrder?: number
   label?: string
   color?: string
   width?: number
   lineStyle?: LineStyle
   markerType?: EdgeMarkerType
+  breakpoints?: Position[]
   breakpointX?: number
   breakpointY?: number
   breakpointLocked?: boolean

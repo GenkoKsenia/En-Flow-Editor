@@ -42,7 +42,6 @@
             :edge="edge"
             :nodes="graph.nodes"
             :get-connection-position="getConnectionPosition"
-            :force-three-segments="edgeRequiresPassThrough[edge.id]"
           />
 
           <GraphNode
@@ -62,6 +61,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import {
+  buildConnectionPositionMap,
   buildOrthogonalEdgeSegments,
   getAbsoluteNodePosition,
   getConnectionPoint,
@@ -95,23 +95,7 @@ const zoomPercent = computed(() => Math.round(zoom.value * 100))
 const graph = computed(() => parseVersionSnapshotGraph(props.code))
 
 const connectionMap = computed<Record<string, Record<ConnectionSide, string[]>>>(() => {
-  const map: Record<string, Record<ConnectionSide, string[]>> = {}
-
-  graph.value.nodes.forEach(node => {
-    map[node.id] = {
-      top: [],
-      right: [],
-      bottom: [],
-      left: [],
-    }
-  })
-
-  graph.value.edges.forEach(edge => {
-    map[edge.sourceNodeId]?.[edge.sourceSide].push(edge.id)
-    map[edge.targetNodeId]?.[edge.targetSide].push(edge.id)
-  })
-
-  return map
+  return buildConnectionPositionMap(graph.value.nodes, graph.value.edges)
 })
 
 const edgeSegments = computed(() => {

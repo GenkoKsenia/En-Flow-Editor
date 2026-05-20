@@ -1,26 +1,21 @@
 <template>
   <div class="toolbar">
     <div class="toolbar-group icon-group">
-      <UiButton size="icon" variant="outline" @click="$emit('add-node')" title="Процесс" aria-label="Процесс">
+      <UiButton size="icon" variant="outline" :disabled="isReadOnly" @click="$emit('add-node')" title="Процесс" aria-label="Процесс">
         <Square class="toolbar-icon" />
       </UiButton>
       <UiButton
         size="icon"
         variant="outline"
         :active="isConnectionMode"
+        :disabled="isReadOnly"
         @click="$emit('start-connection-mode')"
         title="Поток данных"
         aria-label="Связь"
       >
         <GitBranch class="toolbar-icon" />
       </UiButton>
-      <UiButton size="icon" variant="outline" title="Внешняя система" aria-label="Внешняя система">
-        <Globe class="toolbar-icon" />
-      </UiButton>
-      <UiButton size="icon" variant="outline" title="Пользователь" aria-label="Пользователь">
-        <UserRound class="toolbar-icon" />
-      </UiButton>
-      <UiButton size="icon" variant="outline" title="Хранилище данных" aria-label="Хранилище данных">
+      <UiButton size="icon" variant="outline" :disabled="isReadOnly" @click="$emit('add-database-node')" title="Хранилище данных" aria-label="Хранилище данных">
         <Database class="toolbar-icon" />
       </UiButton>
       <UiButton
@@ -33,7 +28,7 @@
       >
         <MessageSquare class="toolbar-icon" />
       </UiButton>
-      <UiButton size="icon" variant="outline" @click="$emit('add-boundary')" title="Граница системы" aria-label="Граница системы">
+      <UiButton size="icon" variant="outline" :disabled="isReadOnly" @click="$emit('add-boundary')" title="Граница системы" aria-label="Граница системы">
         <SquareDashed class="toolbar-icon" />
       </UiButton>
     </div>
@@ -97,7 +92,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Database, Eye, EyeOff, GitBranch, Globe, History, MessageSquare, Square, SquareDashed, UserRound } from 'lucide-vue-next'
+import { Database, Eye, EyeOff, GitBranch, History, MessageSquare, Square, SquareDashed } from 'lucide-vue-next'
 
 import type { CommentsStoreComment } from '@/domains/comments'
 import UiButton from '@/presentation/ui/UiButton.vue'
@@ -118,10 +113,12 @@ defineProps<{
   dataFlows: DataFlow[]
   comments: CommentsStoreComment[]
   includeCommentsInPng: boolean
+  isReadOnly: boolean
 }>()
 
 const emit = defineEmits<{
   'add-node': []
+  'add-database-node': []
   'start-connection-mode': []
   'toggle-comment-mode': []
   'toggle-comments-visibility': []

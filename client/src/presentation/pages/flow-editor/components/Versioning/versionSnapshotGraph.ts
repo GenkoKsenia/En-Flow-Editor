@@ -6,23 +6,32 @@ import {
   DEFAULT_EDGE_WIDTH,
   DEFAULT_NODE_COLOR,
 } from '@/constants'
-import { findFirstValidBreakpoint, type DiagramDto } from '@/domains/diagram'
+import { findValidBreakpoints, type DiagramDto } from '@/domains/diagram'
 import {
+  buildLegacyBreakpointCorners,
   generateEdgeLabel,
+  getAbsoluteNodePosition,
+  getNodeConnectionPoint,
+  normalizeConnectionEndpointOrders,
   normalizeBorderStyle,
-  normalizeConnectionSide,
   parseInformationPayload,
   normalizeLineStyle,
   normalizeNodeId,
+  sanitizeOrthogonalCorners,
+  unpackConnectionSide,
 } from '@/domains/diagram'
-import type { Edge, Node } from '@/domains/graph'
+import {
+  normalizeConnectionSideForBorderStyle,
+  type Edge,
+  type Node,
+} from '@/domains/graph'
 
 type BlockStyle = {
   color?: string
-  border_color?: string
-  border_width?: number
-  border_radius?: number
-  border_style?: string
+  borderColor?: string
+  borderWidth?: number
+  borderRadius?: number
+  borderStyle?: string
 }
 
 type ConnectionStyle = {
@@ -56,13 +65,18 @@ function readBlockStyles(styles: DiagramDto['styles']): Record<string, BlockStyl
   const blockStyles: Record<string, BlockStyle> = {}
 
   styles?.blocks?.forEach(style => {
-    if (!style?.element_id) return
-    blockStyles[String(style.element_id)] = {
+    const elementId = style?.elementId ?? style?.element_id
+    if (!elementId) return
+    blockStyles[String(elementId)] = {
       color: style.color,
-      border_color: style.border_color,
-      border_width: typeof style.border_width === 'number' ? style.border_width : undefined,
-      border_radius: typeof style.border_radius === 'number' ? style.border_radius : undefined,
-      border_style: style.border_style,
+      borderColor: style.borderColor ?? style.border_color,
+      borderWidth: typeof (style.borderWidth ?? style.border_width) === 'number'
+        ? (style.borderWidth ?? style.border_width)
+        : undefined,
+      borderRadius: typeof (style.borderRadius ?? style.border_radius) === 'number'
+        ? (style.borderRadius ?? style.border_radius)
+        : undefined,
+      borderStyle: style.borderStyle ?? style.border_style,
     }
   })
 
@@ -73,8 +87,9 @@ function readConnectionStyles(styles: DiagramDto['styles']): Record<string, Conn
   const connectionStyles: Record<string, ConnectionStyle> = {}
 
   styles?.connections?.forEach(style => {
-    if (!style?.element_id) return
-    connectionStyles[String(style.element_id)] = {
+    const elementId = style?.elementId ?? style?.element_id
+    if (!elementId) return
+    connectionStyles[String(elementId)] = {
       color: style.color,
       width: typeof style.width === 'number' ? style.width : undefined,
       type: style.type,
@@ -137,10 +152,10 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
         rawParentId: block.parentId,
         passThroughEdges: passThroughByNode[normalizedId] ?? [],
         color: style?.color ?? DEFAULT_NODE_COLOR,
-        borderColor: style?.border_color ?? DEFAULT_BORDER_COLOR,
-        borderWidth: style?.border_width ?? DEFAULT_BORDER_WIDTH,
-        borderRadius: style?.border_radius ?? DEFAULT_BORDER_RADIUS,
-        borderStyle: normalizeBorderStyle(style?.border_style),
+        borderColor: style?.borderColor ?? DEFAULT_BORDER_COLOR,
+        borderWidth: style?.borderWidth ?? DEFAULT_BORDER_WIDTH,
+        borderRadius: style?.borderRadius ?? DEFAULT_BORDER_RADIUS,
+        borderStyle: normalizeBorderStyle(style?.borderStyle),
         informationIds: informationPayload.ids,
         informationText: informationPayload.text,
       }
@@ -165,6 +180,7 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
     informationIds: node.informationIds,
     informationText: node.informationText,
   }))
+  const nodeBorderStyles = new Map(nodes.map(node => [node.id, node.borderStyle]))
 
   const nodeLabelMap = new Map(nodes.map(node => [node.id, node.text.trim() || node.id]))
   const existingEdgeLabels: string[] = []
@@ -178,30 +194,76 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
       if (!startId || !endId) return null
 
       const style = connectionStyles[String(connection.id)]
-      const breakpoint = findFirstValidBreakpoint(connection.breakpoints)
       const labelRaw = (connection.label ?? '').trim()
       const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels, nodeId => nodeLabelMap.get(nodeId) ?? nodeId)
+      const sourceEndpoint = unpackConnectionSide(connection.startSide)
+      const targetEndpoint = unpackConnectionSide(connection.endSide)
+      const sourceSide = normalizeConnectionSideForBorderStyle(
+        sourceEndpoint.side,
+        nodeBorderStyles.get(startId),
+      )
+      const targetSide = normalizeConnectionSideForBorderStyle(
+        targetEndpoint.side,
+        nodeBorderStyles.get(endId),
+      )
+      const sourceNode = nodes.find(node => node.id === startId)
+      const targetNode = nodes.find(node => node.id === endId)
+      if (!sourceNode || !targetNode) return null
+
+      const sourcePoint = getNodeConnectionPoint(
+        getAbsoluteNodePosition(nodes, sourceNode),
+        sourceNode,
+        sourceSide,
+      )
+      const targetPoint = getNodeConnectionPoint(
+        getAbsoluteNodePosition(nodes, targetNode),
+        targetNode,
+        targetSide,
+      )
+      const validBreakpoints = findValidBreakpoints(connection.breakpoints)
+      const breakpoints = validBreakpoints.length === 1
+        ? buildLegacyBreakpointCorners(
+          {
+            id: String(connection.id),
+            sourceSide,
+            targetSide,
+            breakpointX: validBreakpoints[0].x,
+            breakpointY: validBreakpoints[0].y,
+          },
+          sourcePoint,
+          targetPoint,
+        )
+        : sanitizeOrthogonalCorners(validBreakpoints)
       existingEdgeLabels.push(label)
 
       return {
         id: String(connection.id),
         sourceNodeId: startId,
         targetNodeId: endId,
-        sourceSide: normalizeConnectionSide(connection.startSide),
-        targetSide: normalizeConnectionSide(connection.endSide),
+        sourceSide,
+        targetSide,
+        sourceOrder: sourceEndpoint.order ?? (
+          typeof connection.startOrder === 'number' ? connection.startOrder : undefined
+        ),
+        targetOrder: targetEndpoint.order ?? (
+          typeof connection.endOrder === 'number' ? connection.endOrder : undefined
+        ),
         label,
         color: style?.color ?? DEFAULT_EDGE_COLOR,
         width: style?.width ?? DEFAULT_EDGE_WIDTH,
         lineStyle: normalizeLineStyle(style?.type),
         markerType: 'triangle',
-        breakpointX: breakpoint?.x,
-        breakpointY: breakpoint?.y,
+        breakpoints,
+        breakpointX: undefined,
+        breakpointY: undefined,
         breakpointLocked: false,
         geometry: undefined,
         dataKeys: Array.isArray(connection.dataKeys) ? connection.dataKeys.map(key => String(key)) : [],
       } satisfies Edge
     })
     .filter((edge): edge is Edge => Boolean(edge))
+
+  normalizeConnectionEndpointOrders(edges)
 
   return { nodes, edges }
 }

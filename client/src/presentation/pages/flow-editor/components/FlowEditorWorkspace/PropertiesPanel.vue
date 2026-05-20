@@ -1,5 +1,5 @@
 <template>
-  <div v-if="selectedObject" class="properties-panel">
+  <div v-if="panelMode !== 'none' && panelMode !== 'mixed'" class="properties-panel">
     <div class="properties-header">
       <h3>Свойства</h3>
       <button class="close-btn" @click="clearSelection">×</button>
@@ -12,39 +12,39 @@
     <fieldset class="properties-fieldset" :disabled="isLocked">
       <div class="properties-content">
       <!-- Свойства узла -->
-      <div v-if="selectedNode" class="node-properties">
+      <div v-if="isNodePanel" class="node-properties">
         <div class="property-group">
           <h4>Узел</h4>
           <div class="property">
             <label>Текст:</label>
             <UiInput
-              v-model="selectedNode.text" 
-              @change="onNodeTextChange"
+              v-model="nodeTextValue"
+              @change="applyNodeText"
               class="property-input"
             />
           </div>
           <div class="property property--stacked">
             <label>Информация:</label>
             <textarea
-              v-model="selectedNode.informationText"
+              v-model="nodeInformationTextValue"
               class="property-input multiline"
               placeholder="Дополнительный текст"
-              @change="onNodeInformationTextChange"
+              @change="applyNodeInformationText"
             ></textarea>
           </div>
           <div class="property">
             <label>Позиция:</label>
             <div class="position-inputs">
               <UiInput
-                v-model="selectedNode.position.x"
-                @change="onNodePositionChange"
+                v-model="nodePositionXValue"
+                @change="applyNodePositionX"
                 type="number"
                 size="sm"
                 class="property-input small"
               />
               <UiInput
-                v-model="selectedNode.position.y"
-                @change="onNodePositionChange"
+                v-model="nodePositionYValue"
+                @change="applyNodePositionY"
                 type="number"
                 size="sm"
                 class="property-input small"
@@ -55,22 +55,22 @@
             <label>Размер:</label>
             <div class="size-inputs">
               <UiInput
-                v-model="selectedNode.width"
-                @change="onNodeSizeChange"
+                v-model="nodeWidthValue"
+                @change="applyNodeWidth"
                 type="number"
                 size="sm"
                 class="property-input small"
               />
               <UiInput
-                v-model="selectedNode.height"
-                @change="onNodeSizeChange"
+                v-model="nodeHeightValue"
+                @change="applyNodeHeight"
                 type="number"
                 size="sm"
                 class="property-input small"
               />
             </div>
           </div>
-          <div class="property-group">
+          <div v-if="isSingleNodeSelection" class="property-group">
             <div class="property header-row">
               <label>Данные блока</label>
               <UiButton class="add-data-btn" size="sm" variant="neutral" @click="onAddDataItem">＋</UiButton>
@@ -100,7 +100,7 @@
                           type="checkbox" 
                           :value="opt.value" 
                           :checked="(item.finishBlocks ?? []).includes(opt.value)"
-                          :disabled="opt.value === selectedNode.id"
+                          :disabled="opt.value === singleSelectedNode?.id"
                           @change="e => onToggleFinish(item.dataKey, opt.value, (e.target as HTMLInputElement).checked)"
                         />
                         {{ opt.label }}
@@ -119,10 +119,11 @@
             <label>Стиль рамки:</label>
             <UiSelect
               class="property-input"
-              :model-value="selectedNode.borderStyle || 'solid'"
+              :model-value="nodeBorderStyleValue"
               size="sm"
               @update:model-value="onNodeBorderStyleChange"
             >
+              <option value="" disabled></option>
               <option 
                 v-for="option in nodeLineStyleOptions" 
                 :key="option.value" 
@@ -135,28 +136,28 @@
           <div class="property">
             <label>Цвет блока:</label>
             <UiInput
-              type="color"
+              v-model="nodeColorValue"
+              :type="nodeColorInputType"
               size="sm"
               class="property-input small"
-              :model-value="selectedNode.color || '#ffffff'"
-              @update:model-value="value => onNodeColorChange(String(value))"
+              @change="applyNodeColor"
             />
           </div>
           <div class="property">
             <label>Цвет рамки:</label>
             <UiInput
-              type="color"
+              v-model="nodeBorderColorValue"
+              :type="nodeBorderColorInputType"
               size="sm"
               class="property-input small"
-              :model-value="selectedNode.borderColor || '#666666'"
-              @update:model-value="value => onNodeBorderColorChange(String(value))"
+              @change="applyNodeBorderColor"
             />
           </div>
           <div class="property">
             <label>Толщина рамки:</label>
             <UiInput
-              v-model="selectedNode.borderWidth"
-              @change="onNodeBorderWidthChange"
+              v-model="nodeBorderWidthValue"
+              @change="applyNodeBorderWidth"
               type="number"
               size="sm"
               class="property-input small"
@@ -166,15 +167,15 @@
           <div class="property">
             <label>Скругление:</label>
             <UiInput
-              v-model="selectedNode.borderRadius"
-              @change="onNodeBorderRadiusChange"
+              v-model="nodeBorderRadiusValue"
+              @change="applyNodeBorderRadius"
               type="number"
               size="sm"
               class="property-input small"
               min="0"
             />
           </div>
-          <div class="property-group">
+          <div v-if="isSingleNodeSelection" class="property-group">
             <h5>Стрелки, проходящие через блок</h5>
             <details class="edge-selector">
               <summary>Выбрать стрелки</summary>
@@ -199,14 +200,14 @@
       </div>
       
       <!-- Свойства стрелки -->
-      <div v-else-if="selectedEdge" class="edge-properties">
+      <div v-else-if="isEdgePanel" class="edge-properties">
         <div class="property-group">
           <h4>Связь</h4>
           <div class="property">
             <label>Название:</label>
             <UiInput
-              v-model="selectedEdge.label"
-              @change="onEdgeLabelChange"
+              v-model="edgeLabelValue"
+              @change="applyEdgeLabel"
               class="property-input"
               placeholder="Название связи"
             />
@@ -215,10 +216,11 @@
             <label>Стиль линии:</label>
             <UiSelect
               class="property-input"
-              :model-value="selectedEdge.lineStyle || 'solid'"
+              :model-value="edgeLineStyleValue"
               size="sm"
               @update:model-value="onEdgeLineStyleChange"
             >
+              <option value="" disabled></option>
               <option 
                 v-for="option in edgeLineStyleOptions" 
                 :key="option.value" 
@@ -231,18 +233,18 @@
           <div class="property">
             <label>Цвет линии:</label>
             <UiInput
-              type="color"
+              v-model="edgeColorValue"
+              :type="edgeColorInputType"
               size="sm"
               class="property-input small"
-              :model-value="selectedEdge.color || '#666666'"
-              @update:model-value="value => onEdgeColorChange(String(value))"
+              @change="applyEdgeColor"
             />
           </div>
           <div class="property">
             <label>Толщина линии:</label>
             <UiInput
-              v-model="selectedEdge.width"
-              @change="onEdgeWidthChange"
+              v-model="edgeWidthValue"
+              @change="applyEdgeWidth"
               type="number"
               size="sm"
               class="property-input small"
@@ -250,7 +252,7 @@
             />
           </div>
 
-          <div class="property-group">
+          <div v-if="isSingleEdgeSelection" class="property-group">
             <h5>Данные, которые переносит эта связь</h5>
             <div class="edge-checkboxes">
               <label 
@@ -288,15 +290,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import UiButton from '@/presentation/ui/UiButton.vue'
 import UiInput from '@/presentation/ui/UiInput.vue'
 import UiSelect from '@/presentation/ui/UiSelect.vue'
 import type { SelectedObject } from '@/domains/diagram'
-import type { DataFlow, Edge, LineStyle, Node } from '@/domains/graph'
+import type { DataFlow, Edge, LineStyle, Node, NodeLineStyle } from '@/domains/graph'
 
 interface Props {
   selectedObject?: SelectedObject | null
+  selectedNodeIds?: string[]
+  selectedEdgeIds?: string[]
   edges?: Edge[]
   nodes?: Node[]
   dataSets?: Record<string, string[]>
@@ -310,6 +314,7 @@ interface Emits {
   (e: 'update:edge', edgeId: string, updates: Partial<Edge>): void
   (e: 'delete:node', nodeId: string): void
   (e: 'delete:edge', edgeId: string): void
+  (e: 'delete:selection'): void
   (e: 'clear-selection'): void
   (e: 'update:dataFlows', flows: DataFlow[]): void
 }
@@ -317,19 +322,48 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-// Computed свойства для безопасного доступа к данным
-const selectedNode = computed(() => {
-  return props.selectedObject?.type === 'node' ? props.selectedObject.data as Node : null
-})
+type PanelMode = 'none' | 'mixed' | 'single-node' | 'multi-node' | 'single-edge' | 'multi-edge'
 
-const selectedEdge = computed(() => {
-  return props.selectedObject?.type === 'edge' ? props.selectedObject.data as Edge : null
+function getCommonValue<T>(items: T[]): T | undefined {
+  if (!items.length) return undefined
+  const [first, ...rest] = items
+  return rest.every(item => item === first) ? first : undefined
+}
+
+function isHexColor(value: string): boolean {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim())
+}
+
+const selectedNodeIds = computed(() => props.selectedNodeIds ?? [])
+const selectedEdgeIds = computed(() => props.selectedEdgeIds ?? [])
+const selectedNodes = computed(() => {
+  const ids = new Set(selectedNodeIds.value)
+  return (props.nodes ?? []).filter(node => ids.has(node.id))
 })
+const selectedEdges = computed(() => {
+  const ids = new Set(selectedEdgeIds.value)
+  return (props.edges ?? []).filter(edge => ids.has(edge.id))
+})
+const panelMode = computed<PanelMode>(() => {
+  if (selectedNodes.value.length > 0 && selectedEdges.value.length > 0) return 'mixed'
+  if (selectedNodes.value.length === 1) return 'single-node'
+  if (selectedNodes.value.length > 1) return 'multi-node'
+  if (selectedEdges.value.length === 1) return 'single-edge'
+  if (selectedEdges.value.length > 1) return 'multi-edge'
+  return 'none'
+})
+const isNodePanel = computed(() => panelMode.value === 'single-node' || panelMode.value === 'multi-node')
+const isEdgePanel = computed(() => panelMode.value === 'single-edge' || panelMode.value === 'multi-edge')
+const isSingleNodeSelection = computed(() => panelMode.value === 'single-node')
+const isSingleEdgeSelection = computed(() => panelMode.value === 'single-edge')
+const singleSelectedNode = computed(() => selectedNodes.value[0] ?? null)
+const singleSelectedEdge = computed(() => selectedEdges.value[0] ?? null)
 
 const availableEdges = computed(() => props.edges ?? [])
-const nodeLineStyleOptions: { value: LineStyle, label: string }[] = [
+const nodeLineStyleOptions: { value: NodeLineStyle, label: string }[] = [
   { value: 'solid', label: 'Сплошная' },
-  { value: 'dashed', label: 'Пунктирная' }
+  { value: 'dashed', label: 'Пунктирная' },
+  { value: 'database', label: 'База данных' },
 ]
 const edgeLineStyleOptions: { value: LineStyle, label: string }[] = [
   { value: 'solid', label: 'Сплошная' },
@@ -344,8 +378,8 @@ const dataFlowMap = computed(() => {
 })
 
 const blockDataItems = computed(() => {
-  if (!selectedNode.value) return []
-  return (props.dataFlows ?? []).filter(flow => flow.startBlock === selectedNode.value!.id)
+  if (!singleSelectedNode.value) return []
+  return (props.dataFlows ?? []).filter(flow => flow.startBlock === singleSelectedNode.value.id)
 })
 
 const finishOptions = computed(() => {
@@ -353,77 +387,137 @@ const finishOptions = computed(() => {
   return props.nodes.map(n => ({ value: n.id, label: n.text || n.id }))
 })
 
+const nodeTextValue = ref('')
+const nodeInformationTextValue = ref('')
+const nodePositionXValue = ref<number | ''>('')
+const nodePositionYValue = ref<number | ''>('')
+const nodeWidthValue = ref<number | ''>('')
+const nodeHeightValue = ref<number | ''>('')
+const nodeBorderStyleValue = ref<NodeLineStyle | ''>('')
+const nodeColorValue = ref('')
+const nodeBorderColorValue = ref('')
+const nodeBorderWidthValue = ref<number | ''>('')
+const nodeBorderRadiusValue = ref<number | ''>('')
+const edgeLabelValue = ref('')
+const edgeLineStyleValue = ref<LineStyle | ''>('')
+const edgeColorValue = ref('')
+const edgeWidthValue = ref<number | ''>('')
+
+const nodeColorInputType = computed(() => (isHexColor(nodeColorValue.value) ? 'color' : 'text'))
+const nodeBorderColorInputType = computed(() => (isHexColor(nodeBorderColorValue.value) ? 'color' : 'text'))
+const edgeColorInputType = computed(() => (isHexColor(edgeColorValue.value) ? 'color' : 'text'))
+
+watch(
+  selectedNodes,
+  nodes => {
+    nodeTextValue.value = getCommonValue(nodes.map(node => node.text ?? '')) ?? ''
+    nodeInformationTextValue.value = getCommonValue(nodes.map(node => node.informationText ?? '')) ?? ''
+    nodePositionXValue.value = getCommonValue(nodes.map(node => node.position.x)) ?? ''
+    nodePositionYValue.value = getCommonValue(nodes.map(node => node.position.y)) ?? ''
+    nodeWidthValue.value = getCommonValue(nodes.map(node => node.width)) ?? ''
+    nodeHeightValue.value = getCommonValue(nodes.map(node => node.height)) ?? ''
+    nodeBorderStyleValue.value = getCommonValue(nodes.map(node => node.borderStyle ?? 'solid')) ?? ''
+    nodeColorValue.value = getCommonValue(nodes.map(node => node.color ?? '#ffffff')) ?? ''
+    nodeBorderColorValue.value = getCommonValue(nodes.map(node => node.borderColor ?? '#666666')) ?? ''
+    nodeBorderWidthValue.value = getCommonValue(nodes.map(node => node.borderWidth ?? 0)) ?? ''
+    nodeBorderRadiusValue.value = getCommonValue(nodes.map(node => node.borderRadius ?? 0)) ?? ''
+  },
+  { immediate: true, deep: true },
+)
+
+watch(
+  selectedEdges,
+  edges => {
+    edgeLabelValue.value = getCommonValue(edges.map(edge => edge.label ?? '')) ?? ''
+    edgeLineStyleValue.value = getCommonValue(edges.map(edge => edge.lineStyle ?? 'solid')) ?? ''
+    edgeColorValue.value = getCommonValue(edges.map(edge => edge.color ?? '#666666')) ?? ''
+    edgeWidthValue.value = getCommonValue(edges.map(edge => edge.width ?? 0)) ?? ''
+  },
+  { immediate: true, deep: true },
+)
+
 function formatEdgeLabel(edge: Edge): string {
   return edge.label?.trim() || edge.id
 }
 
-// Обработчики изменений
-function onNodeTextChange(): void {
-  if (selectedNode.value) {
-    emit('update:node', selectedNode.value.id, {
-      text: selectedNode.value.text
-    })
-  }
-}
-
-function onNodeInformationTextChange(): void {
-  if (!selectedNode.value) return
-  emit('update:node', selectedNode.value.id, {
-    informationText: selectedNode.value.informationText ?? ''
+function emitNodeUpdates(updates: Partial<Node>): void {
+  selectedNodes.value.forEach(node => {
+    emit('update:node', node.id, updates)
   })
 }
 
-function onNodePositionChange(): void {
-  if (selectedNode.value) {
-    emit('update:node', selectedNode.value.id, {
-      position: { ...selectedNode.value.position }
-    })
-  }
+function emitEdgeUpdates(updates: Partial<Edge>): void {
+  selectedEdges.value.forEach(edge => {
+    emit('update:edge', edge.id, updates)
+  })
 }
 
-function onNodeSizeChange(): void {
-  if (selectedNode.value) {
-    emit('update:node', selectedNode.value.id, {
-      width: selectedNode.value.width,
-      height: selectedNode.value.height
+function applyNodeText(): void {
+  emitNodeUpdates({ text: nodeTextValue.value })
+}
+
+function applyNodeInformationText(): void {
+  emitNodeUpdates({ informationText: nodeInformationTextValue.value })
+}
+
+function applyNodePositionX(): void {
+  if (nodePositionXValue.value === '') return
+  selectedNodes.value.forEach(node => {
+    emit('update:node', node.id, {
+      position: {
+        ...node.position,
+        x: Number(nodePositionXValue.value),
+      },
     })
-  }
+  })
+}
+
+function applyNodePositionY(): void {
+  if (nodePositionYValue.value === '') return
+  selectedNodes.value.forEach(node => {
+    emit('update:node', node.id, {
+      position: {
+        ...node.position,
+        y: Number(nodePositionYValue.value),
+      },
+    })
+  })
+}
+
+function applyNodeWidth(): void {
+  if (nodeWidthValue.value === '') return
+  emitNodeUpdates({ width: Number(nodeWidthValue.value) })
+}
+
+function applyNodeHeight(): void {
+  if (nodeHeightValue.value === '') return
+  emitNodeUpdates({ height: Number(nodeHeightValue.value) })
 }
 
 function onNodeBorderStyleChange(value: string): void {
-  if (!selectedNode.value) return
-  const safeValue: LineStyle = value === 'dotted' ? 'dashed' : value
-  selectedNode.value.borderStyle = safeValue
-  emit('update:node', selectedNode.value.id, {
-    borderStyle: safeValue
-  })
+  const nextValue: NodeLineStyle = value === 'database' || value === 'dashed' ? value : 'solid'
+  nodeBorderStyleValue.value = nextValue
+  emitNodeUpdates({ borderStyle: nextValue })
 }
 
-function onNodeColorChange(value: string): void {
-  if (!selectedNode.value) return
-  selectedNode.value.color = value
-  emit('update:node', selectedNode.value.id, { color: value })
+function applyNodeColor(): void {
+  if (!nodeColorValue.value) return
+  emitNodeUpdates({ color: nodeColorValue.value })
 }
 
-function onNodeBorderColorChange(value: string): void {
-  if (!selectedNode.value) return
-  selectedNode.value.borderColor = value
-  emit('update:node', selectedNode.value.id, { borderColor: value })
+function applyNodeBorderColor(): void {
+  if (!nodeBorderColorValue.value) return
+  emitNodeUpdates({ borderColor: nodeBorderColorValue.value })
 }
 
-function onNodeBorderWidthChange(): void {
-  if (!selectedNode.value) return
-  emit('update:node', selectedNode.value.id, { borderWidth: selectedNode.value.borderWidth })
+function applyNodeBorderWidth(): void {
+  if (nodeBorderWidthValue.value === '') return
+  emitNodeUpdates({ borderWidth: Number(nodeBorderWidthValue.value) })
 }
 
-function onNodeBorderRadiusChange(): void {
-  if (!selectedNode.value) return
-  emit('update:node', selectedNode.value.id, { borderRadius: selectedNode.value.borderRadius })
-}
-
-function collectSelected(event: Event): string[] {
-  const select = event.target as HTMLSelectElement
-  return Array.from(select.selectedOptions).map(o => o.value)
+function applyNodeBorderRadius(): void {
+  if (nodeBorderRadiusValue.value === '') return
+  emitNodeUpdates({ borderRadius: Number(nodeBorderRadiusValue.value) })
 }
 
 function syncInformationIds(nodeId: string, flows: DataFlow[]): void {
@@ -432,16 +526,16 @@ function syncInformationIds(nodeId: string, flows: DataFlow[]): void {
 }
 
 function onAddDataItem(): void {
-  if (!selectedNode.value) return
+  if (!singleSelectedNode.value) return
   const newId = Date.now().toString()
   const flows = [...(props.dataFlows ?? []), {
     dataKey: newId,
     dataName: `Данные ${blockDataItems.value.length + 1}`,
-    startBlock: selectedNode.value.id,
+    startBlock: singleSelectedNode.value.id,
     finishBlocks: []
   } satisfies DataFlow]
   emit('update:dataFlows', flows)
-  syncInformationIds(selectedNode.value.id, flows)
+  syncInformationIds(singleSelectedNode.value.id, flows)
 }
 
 function onDataNameChange(dataKey: string, value: string): void {
@@ -461,10 +555,10 @@ function onDataFinishChange(dataKey: string, finishes: string[]): void {
 }
 
 function onRemoveDataItem(dataKey: string): void {
-  if (!props.dataFlows || !selectedNode.value) return
+  if (!props.dataFlows || !singleSelectedNode.value) return
   const flows = props.dataFlows.filter(f => f.dataKey !== dataKey)
   emit('update:dataFlows', flows)
-  syncInformationIds(selectedNode.value.id, flows)
+  syncInformationIds(singleSelectedNode.value.id, flows)
 }
 
 function finishLabel(selected: string[]): string {
@@ -495,12 +589,12 @@ function onPassThroughEdgeInput(edgeId: string, event: Event): void {
 }
 
 function isEdgeRequired(edgeId: string): boolean {
-  return selectedNode.value?.passThroughEdges?.includes(edgeId) ?? false
+  return singleSelectedNode.value?.passThroughEdges?.includes(edgeId) ?? false
 }
 
 function onPassThroughEdgeToggle(edgeId: string, checked: boolean): void {
-  if (!selectedNode.value) return
-  const current = [...(selectedNode.value.passThroughEdges || [])]
+  if (!singleSelectedNode.value) return
+  const current = [...(singleSelectedNode.value.passThroughEdges || [])]
   const index = current.indexOf(edgeId)
   
   if (checked && index === -1) {
@@ -509,43 +603,35 @@ function onPassThroughEdgeToggle(edgeId: string, checked: boolean): void {
     current.splice(index, 1)
   }
   
-  selectedNode.value.passThroughEdges = current
-  emit('update:node', selectedNode.value.id, {
+  emit('update:node', singleSelectedNode.value.id, {
     passThroughEdges: current
   })
 }
 
-function onEdgeLabelChange(): void {
-  if (!selectedEdge.value) return
-  emit('update:edge', selectedEdge.value.id, {
-    label: selectedEdge.value.label
-  })
+function applyEdgeLabel(): void {
+  emitEdgeUpdates({ label: edgeLabelValue.value })
 }
 
 function onEdgeLineStyleChange(value: string): void {
-  if (!selectedEdge.value) return
   const nextValue = value as LineStyle
-  selectedEdge.value.lineStyle = nextValue
-  emit('update:edge', selectedEdge.value.id, {
-    lineStyle: nextValue
-  })
+  edgeLineStyleValue.value = nextValue
+  emitEdgeUpdates({ lineStyle: nextValue })
 }
 
-function onEdgeColorChange(value: string): void {
-  if (!selectedEdge.value) return
-  selectedEdge.value.color = value
-  emit('update:edge', selectedEdge.value.id, { color: value })
+function applyEdgeColor(): void {
+  if (!edgeColorValue.value) return
+  emitEdgeUpdates({ color: edgeColorValue.value })
 }
 
-function onEdgeWidthChange(): void {
-  if (!selectedEdge.value) return
-  emit('update:edge', selectedEdge.value.id, { width: selectedEdge.value.width })
+function applyEdgeWidth(): void {
+  if (edgeWidthValue.value === '') return
+  emitEdgeUpdates({ width: Number(edgeWidthValue.value) })
 }
 
 function onEdgeDataKeyToggle(nodeId: string, event: Event): void {
-  if (!selectedEdge.value) return
+  if (!singleSelectedEdge.value) return
   const checked = (event.target as HTMLInputElement).checked
-  const current = [...(selectedEdge.value.dataKeys ?? [])]
+  const current = [...(singleSelectedEdge.value.dataKeys ?? [])]
   const idx = current.indexOf(nodeId)
   if (checked && idx === -1) {
     current.push(nodeId)
@@ -555,16 +641,15 @@ function onEdgeDataKeyToggle(nodeId: string, event: Event): void {
   // ограничиваем данными исходного блока
   const allowed = edgeDataOptions.value.map(o => o.value)
   const sanitized = current.filter(id => allowed.includes(id))
-  selectedEdge.value.dataKeys = sanitized
-  emit('update:edge', selectedEdge.value.id, { dataKeys: sanitized })
+  emit('update:edge', singleSelectedEdge.value.id, { dataKeys: sanitized })
 }
 
 function edgeCarries(nodeId: string): boolean {
-  return selectedEdge.value?.dataKeys?.includes(nodeId) ?? false
+  return singleSelectedEdge.value?.dataKeys?.includes(nodeId) ?? false
 }
 
 const edgeDataOptions = computed(() => {
-  const edge = selectedEdge.value
+  const edge = singleSelectedEdge.value
   if (!edge) return []
   const dataset = props.dataSets?.[edge.sourceNodeId] ?? []
   return dataset.map(id => ({
@@ -593,13 +678,17 @@ function resolveDataLabel(dataId: string, edge: Edge): string {
 }
 
 function deleteSelectedObject(): void {
-  if (!props.selectedObject) return
-  
-  if (props.selectedObject.type === 'node') {
-    emit('delete:node', props.selectedObject.data.id)
-  } else {
-    emit('delete:edge', props.selectedObject.data.id)
+  if (panelMode.value === 'single-node' && singleSelectedNode.value) {
+    emit('delete:node', singleSelectedNode.value.id)
+    return
   }
+
+  if (panelMode.value === 'single-edge' && singleSelectedEdge.value) {
+    emit('delete:edge', singleSelectedEdge.value.id)
+    return
+  }
+
+  emit('delete:selection')
 }
 
 function clearSelection(): void {

@@ -9,11 +9,37 @@ export function normalizeLineStyle(style: unknown): Edge['lineStyle'] {
 }
 
 export function normalizeBorderStyle(style: unknown): NodeLineStyle {
-  return style === 'dashed' ? 'dashed' : 'solid'
+  return style === 'dashed' || style === 'database' ? style : 'solid'
 }
 
 export function normalizeConnectionSide(side: unknown): ConnectionSide {
   return side === 'top' || side === 'right' || side === 'bottom' || side === 'left' ? side : 'right'
+}
+
+export function unpackConnectionSide(
+  raw: unknown,
+): { side: ConnectionSide; order?: number } {
+  if (typeof raw !== 'string') {
+    return { side: 'right' }
+  }
+
+  const match = raw.trim().match(/^(top|right|bottom|left)(?:@(-?\d+))?$/)
+  if (!match) {
+    return { side: normalizeConnectionSide(raw) }
+  }
+
+  const [, sideToken, orderToken] = match
+  const order = typeof orderToken === 'string' ? Number(orderToken) : Number.NaN
+
+  return Number.isInteger(order)
+    ? { side: sideToken as ConnectionSide, order }
+    : { side: sideToken as ConnectionSide }
+}
+
+export function packConnectionSide(side: ConnectionSide | null | undefined, order?: number | null): string | null {
+  if (!side) return null
+  if (!Number.isInteger(order)) return side
+  return `${side}@${order}`
 }
 
 function normalizeInformationText(value: unknown): string {
@@ -78,7 +104,6 @@ export function normalizeDataFlow(flow: EditorDataFlowDto, fallbackStart?: strin
   if (!keyRaw) return null
 
   const startRaw = (flow as any)?.startBlock ?? (flow as any)?.sourceBlock ?? fallbackStart ?? null
-  if (!startRaw) return null
 
   const finishBlocks = Array.isArray((flow as any)?.finishBlocks)
     ? (flow as any).finishBlocks.map((finishBlock: unknown) => String(finishBlock)).filter(Boolean)
@@ -91,7 +116,7 @@ export function normalizeDataFlow(flow: EditorDataFlowDto, fallbackStart?: strin
   return {
     dataKey: String(keyRaw),
     dataName,
-    startBlock: String(startRaw),
+    startBlock: startRaw ? String(startRaw) : undefined,
     finishBlocks,
   }
 }

@@ -29,6 +29,7 @@ function onLogoClick(): void {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .main {
@@ -36,5 +37,6 @@ function onLogoClick(): void {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 </style>

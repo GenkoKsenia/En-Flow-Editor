@@ -7,6 +7,7 @@ import type { Edge, Node } from '@/domains/graph'
 
 import { useBreakpointDrag } from './useBreakpointDrag'
 import { useCommentDrag } from './useCommentDrag'
+import { useEdgeEndpointOrderDrag } from './useEdgeEndpointOrderDrag'
 import { useEditorDiagnostics } from './useEditorDiagnostics'
 import { useFlowEditorActions } from './useFlowEditorActions'
 import { useFlowEditorComments } from './useFlowEditorComments'
@@ -25,7 +26,7 @@ export function useFlowEditorWorkspace(
   const collaborationStore = useDiagramCollaborationStore()
   const uiStore = useEditorUiStore()
 
-  const { nodes, edges, dataFlows } = storeToRefs(diagramStore)
+  const { nodes, edges, dataFlows, isReadOnly } = storeToRefs(diagramStore)
   const {
     selectedNodeIds,
     selectedEdgeIds,
@@ -37,6 +38,8 @@ export function useFlowEditorWorkspace(
     draggingEdgeId,
     potentialParentId,
     isConnectionMode,
+    connectionStartNode,
+    connectionDraftPoints,
     isCommentMode,
     isMarqueeSelecting,
     marqueeRect,
@@ -93,6 +96,8 @@ export function useFlowEditorWorkspace(
     addCommentOnCanvas: commentsApi.addCommentOnCanvas,
     createEdge: actions.createEdge,
     clearSelection: actions.clearSelection,
+    getCanvasPoint,
+    getAbsoluteNodePosition,
   })
 
   const { onNodeMouseDown } = useNodeDrag({
@@ -179,6 +184,16 @@ export function useFlowEditorWorkspace(
     clampYValue,
   })
 
+  const { onEndpointOrderDragStart } = useEdgeEndpointOrderDrag({
+    nodes,
+    edges,
+    zoom,
+    canvas: computed(() => canvas.value),
+    diagramStore,
+    uiStore,
+    getAbsoluteNodePosition,
+  })
+
   function getCanvasPoint(event: MouseEvent): { x: number; y: number } | null {
     if (!canvasContent.value) return null
 
@@ -207,7 +222,9 @@ export function useFlowEditorWorkspace(
   }
 
   function onCanvasMouseDown(event: MouseEvent): void {
-    if (isConnectionMode.value || isCommentMode.value) return
+    if (isReadOnly.value) return
+    if (connections.onCanvasMouseDown(event)) return
+    if (isCommentMode.value) return
 
     const target = event.target as Element | null
     if (
@@ -271,25 +288,37 @@ export function useFlowEditorWorkspace(
       edges.value.map(edge => [edge.id, collaborationStore.getElementLockOwner('connection', edge.id)]),
     ),
   )
-  const selectedObjectLockOwner = computed(() => {
-    if (selectedNodeId.value) {
-      return collaborationStore.getElementLockOwner('block', selectedNodeId.value)
+  const selectedObjectLockOwners = computed(() => {
+    if (selectedNodeIds.value.length > 0 && selectedEdgeIds.value.length === 0) {
+      return selectedNodeIds.value
+        .map(nodeId => collaborationStore.getElementLockOwner('block', nodeId))
+        .filter((owner): owner is string => Boolean(owner))
     }
 
-    if (selectedEdgeId.value) {
-      return collaborationStore.getElementLockOwner('connection', selectedEdgeId.value)
+    if (selectedEdgeIds.value.length > 0 && selectedNodeIds.value.length === 0) {
+      return selectedEdgeIds.value
+        .map(edgeId => collaborationStore.getElementLockOwner('connection', edgeId))
+        .filter((owner): owner is string => Boolean(owner))
     }
 
-    return null
+    return []
   })
   const isSelectedObjectLockedByOther = computed(() =>
-    selectedObjectLockOwner.value !== null && selectedObjectLockOwner.value !== 'self',
+    selectedObjectLockOwners.value.some(owner => owner !== 'self'),
   )
+  const isSelectedObjectReadOnly = computed(() => isReadOnly.value)
   const selectedObjectLockMessage = computed(() => {
+    if (isSelectedObjectReadOnly.value) return 'Схема закрыта для редактирования'
     if (!isSelectedObjectLockedByOther.value) return null
-    return selectedObjectLockOwner.value === 'locked'
-      ? 'Элемент занят другим пользователем'
-      : `Элемент занят: ${selectedObjectLockOwner.value}`
+
+    if (selectedObjectLockOwners.value.length === 1) {
+      const owner = selectedObjectLockOwners.value[0]
+      return owner === 'locked'
+        ? 'Элемент занят другим пользователем'
+        : `Элемент занят: ${owner}`
+    }
+
+    return 'Один или несколько элементов заняты другим пользователем'
   })
 
   return {
@@ -306,11 +335,15 @@ export function useFlowEditorWorkspace(
     marqueeRect,
     lockedNodeOwners,
     lockedEdgeOwners,
+    isReadOnly,
     isSelectedObjectLockedByOther,
+    isSelectedObjectReadOnly,
     selectedObjectLockMessage,
     isDragging,
     potentialParentId,
     isConnectionMode,
+    connectionStartNode,
+    connectionDraftPoints,
     isCommentMode,
     isDownloadMenuOpen,
     isVersionMenuOpen,
@@ -336,6 +369,7 @@ export function useFlowEditorWorkspace(
     nodeSendableData: diagnostics.nodeSendableData,
     isConnectionSource: connections.isConnectionSource,
     isConnectionTarget: connections.isConnectionTarget,
+    connectionDraftPath: connections.connectionDraftPath,
     getChildrenCount,
     getConnectionPosition,
     getCommentStyle: commentsApi.getCommentStyle,
@@ -345,6 +379,7 @@ export function useFlowEditorWorkspace(
     getAbsoluteNodePosition,
     getDescendantNodes,
     addNode: actions.addNode,
+    addDatabaseNode: actions.addDatabaseNode,
     startConnectionMode: connections.startConnectionMode,
     toggleCommentMode: actions.toggleCommentMode,
     addBoundary: actions.addBoundary,
@@ -359,6 +394,11 @@ export function useFlowEditorWorkspace(
     updateNode: actions.updateNode,
     updateEdge: actions.updateEdge,
     updateDataFlows: actions.updateDataFlows,
+    copySelection: actions.copySelection,
+    pasteSelection: actions.pasteSelection,
+    deleteSelection: actions.deleteSelection,
+    undo: actions.undo,
+    redo: actions.redo,
     deleteNode: actions.deleteNode,
     deleteEdge: actions.deleteEdge,
     clearSelection: actions.clearSelection,
@@ -367,9 +407,11 @@ export function useFlowEditorWorkspace(
     onCanvasWheel: viewport.onCanvasWheel,
     onEdgeClick: connections.onEdgeClick,
     onBreakpointDragStart,
+    onEndpointOrderDragStart,
     onNodeMouseDown,
     onNodeClick: connections.onNodeClick,
     onNodeHoverSide: connections.onNodeHoverSide,
+    resetConnectionMode: connections.resetConnectionMode,
     startCommentDrag,
     updateCommentText: commentsApi.updateCommentText,
     submitComment: commentsApi.submitComment,

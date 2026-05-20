@@ -29,6 +29,7 @@ export const useEditorUiStore = defineStore('editorUi', () => {
   const isConnectionMode = ref(false)
   const connectionStartNode = ref<string | null>(null)
   const connectionStartSide = ref<ConnectionSide | null>(null)
+  const connectionDraftPoints = ref<Position[]>([])
   const hoveredNodeId = ref<string | null>(null)
   const hoveredNodeSide = ref<ConnectionSide | null>(null)
   const isCommentMode = ref(false)
@@ -92,9 +93,27 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     selectedEdgeIds.value = []
   }
 
+  function toggleNodeSelection(nodeId: string): void {
+    if (selectedNodeIds.value.includes(nodeId)) {
+      selectedNodeIds.value = selectedNodeIds.value.filter(id => id !== nodeId)
+      return
+    }
+
+    selectedNodeIds.value = [...selectedNodeIds.value, nodeId]
+  }
+
   function selectEdge(edgeId: string): void {
     selectedEdgeIds.value = [edgeId]
     selectedNodeIds.value = []
+  }
+
+  function toggleEdgeSelection(edgeId: string): void {
+    if (selectedEdgeIds.value.includes(edgeId)) {
+      selectedEdgeIds.value = selectedEdgeIds.value.filter(id => id !== edgeId)
+      return
+    }
+
+    selectedEdgeIds.value = [...selectedEdgeIds.value, edgeId]
   }
 
   function setSelectedNodes(nodeIds: string[]): void {
@@ -180,6 +199,7 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     isConnectionMode.value = true
     connectionStartNode.value = null
     connectionStartSide.value = null
+    connectionDraftPoints.value = []
     isCommentMode.value = false
   }
 
@@ -187,6 +207,7 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     isConnectionMode.value = false
     connectionStartNode.value = null
     connectionStartSide.value = null
+    connectionDraftPoints.value = []
     hoveredNodeId.value = null
     hoveredNodeSide.value = null
   }
@@ -194,6 +215,15 @@ export const useEditorUiStore = defineStore('editorUi', () => {
   function setConnectionStart(nodeId: string | null, side: ConnectionSide | null): void {
     connectionStartNode.value = nodeId
     connectionStartSide.value = side
+    connectionDraftPoints.value = []
+  }
+
+  function setConnectionDraftPoints(points: Position[]): void {
+    connectionDraftPoints.value = points.map(point => ({ x: point.x, y: point.y }))
+  }
+
+  function addConnectionDraftPoint(point: Position): void {
+    connectionDraftPoints.value = [...connectionDraftPoints.value, { x: point.x, y: point.y }]
   }
 
   function setHoveredNode(nodeId: string | null, side: ConnectionSide | null): void {
@@ -301,6 +331,7 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     isConnectionMode,
     connectionStartNode,
     connectionStartSide,
+    connectionDraftPoints,
     hoveredNodeId,
     hoveredNodeSide,
     isCommentMode,
@@ -319,7 +350,9 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     canvasGridStyle,
     clearSelection,
     selectNode,
+    toggleNodeSelection,
     selectEdge,
+    toggleEdgeSelection,
     setSelectedNodes,
     setSelectedEdges,
     setSelection,
@@ -336,6 +369,8 @@ export const useEditorUiStore = defineStore('editorUi', () => {
     startConnectionMode,
     resetConnectionMode,
     setConnectionStart,
+    setConnectionDraftPoints,
+    addConnectionDraftPoint,
     setHoveredNode,
     toggleCommentMode,
     stopCommentMode,

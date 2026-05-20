@@ -21,6 +21,25 @@
           </div>
         </section>
 
+        <section v-if="canToggleReadOnly" class="team-section">
+          <div class="section-title">Режим схемы</div>
+          <div class="scheme-mode-card">
+            <div class="scheme-mode-copy">
+              <div class="scheme-mode-title">
+                {{ isReadOnly ? 'Только просмотр' : 'Редактирование доступно' }}
+              </div>
+            </div>
+            <UiButton
+              size="sm"
+              :variant="isReadOnly ? 'surface' : 'neutral'"
+              :disabled="isTogglingReadOnly"
+              @click="$emit('toggle-read-only')"
+            >
+              {{ isTogglingReadOnly ? 'Сохранение...' : (isReadOnly ? 'Открыть редактирование' : 'Закрыть редактирование') }}
+            </UiButton>
+          </div>
+        </section>
+
         <section class="team-section team-section--members">
           <div class="section-title">Участники</div>
 
@@ -120,6 +139,16 @@ import UiSelect from '@/presentation/ui/UiSelect.vue'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import type { TeamMember } from '@/domains/diagram'
 import { getUserInitials } from '@/shared/lib/getUserInitials'
+
+defineProps<{
+  isReadOnly: boolean
+  canToggleReadOnly: boolean
+  isTogglingReadOnly: boolean
+}>()
+
+defineEmits<{
+  'toggle-read-only': []
+}>()
 
 const EDITOR_ROLE = 'Редактирование'
 const VIEWER_ROLE = 'Просмотр'
@@ -394,6 +423,27 @@ function avatarClass(role: string): string {
 
 .share-link:hover {
   text-decoration: underline;
+}
+
+.scheme-mode-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #d9e4ec;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(236, 253, 245, 0.9), rgba(255, 255, 255, 0.96));
+}
+
+.scheme-mode-copy {
+  min-width: 0;
+}
+
+.scheme-mode-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .team-list {

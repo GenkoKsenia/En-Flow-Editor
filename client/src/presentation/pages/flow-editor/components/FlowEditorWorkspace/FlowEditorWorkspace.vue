@@ -13,7 +13,9 @@
       :data-flows="dataFlows"
       :comments="comments"
       :include-comments-in-png="includeCommentsInPng"
+      :is-read-only="props.isReadOnly"
       @add-node="addNode"
+      @add-database-node="addDatabaseNode"
       @start-connection-mode="startConnectionMode"
       @toggle-comment-mode="toggleCommentMode"
       @toggle-comments-visibility="commentsVisible = !commentsVisible"
@@ -80,17 +82,20 @@
         >
           <PropertiesPanel
             :selected-object="selectedObject"
+            :selected-node-ids="selectedNodeIds"
+            :selected-edge-ids="selectedEdgeIds"
             :edges="edges"
             :nodes="nodes"
             :data-sets="nodeSendableData"
             :data-flows="dataFlows"
-            :is-locked="isSelectedObjectLockedByOther"
+            :is-locked="isSelectedObjectLockedByOther || isSelectedObjectReadOnly"
             :lock-message="selectedObjectLockMessage"
             @update:node="updateNode"
             @update:edge="updateEdge"
             @update:dataFlows="updateDataFlows"
             @delete:node="deleteNode"
             @delete:edge="deleteEdge"
+            @delete:selection="deleteSelection"
             @clear-selection="clearSelection"
           />
         </div>
@@ -156,6 +161,18 @@
 
             <ArrowDefinitions />
 
+            <svg
+              v-if="connectionDraftPath"
+              class="connection-draft"
+              aria-hidden="true"
+            >
+              <path
+                :d="connectionDraftPath"
+                class="connection-draft__path"
+                fill="none"
+              />
+            </svg>
+
             <GraphEdge
               v-for="edge in edges"
               :key="edge.id"
@@ -167,7 +184,6 @@
               :is-comment-target-highlighted="highlightedCommentTarget?.type === 'edge' && highlightedCommentTarget.id === edge.id"
               :show-drag-handle="showDragHandles"
               :get-connection-position="getConnectionPosition"
-              :force-three-segments="edgeRequiresPassThrough[edge.id]"
               :has-pass-through-error="edgePassThroughErrors[edge.id]"
               :is-pass-through="edgeRequiresPassThrough[edge.id]"
               :error-message="edgeErrorMessages[edge.id]"
@@ -175,6 +191,7 @@
               :locked-by="lockedEdgeOwners[edge.id]"
               @edge-click="onEdgeClick"
               @breakpoint-drag-start="onBreakpointDragStart"
+              @endpoint-order-drag-start="onEndpointOrderDragStart"
             />
 
             <GraphNode
@@ -233,7 +250,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { CommentsStoreComment } from '@/domains/comments'
 
@@ -249,6 +266,10 @@ import EditorToolbar from '../EditorToolbar/EditorToolbar.vue'
 import { useFlowEditorPngExport } from '../../composables/useFlowEditorPngExport'
 import { useFlowEditorVersions } from '../../composables/useFlowEditorVersions'
 import { useFlowEditorWorkspace } from '../../composables/useFlowEditorWorkspace'
+
+const props = defineProps<{
+  isReadOnly: boolean
+}>()
 
 const canvas = ref<HTMLElement | null>(null)
 const canvasContent = ref<HTMLElement | null>(null)
@@ -267,11 +288,15 @@ const {
   marqueeRect,
   lockedNodeOwners,
   lockedEdgeOwners,
+  isReadOnly,
   isSelectedObjectLockedByOther,
+  isSelectedObjectReadOnly,
   selectedObjectLockMessage,
   isDragging,
   potentialParentId,
   isConnectionMode,
+  connectionStartNode,
+  connectionDraftPoints,
   isCommentMode,
   isDownloadMenuOpen,
   isVersionMenuOpen,
@@ -297,6 +322,7 @@ const {
   nodeSendableData,
   isConnectionSource,
   isConnectionTarget,
+  connectionDraftPath,
   getChildrenCount,
   getConnectionPosition,
   getCommentStyle,
@@ -306,6 +332,7 @@ const {
   getAbsoluteNodePosition,
   getDescendantNodes,
   addNode,
+  addDatabaseNode,
   startConnectionMode,
   toggleCommentMode,
   addBoundary,
@@ -320,6 +347,11 @@ const {
   updateNode,
   updateEdge,
   updateDataFlows,
+  copySelection,
+  pasteSelection,
+  deleteSelection,
+  undo,
+  redo,
   deleteNode,
   deleteEdge,
   clearSelection,
@@ -328,9 +360,11 @@ const {
   onCanvasWheel,
   onEdgeClick,
   onBreakpointDragStart,
+  onEndpointOrderDragStart,
   onNodeMouseDown,
   onNodeClick,
   onNodeHoverSide,
+  resetConnectionMode,
   startCommentDrag,
   updateCommentText,
   submitComment,
@@ -354,7 +388,10 @@ const hasDiagnosticsPanel = computed(() => schemeDiagnostics.value.length > 0)
 const hasDiagnosticsErrors = computed(() => schemeDiagnostics.value.some(item => item.level === 'error'))
 const hasDiagnosticsWarnings = computed(() => schemeDiagnostics.value.some(item => item.level === 'warning'))
 const showDiagnosticsPanel = computed(() => hasDiagnosticsPanel.value && !isDiagnosticsCollapsed.value)
-const hasPropertiesPanel = computed(() => Boolean(selectedObject.value))
+const hasPropertiesPanel = computed(() => (
+  (selectedNodeIds.value.length > 0 && selectedEdgeIds.value.length === 0)
+  || (selectedEdgeIds.value.length > 0 && selectedNodeIds.value.length === 0)
+))
 const hasSidePanels = computed(() => showDiagnosticsPanel.value || hasPropertiesPanel.value)
 const draggedNodeIds = computed(() => {
   if (!isDragging.value) return new Set<string>()
@@ -403,6 +440,11 @@ const canvasContentLogicalSize = computed(() => {
   })
 
   edges.value.forEach(edge => {
+    edge.breakpoints?.forEach(point => {
+      maxRight = Math.max(maxRight, point.x)
+      maxBottom = Math.max(maxBottom, point.y)
+    })
+
     if (typeof edge.breakpointX === 'number') {
       maxRight = Math.max(maxRight, edge.breakpointX)
     }
@@ -410,6 +452,11 @@ const canvasContentLogicalSize = computed(() => {
     if (typeof edge.breakpointY === 'number') {
       maxBottom = Math.max(maxBottom, edge.breakpointY)
     }
+  })
+
+  connectionDraftPoints.value.forEach(point => {
+    maxRight = Math.max(maxRight, point.x)
+    maxBottom = Math.max(maxBottom, point.y)
   })
 
   visibleComments.value.forEach(comment => {
@@ -478,6 +525,13 @@ watch(hasDiagnosticsPanel, value => {
 onBeforeUnmount(() => {
   clearZoomHideTimeout()
   clearCommentTargetHideTimeout()
+  document.removeEventListener('keydown', onDocumentKeyDown)
+  document.removeEventListener('mousedown', onDocumentMouseDown)
+})
+
+onMounted(() => {
+  document.addEventListener('keydown', onDocumentKeyDown)
+  document.addEventListener('mousedown', onDocumentMouseDown)
 })
 
 function clearZoomHideTimeout(): void {
@@ -496,6 +550,85 @@ function scheduleZoomControlHide(delay = 1600): void {
     showZoomControl.value = false
     zoomFlashTimeout = null
   }, delay)
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+
+  return Boolean(
+    target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]'),
+  )
+}
+
+function matchesModifierShortcut(
+  event: KeyboardEvent,
+  keyCode: 'KeyC' | 'KeyV' | 'KeyZ',
+  options?: { shiftKey?: boolean },
+): boolean {
+  if (!(event.ctrlKey || event.metaKey)) return false
+
+  const expectedShiftKey = options?.shiftKey ?? false
+  return event.shiftKey === expectedShiftKey && event.code === keyCode
+}
+
+function onDocumentKeyDown(event: KeyboardEvent): void {
+  if (isEditableTarget(event.target)) return
+
+  const isCopy = matchesModifierShortcut(event, 'KeyC')
+  const isPaste = matchesModifierShortcut(event, 'KeyV')
+  const isUndo = matchesModifierShortcut(event, 'KeyZ')
+  const isRedo = matchesModifierShortcut(event, 'KeyZ', { shiftKey: true })
+  const hasConnectionDraft = Boolean(connectionStartNode.value || connectionDraftPoints.value.length)
+
+  if (isCopy) {
+    event.preventDefault()
+    copySelection()
+    return
+  }
+
+  if (isPaste) {
+    event.preventDefault()
+    pasteSelection()
+    return
+  }
+
+  if (isUndo) {
+    event.preventDefault()
+    void undo()
+    return
+  }
+
+  if (isRedo) {
+    event.preventDefault()
+    void redo()
+    return
+  }
+
+  if (event.key === 'Delete') {
+    if (hasConnectionDraft) {
+      event.preventDefault()
+      resetConnectionMode()
+      return
+    }
+
+    event.preventDefault()
+    deleteSelection()
+    return
+  }
+
+  if (event.key === 'Escape' && hasConnectionDraft) {
+    event.preventDefault()
+    resetConnectionMode()
+  }
+}
+
+function onDocumentMouseDown(event: MouseEvent): void {
+  const target = event.target as Element | null
+  if (!target) return
+  if (!connectionStartNode.value && !connectionDraftPoints.value.length) return
+  if (target.closest('.canvas')) return
+
+  resetConnectionMode()
 }
 
 function revealZoomControl(): void {
@@ -673,6 +806,23 @@ const { onDownloadPng } = useFlowEditorPngExport({
   transform-origin: 0 0;
   padding: 24px;
   box-sizing: border-box;
+}
+
+.connection-draft {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 3;
+}
+
+.connection-draft__path {
+  stroke: #0b6bcb;
+  stroke-width: 2;
+  stroke-dasharray: 8 5;
+  opacity: 0.82;
 }
 
 .canvas-content-sizer {

@@ -9,6 +9,7 @@ import type { updateVersion } from '../api'
 export type DiagramContext = {
   schemeId: Ref<string | null>
   currentVersionId: Ref<string | null>
+  isReadOnly: Ref<boolean>
   nodes: Ref<Node[]>
   edges: Ref<Edge[]>
   dataFlows: Ref<DataFlow[]>
@@ -17,6 +18,9 @@ export type DiagramContext = {
   nextBoundaryId: Ref<number>
   jsonError: Ref<string | null>
   jsonBuffer: Ref<string>
+  dslError: Ref<string | null>
+  dslBuffer: Ref<string>
+  isUpdatingFromDsl: Ref<boolean>
   isUpdatingFromState: Ref<boolean>
   isEditorFocused: Ref<boolean>
   lastSerializedJson: Ref<string>

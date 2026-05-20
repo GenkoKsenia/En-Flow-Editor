@@ -42,3 +42,11 @@ export async function updateVersion(versionId: string | number, code: unknown): 
     },
   })
 }
+
+export async function setVersionReadOnly(versionId: string | number, isReadOnly: boolean): Promise<void> {
+  await http.post(`/Version/lock/${versionId}`, isReadOnly, {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+}

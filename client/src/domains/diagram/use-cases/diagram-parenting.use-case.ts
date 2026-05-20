@@ -41,11 +41,13 @@ export function createDiagramParentingUseCases(context: DiagramContext) {
   function alignEdgeToNode(edge: Edge, node: Node): void {
     const rect = getNodeRect(node)
     if (isHorizontalPassThroughEdge(edge)) {
+      edge.breakpoints = undefined
       edge.breakpointX = roundCoord(rect.left + rect.width * getPassThroughFraction(node.id, edge.id, 'horizontal'))
       return
     }
 
     if (isVerticalPassThroughEdge(edge)) {
+      edge.breakpoints = undefined
       edge.breakpointY = roundCoord(rect.top + rect.height * getPassThroughFraction(node.id, edge.id, 'vertical'))
     }
   }

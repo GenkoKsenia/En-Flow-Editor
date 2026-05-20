@@ -39,6 +39,10 @@ type DiagramNodeSnapshot = Pick<Node, 'id'>
 
 type DiagramCollaborationStore = ReturnType<typeof useDiagramCollaborationStore>
 
+function readStyleElementId(style: { elementId?: string; element_id?: string } | null | undefined): string | null {
+  return style?.elementId ?? style?.element_id ?? null
+}
+
 function summarizeRequest(request: SchemeHubCodeRequest) {
   return {
     blocks: request.blocks?.length ?? 0,
@@ -142,26 +146,29 @@ export function createDiagramCollaborationUseCases(
   }
 
   function getBlockStyle(blockId: string): SchemeHubBlockStyleChange['blockStyle'] | null {
-    const style = getSnapshot().styles?.blocks?.find(item => item.element_id === blockId)
-    if (!style?.element_id) return null
+    const style = getSnapshot().styles?.blocks?.find(item => readStyleElementId(item) === blockId)
+    const elementId = readStyleElementId(style)
+    if (!elementId) return null
 
     return {
-      element_id: style.element_id,
-      element_type: 'block',
+      elementId,
+      elementType: 'block',
       color: style.color,
-      border_color: style.border_color,
-      border_width: style.border_width,
-      border_style: style.border_style,
+      borderColor: style.borderColor ?? style.border_color,
+      borderWidth: style.borderWidth ?? style.border_width,
+      borderRadius: style.borderRadius ?? style.border_radius,
+      borderStyle: style.borderStyle ?? style.border_style,
     }
   }
 
   function getConnectionStyle(connectionId: string): SchemeHubConnectionStyleChange['connectionStyle'] | null {
-    const style = getSnapshot().styles?.connections?.find(item => item.element_id === connectionId)
-    if (!style?.element_id) return null
+    const style = getSnapshot().styles?.connections?.find(item => readStyleElementId(item) === connectionId)
+    const elementId = readStyleElementId(style)
+    if (!elementId) return null
 
     return {
-      element_id: style.element_id,
-      element_type: 'connection',
+      elementId,
+      elementType: 'connection',
       color: style.color,
       width: style.width,
       type: style.type,
@@ -511,15 +518,15 @@ export function createDiagramCollaborationUseCases(
       styles: {
         blocks: [
           createBlockStyleChange(actionType, {
-            element_id: node.id,
-            element_type: 'block',
+            elementId: node.id,
+            elementType: 'block',
           }),
         ],
         connections: deletedEdges.length
           ? deletedEdges.map(edge =>
               createConnectionStyleChange(actionType, {
-                element_id: edge.id,
-                element_type: 'connection',
+                elementId: edge.id,
+                elementType: 'connection',
               }),
             )
           : undefined,
@@ -570,8 +577,8 @@ export function createDiagramCollaborationUseCases(
       styles: {
         connections: [
           createConnectionStyleChange(actionType, {
-            element_id: edge.id,
-            element_type: 'connection',
+            elementId: edge.id,
+            elementType: 'connection',
           }),
         ],
       },
