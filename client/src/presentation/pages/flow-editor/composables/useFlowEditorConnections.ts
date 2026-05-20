@@ -1,12 +1,24 @@
 import { computed, type ComputedRef } from 'vue'
 import { storeToRefs } from 'pinia'
 
-import { useDiagramStore } from '@/domains/diagram'
+import {
+  buildOrthogonalConnectorCorners,
+  getNodeConnectionPoint,
+  getSideAxis,
+  projectOrthogonalPoint,
+  roundCoord,
+  sanitizeOrthogonalCorners,
+  toggleSegmentAxis,
+  useDiagramStore,
+} from '@/domains/diagram'
 import { useEditorUiStore } from '@/presentation/pages/flow-editor/store'
 import {
+  getAllowedConnectionSidesForBorderStyle,
   normalizeConnectionSideForBorderStyle,
   type ConnectionSide,
   type Edge,
+  type Node,
+  type Position,
 } from '@/domains/graph'
 
 type UseFlowEditorConnectionsOptions = {
@@ -16,6 +28,8 @@ type UseFlowEditorConnectionsOptions = {
   addCommentOnCanvas: (event: MouseEvent) => boolean
   createEdge: (edge: Edge) => void
   clearSelection: () => Promise<void> | void
+  getCanvasPoint: (event: MouseEvent) => Position | null
+  getAbsoluteNodePosition: (node: Node) => Position
 }
 
 function buildEdgeLabel(
@@ -45,6 +59,8 @@ export function useFlowEditorConnections({
   addCommentOnCanvas,
   createEdge,
   clearSelection,
+  getCanvasPoint,
+  getAbsoluteNodePosition,
 }: UseFlowEditorConnectionsOptions) {
   const documentStore = useDiagramStore()
   const uiStore = useEditorUiStore()
@@ -55,6 +71,7 @@ export function useFlowEditorConnections({
     isConnectionMode,
     connectionStartNode,
     connectionStartSide,
+    connectionDraftPoints,
     hoveredNodeId,
     hoveredNodeSide,
     selectedNodeIds,
@@ -73,17 +90,123 @@ export function useFlowEditorConnections({
       && !(hoveredNodeId.value === nodeId && hoveredNodeSide.value),
   )
 
+  const connectionDraftPath = computed(() => {
+    if (!connectionStartNode.value || !connectionStartSide.value || !connectionDraftPoints.value.length) {
+      return ''
+    }
+
+    const sourceNode = nodes.value.find(node => node.id === connectionStartNode.value)
+    if (!sourceNode) return ''
+
+    const startPoint = getNodeConnectionPoint(
+      getAbsoluteNodePosition(sourceNode),
+      sourceNode,
+      connectionStartSide.value,
+    )
+
+    const points = sanitizeOrthogonalCorners(connectionDraftPoints.value)
+    if (!points.length) return ''
+
+    let path = `M ${startPoint.x} ${startPoint.y}`
+    points.forEach(point => {
+      path += ` L ${point.x} ${point.y}`
+    })
+
+    return path
+  })
+
   const startConnectionMode = () => {
     if (isReadOnly.value) return
     uiStore.startConnectionMode()
   }
   const resetConnectionMode = () => uiStore.resetConnectionMode()
 
+  function getClickedNodeSide(node: Node, event: MouseEvent): ConnectionSide {
+    const target = event.currentTarget instanceof HTMLElement
+      ? event.currentTarget
+      : null
+    const allowedSides = getAllowedConnectionSidesForBorderStyle(node.borderStyle)
+
+    if (!target || !allowedSides.length) {
+      return allowedSides[0] ?? 'right'
+    }
+
+    const rect = target.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+
+    return allowedSides
+      .map(side => ({
+        side,
+        distance: side === 'top'
+          ? y
+          : side === 'right'
+            ? rect.width - x
+            : side === 'bottom'
+              ? rect.height - y
+              : x,
+      }))
+      .sort((left, right) => left.distance - right.distance)[0]?.side ?? 'right'
+  }
+
+  function getConnectionPointForNode(nodeId: string, side: ConnectionSide): Position | null {
+    const node = nodes.value.find(item => item.id === nodeId)
+    if (!node) return null
+
+    return getNodeConnectionPoint(getAbsoluteNodePosition(node), node, side)
+  }
+
+  function getDraftAxis(): ReturnType<typeof getSideAxis> | null {
+    if (!connectionStartSide.value) return null
+
+    let axis = getSideAxis(connectionStartSide.value)
+    for (let index = 0; index < connectionDraftPoints.value.length; index += 1) {
+      axis = toggleSegmentAxis(axis)
+    }
+
+    return axis
+  }
+
+  function buildConnectionBreakpoints(
+    sourceId: string,
+    sourceSide: ConnectionSide,
+    targetId: string,
+    targetSide: ConnectionSide,
+  ): Position[] {
+    const sourcePoint = getConnectionPointForNode(sourceId, sourceSide)
+    const targetPoint = getConnectionPointForNode(targetId, targetSide)
+    if (!sourcePoint || !targetPoint) {
+      return []
+    }
+
+    const points = sanitizeOrthogonalCorners(connectionDraftPoints.value)
+    if (!points.length) {
+      return []
+    }
+
+    const currentPoint = points[points.length - 1] ?? sourcePoint
+    const nextAxis = getDraftAxis()
+    if (!nextAxis) {
+      return points
+    }
+
+    return sanitizeOrthogonalCorners([
+      ...points,
+      ...buildOrthogonalConnectorCorners(
+        currentPoint,
+        targetPoint,
+        nextAxis,
+        getSideAxis(targetSide),
+      ),
+    ])
+  }
+
   function buildPendingEdge(
     sourceId: string,
     sourceSide: ConnectionSide,
     targetId: string,
     targetSide: ConnectionSide,
+    breakpoints: Position[] = [],
   ) {
     return {
       id: documentStore.createEdgeId(),
@@ -91,6 +214,7 @@ export function useFlowEditorConnections({
       targetNodeId: targetId,
       sourceSide,
       targetSide,
+      breakpoints,
       label: '',
       lineStyle: 'solid' as const,
       markerType: 'triangle' as const,
@@ -114,9 +238,21 @@ export function useFlowEditorConnections({
     const label = buildEdgeLabel(sourceId, targetId, edges.value.map(edge => edge.label ?? ''), sourceName, targetName)
     const normalizedSourceSide = normalizeConnectionSideForBorderStyle(sourceSide, sourceNode?.borderStyle)
     const normalizedTargetSide = normalizeConnectionSideForBorderStyle(targetSide, targetNode?.borderStyle)
+    const breakpoints = buildConnectionBreakpoints(
+      sourceId,
+      normalizedSourceSide,
+      targetId,
+      normalizedTargetSide,
+    )
 
     createEdge({
-      ...buildPendingEdge(sourceId, normalizedSourceSide, targetId, normalizedTargetSide),
+      ...buildPendingEdge(
+        sourceId,
+        normalizedSourceSide,
+        targetId,
+        normalizedTargetSide,
+        breakpoints,
+      ),
       sourceNodeId: sourceId,
       targetNodeId: targetId,
       label,
@@ -170,14 +306,20 @@ export function useFlowEditorConnections({
       return
     }
 
-    if (!hoveredNodeSide.value) return
+    const node = nodes.value.find(item => item.id === nodeId)
+    if (!node) return
+
+    const resolvedSide = hoveredNodeId.value === nodeId && hoveredNodeSide.value
+      ? hoveredNodeSide.value
+      : getClickedNodeSide(node, event)
+
     if (!connectionStartNode.value) {
-      uiStore.setConnectionStart(nodeId, hoveredNodeSide.value)
+      uiStore.setConnectionStart(nodeId, resolvedSide)
       return
     }
 
     if (connectionStartNode.value !== nodeId && connectionStartSide.value) {
-      createConnection(connectionStartNode.value, connectionStartSide.value, nodeId, hoveredNodeSide.value)
+      createConnection(connectionStartNode.value, connectionStartSide.value, nodeId, resolvedSide)
     }
 
     resetConnectionMode()
@@ -223,6 +365,39 @@ export function useFlowEditorConnections({
     uiStore.selectEdge(edgeId)
   }
 
+  function onCanvasMouseDown(event: MouseEvent): boolean {
+    if (!isConnectionMode.value) return false
+
+    const target = event.target as Element | null
+    if (target?.closest('.node')) return false
+
+    if (!connectionStartNode.value || !connectionStartSide.value) {
+      resetConnectionMode()
+      return true
+    }
+
+    const clickPoint = getCanvasPoint(event)
+    const origin = connectionDraftPoints.value[connectionDraftPoints.value.length - 1]
+      ?? getConnectionPointForNode(connectionStartNode.value, connectionStartSide.value)
+    const draftAxis = getDraftAxis()
+
+    if (!clickPoint || !origin || !draftAxis) {
+      return true
+    }
+
+    const projected = projectOrthogonalPoint(origin, clickPoint, draftAxis)
+    uiStore.setConnectionDraftPoints(sanitizeOrthogonalCorners([
+      ...connectionDraftPoints.value,
+      {
+        x: roundCoord(projected.x),
+        y: roundCoord(projected.y),
+      },
+    ]))
+
+    event.preventDefault()
+    return true
+  }
+
   function onCanvasClick(event: MouseEvent): void {
     if (uiStore.consumeSelectionClickSuppression()) return
 
@@ -246,7 +421,7 @@ export function useFlowEditorConnections({
     }
 
     if (isConnectionMode.value && !target?.closest('.node')) {
-      resetConnectionMode()
+      return
     }
 
     if (
@@ -263,10 +438,12 @@ export function useFlowEditorConnections({
   return {
     isConnectionSource,
     isConnectionTarget,
+    connectionDraftPath,
     startConnectionMode,
     onNodeHoverSide,
     onNodeClick,
     onEdgeClick,
+    onCanvasMouseDown,
     onCanvasClick,
     resetConnectionMode,
   }

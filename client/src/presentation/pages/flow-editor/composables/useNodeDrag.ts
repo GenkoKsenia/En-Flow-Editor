@@ -228,6 +228,10 @@ export function useNodeDrag({
           if (!edge) return
 
           documentStore.updateEdge(edgeId, {
+            breakpoints: edge.breakpoints?.map(point => ({
+              x: roundCoord(point.x + deltaX),
+              y: roundCoord(point.y + deltaY),
+            })),
             breakpointX: typeof edge.breakpointX === 'number' ? roundCoord(edge.breakpointX + deltaX) : edge.breakpointX,
             breakpointY: typeof edge.breakpointY === 'number' ? roundCoord(edge.breakpointY + deltaY) : edge.breakpointY,
           })
@@ -299,6 +303,7 @@ export function useNodeDrag({
         return [
           edgeId,
           {
+            breakpoints: edge?.breakpoints?.map(point => ({ x: point.x, y: point.y })),
             breakpointX: edge?.breakpointX,
             breakpointY: edge?.breakpointY,
           },
@@ -347,6 +352,7 @@ export function useNodeDrag({
       initialPassThroughBreakpoints.forEach((breakpoint, edgeId) => {
         const edge = edges.value.find(item => item.id === edgeId)
         if (!edge) return
+        edge.breakpoints = breakpoint.breakpoints?.map(point => ({ ...point }))
         edge.breakpointX = breakpoint.breakpointX
         edge.breakpointY = breakpoint.breakpointY
       })
@@ -413,7 +419,6 @@ export function useNodeDrag({
     }
 
     if (isConnectionMode.value || isCommentMode.value) {
-      event.preventDefault()
       return
     }
 

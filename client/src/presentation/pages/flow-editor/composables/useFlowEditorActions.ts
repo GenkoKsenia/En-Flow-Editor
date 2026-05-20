@@ -37,6 +37,7 @@ export function useFlowEditorActions() {
     return {
       ...edge,
       dataKeys: [...(edge.dataKeys ?? [])],
+      breakpoints: edge.breakpoints?.map(point => ({ x: point.x, y: point.y })),
     }
   }
 
@@ -268,6 +269,12 @@ export function useFlowEditorActions() {
             id: diagramStore.createEdgeId(),
             sourceNodeId: nodeIdMap.get(edge.sourceNodeId) ?? edge.sourceNodeId,
             targetNodeId: nodeIdMap.get(edge.targetNodeId) ?? edge.targetNodeId,
+            breakpoints: edge.breakpoints?.map(point => ({
+              x: point.x + offset,
+              y: point.y + offset,
+            })),
+            breakpointX: typeof edge.breakpointX === 'number' ? edge.breakpointX + offset : edge.breakpointX,
+            breakpointY: typeof edge.breakpointY === 'number' ? edge.breakpointY + offset : edge.breakpointY,
             dataKeys: (edge.dataKeys ?? []).map(dataKey => dataKeyMap.get(dataKey) ?? dataKey),
           }))
 

@@ -15,12 +15,6 @@
       >
         <GitBranch class="toolbar-icon" />
       </UiButton>
-      <UiButton size="icon" variant="outline" title="Внешняя система" aria-label="Внешняя система">
-        <Globe class="toolbar-icon" />
-      </UiButton>
-      <UiButton size="icon" variant="outline" title="Пользователь" aria-label="Пользователь">
-        <UserRound class="toolbar-icon" />
-      </UiButton>
       <UiButton size="icon" variant="outline" :disabled="isReadOnly" @click="$emit('add-database-node')" title="Хранилище данных" aria-label="Хранилище данных">
         <Database class="toolbar-icon" />
       </UiButton>
@@ -98,7 +92,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Database, Eye, EyeOff, GitBranch, Globe, History, MessageSquare, Square, SquareDashed, UserRound } from 'lucide-vue-next'
+import { Database, Eye, EyeOff, GitBranch, History, MessageSquare, Square, SquareDashed } from 'lucide-vue-next'
 
 import type { CommentsStoreComment } from '@/domains/comments'
 import UiButton from '@/presentation/ui/UiButton.vue'

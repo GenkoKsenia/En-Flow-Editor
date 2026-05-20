@@ -161,6 +161,18 @@
 
             <ArrowDefinitions />
 
+            <svg
+              v-if="connectionDraftPath"
+              class="connection-draft"
+              aria-hidden="true"
+            >
+              <path
+                :d="connectionDraftPath"
+                class="connection-draft__path"
+                fill="none"
+              />
+            </svg>
+
             <GraphEdge
               v-for="edge in edges"
               :key="edge.id"
@@ -283,6 +295,8 @@ const {
   isDragging,
   potentialParentId,
   isConnectionMode,
+  connectionStartNode,
+  connectionDraftPoints,
   isCommentMode,
   isDownloadMenuOpen,
   isVersionMenuOpen,
@@ -308,6 +322,7 @@ const {
   nodeSendableData,
   isConnectionSource,
   isConnectionTarget,
+  connectionDraftPath,
   getChildrenCount,
   getConnectionPosition,
   getCommentStyle,
@@ -349,6 +364,7 @@ const {
   onNodeMouseDown,
   onNodeClick,
   onNodeHoverSide,
+  resetConnectionMode,
   startCommentDrag,
   updateCommentText,
   submitComment,
@@ -424,6 +440,11 @@ const canvasContentLogicalSize = computed(() => {
   })
 
   edges.value.forEach(edge => {
+    edge.breakpoints?.forEach(point => {
+      maxRight = Math.max(maxRight, point.x)
+      maxBottom = Math.max(maxBottom, point.y)
+    })
+
     if (typeof edge.breakpointX === 'number') {
       maxRight = Math.max(maxRight, edge.breakpointX)
     }
@@ -431,6 +452,11 @@ const canvasContentLogicalSize = computed(() => {
     if (typeof edge.breakpointY === 'number') {
       maxBottom = Math.max(maxBottom, edge.breakpointY)
     }
+  })
+
+  connectionDraftPoints.value.forEach(point => {
+    maxRight = Math.max(maxRight, point.x)
+    maxBottom = Math.max(maxBottom, point.y)
   })
 
   visibleComments.value.forEach(comment => {
@@ -500,10 +526,12 @@ onBeforeUnmount(() => {
   clearZoomHideTimeout()
   clearCommentTargetHideTimeout()
   document.removeEventListener('keydown', onDocumentKeyDown)
+  document.removeEventListener('mousedown', onDocumentMouseDown)
 })
 
 onMounted(() => {
   document.addEventListener('keydown', onDocumentKeyDown)
+  document.addEventListener('mousedown', onDocumentMouseDown)
 })
 
 function clearZoomHideTimeout(): void {
@@ -532,13 +560,25 @@ function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
+function matchesModifierShortcut(
+  event: KeyboardEvent,
+  keyCode: 'KeyC' | 'KeyV' | 'KeyZ',
+  options?: { shiftKey?: boolean },
+): boolean {
+  if (!(event.ctrlKey || event.metaKey)) return false
+
+  const expectedShiftKey = options?.shiftKey ?? false
+  return event.shiftKey === expectedShiftKey && event.code === keyCode
+}
+
 function onDocumentKeyDown(event: KeyboardEvent): void {
   if (isEditableTarget(event.target)) return
 
-  const isCopy = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'c'
-  const isPaste = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'v'
-  const isUndo = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'z'
-  const isRedo = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'z'
+  const isCopy = matchesModifierShortcut(event, 'KeyC')
+  const isPaste = matchesModifierShortcut(event, 'KeyV')
+  const isUndo = matchesModifierShortcut(event, 'KeyZ')
+  const isRedo = matchesModifierShortcut(event, 'KeyZ', { shiftKey: true })
+  const hasConnectionDraft = Boolean(connectionStartNode.value || connectionDraftPoints.value.length)
 
   if (isCopy) {
     event.preventDefault()
@@ -565,9 +605,30 @@ function onDocumentKeyDown(event: KeyboardEvent): void {
   }
 
   if (event.key === 'Delete') {
+    if (hasConnectionDraft) {
+      event.preventDefault()
+      resetConnectionMode()
+      return
+    }
+
     event.preventDefault()
     deleteSelection()
+    return
   }
+
+  if (event.key === 'Escape' && hasConnectionDraft) {
+    event.preventDefault()
+    resetConnectionMode()
+  }
+}
+
+function onDocumentMouseDown(event: MouseEvent): void {
+  const target = event.target as Element | null
+  if (!target) return
+  if (!connectionStartNode.value && !connectionDraftPoints.value.length) return
+  if (target.closest('.canvas')) return
+
+  resetConnectionMode()
 }
 
 function revealZoomControl(): void {
@@ -745,6 +806,23 @@ const { onDownloadPng } = useFlowEditorPngExport({
   transform-origin: 0 0;
   padding: 24px;
   box-sizing: border-box;
+}
+
+.connection-draft {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 3;
+}
+
+.connection-draft__path {
+  stroke: #0b6bcb;
+  stroke-width: 2;
+  stroke-dasharray: 8 5;
+  opacity: 0.82;
 }
 
 .canvas-content-sizer {

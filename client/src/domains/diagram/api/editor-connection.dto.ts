@@ -16,15 +16,20 @@ export interface EditorConnectionDto {
   breakpoints?: unknown
 }
 
-export function findFirstValidBreakpoint(
+export function findValidBreakpoints(
   breakpoints: unknown,
-): DiagramPositionDto | null {
-  if (!Array.isArray(breakpoints)) return null
-
-  return breakpoints.find((point): point is DiagramPositionDto =>
+): DiagramPositionDto[] {
+  if (!Array.isArray(breakpoints)) return []
+  return breakpoints.filter((point): point is DiagramPositionDto =>
     typeof point === 'object' &&
     point !== null &&
     typeof (point as DiagramPositionDto).x === 'number' &&
     typeof (point as DiagramPositionDto).y === 'number',
-  ) ?? null
+  )
+}
+
+export function findFirstValidBreakpoint(
+  breakpoints: unknown,
+): DiagramPositionDto | null {
+  return findValidBreakpoints(breakpoints)[0] ?? null
 }

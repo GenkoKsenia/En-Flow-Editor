@@ -3,10 +3,12 @@ import type { Ref } from 'vue'
 import type { Edge } from '@/domains/graph'
 import type { Node, Position } from '@/domains/graph'
 import {
+  buildOrthogonalEdgeSegments,
   getAbsoluteNodePosition,
   getNodeConnectionPoint,
-  getOrthogonalDefaultBreakpoint,
+  getOrthogonalRouteCorners,
   roundCoord,
+  sanitizeOrthogonalCorners,
 } from '@/domains/diagram'
 
 type UiBreakpointApi = {
@@ -34,6 +36,10 @@ type UseBreakpointDragOptions = {
   clampYValue: (edge: Edge, y: number) => number
 }
 
+function clonePoints(points: Position[]): Position[] {
+  return points.map(point => ({ x: point.x, y: point.y }))
+}
+
 export function useBreakpointDrag({
   nodes,
   edges,
@@ -46,28 +52,32 @@ export function useBreakpointDrag({
   clampXValue,
   clampYValue,
 }: UseBreakpointDragOptions) {
-  function resolveBreakpointFallback(edge: Edge): Position {
+  function resolveEdgePoints(edge: Edge): { start: Position; end: Position } | null {
     const sourceNode = nodes.value.find(item => item.id === edge.sourceNodeId)
     const targetNode = nodes.value.find(item => item.id === edge.targetNodeId)
     if (!sourceNode || !targetNode) {
-      return { x: 0, y: 0 }
+      return null
     }
 
-    const sourcePoint = getNodeConnectionPoint(
+    const start = getNodeConnectionPoint(
       getAbsoluteNodePosition(nodes.value, sourceNode),
       sourceNode,
       edge.sourceSide,
     )
-    const targetPoint = getNodeConnectionPoint(
+    const end = getNodeConnectionPoint(
       getAbsoluteNodePosition(nodes.value, targetNode),
       targetNode,
       edge.targetSide,
     )
 
-    return getOrthogonalDefaultBreakpoint(edge, sourcePoint, targetPoint)
+    return { start, end }
   }
 
-  async function onBreakpointDragStart(edgeId: string, event: MouseEvent): Promise<void> {
+  async function onBreakpointDragStart(
+    edgeId: string,
+    segmentIndex: number,
+    event: MouseEvent,
+  ): Promise<void> {
     if (diagramStore.isReadOnly) return
 
     const locked = await diagramStore.beginEdgeEdit(edgeId)
@@ -87,12 +97,37 @@ export function useBreakpointDrag({
       void diagramStore.endEdgeEdit(edgeId)
       return
     }
-    edge.breakpointLocked = true
 
-    const axis: 'x' | 'y' =
-      edge.sourceSide === 'left' || edge.sourceSide === 'right'
-        ? 'x'
-        : 'y'
+    const resolvedPoints = resolveEdgePoints(edge)
+    if (!resolvedPoints) {
+      uiStore.setDraggingBreakpoint(false)
+      uiStore.setDraggingEdgeId(null)
+      void diagramStore.endEdgeEdit(edgeId)
+      return
+    }
+
+    edge.breakpointLocked = true
+    const routePoints = clonePoints(getOrthogonalRouteCorners(edge, resolvedPoints.start, resolvedPoints.end))
+    const geometry = buildOrthogonalEdgeSegments(
+      { ...edge, breakpoints: routePoints },
+      resolvedPoints.start,
+      resolvedPoints.end,
+    )
+    const segment = geometry[segmentIndex]
+
+    if (!segment || segmentIndex <= 0 || segmentIndex >= geometry.length - 1) {
+      uiStore.setDraggingBreakpoint(false)
+      uiStore.setDraggingEdgeId(null)
+      edge.breakpointLocked = false
+      void diagramStore.endEdgeEdit(edgeId)
+      return
+    }
+
+    const isVertical = Math.abs(segment.start.x - segment.end.x) <= 0.01
+    const startPointIndex = segmentIndex - 1
+    const endPointIndex = segmentIndex
+    const basePoints = clonePoints(routePoints)
+    const shouldClampLegacyAxis = basePoints.length === 2
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingBreakpoint.value || !draggingEdgeId.value || !canvas.value) return
@@ -104,23 +139,36 @@ export function useBreakpointDrag({
       const scale = zoom.value || 1
       const scrollLeft = canvas.value.scrollLeft
       const scrollTop = canvas.value.scrollTop
+      const nextPoints = clonePoints(basePoints)
 
-      if (axis === 'x') {
-        const newX = (moveEvent.clientX - canvasRect.left + scrollLeft) / scale
-        if (typeof activeEdge.breakpointY !== 'number') {
-          activeEdge.breakpointY = roundCoord(resolveBreakpointFallback(activeEdge).y)
+      if (isVertical) {
+        let newX = (moveEvent.clientX - canvasRect.left + scrollLeft) / scale
+        if (shouldClampLegacyAxis) {
+          newX = clampXValue(activeEdge, newX)
         }
-        activeEdge.breakpointX = roundCoord(clampXValue(activeEdge, newX))
+        nextPoints[startPointIndex].x = roundCoord(newX)
+        nextPoints[endPointIndex].x = roundCoord(newX)
       } else {
-        const newY = (moveEvent.clientY - canvasRect.top + scrollTop) / scale
-        if (typeof activeEdge.breakpointX !== 'number') {
-          activeEdge.breakpointX = roundCoord(resolveBreakpointFallback(activeEdge).x)
+        let newY = (moveEvent.clientY - canvasRect.top + scrollTop) / scale
+        if (shouldClampLegacyAxis) {
+          newY = clampYValue(activeEdge, newY)
         }
-        activeEdge.breakpointY = roundCoord(clampYValue(activeEdge, newY))
+        nextPoints[startPointIndex].y = roundCoord(newY)
+        nextPoints[endPointIndex].y = roundCoord(newY)
       }
+
+      activeEdge.breakpoints = nextPoints
+      activeEdge.breakpointX = undefined
+      activeEdge.breakpointY = undefined
     }
 
     const onMouseUp = () => {
+      const activeEdge = edges.value.find(item => item.id === edgeId)
+      if (activeEdge) {
+        activeEdge.breakpoints = sanitizeOrthogonalCorners(activeEdge.breakpoints ?? [])
+        activeEdge.breakpointLocked = false
+      }
+
       uiStore.setDraggingBreakpoint(false)
       uiStore.setDraggingEdgeId(null)
       document.removeEventListener('mousemove', onMouseMove)

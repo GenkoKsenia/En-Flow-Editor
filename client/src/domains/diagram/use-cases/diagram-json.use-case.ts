@@ -6,6 +6,7 @@ import {
 } from '@/domains/graph'
 
 import {
+  buildLegacyBreakpointCorners,
   buildInformationPayload,
   packConnectionSide,
   createEmptyDiagram,
@@ -13,21 +14,20 @@ import {
   getAbsoluteNodePosition,
   normalizeConnectionEndpointOrders,
   getNodeConnectionPoint,
-  getOrthogonalDefaultBreakpoint,
   normalizeBorderStyle,
-  normalizeConnectionSide,
   normalizeDataFlow,
   unpackConnectionSide,
   parseInformationPayload,
   normalizeLineStyle,
   normalizeNodeId,
+  sanitizeOrthogonalCorners,
 } from '../lib'
 import type {
   DiagramDto,
   DiagramPositionDto,
   EditorStylesDto,
 } from '../api'
-import { findFirstValidBreakpoint } from '../api'
+import { findValidBreakpoints } from '../api'
 
 import type { DiagramContext } from './diagram.context'
 
@@ -75,19 +75,11 @@ export function createDiagramJsonUseCases(
     }
   }
 
-  function extractBreakpoints(edge: Edge): DiagramPositionDto[] {
-    if (typeof edge.breakpointX === 'number' && typeof edge.breakpointY === 'number') {
-      return [{ x: edge.breakpointX, y: edge.breakpointY }]
-    }
-
-    if (typeof edge.breakpointX !== 'number' && typeof edge.breakpointY !== 'number') {
-      return []
-    }
-
+  function resolveEdgeConnectionPoints(edge: Pick<Edge, 'sourceNodeId' | 'targetNodeId' | 'sourceSide' | 'targetSide'>) {
     const sourceNode = context.nodes.value.find(node => node.id === edge.sourceNodeId)
     const targetNode = context.nodes.value.find(node => node.id === edge.targetNodeId)
     if (!sourceNode || !targetNode) {
-      return []
+      return null
     }
 
     const sourcePoint = getNodeConnectionPoint(
@@ -100,12 +92,67 @@ export function createDiagramJsonUseCases(
       targetNode,
       edge.targetSide,
     )
-    const fallback = getOrthogonalDefaultBreakpoint(edge, sourcePoint, targetPoint)
 
-    return [{
-      x: typeof edge.breakpointX === 'number' ? edge.breakpointX : fallback.x,
-      y: typeof edge.breakpointY === 'number' ? edge.breakpointY : fallback.y,
-    }]
+    return { sourcePoint, targetPoint }
+  }
+
+  function serializeBreakpointList(points: DiagramPositionDto[]): DiagramPositionDto[] {
+    if (points.length !== 1) {
+      return points
+    }
+
+    const point = points[0]
+    return [
+      { x: point.x, y: point.y },
+      { x: point.x, y: point.y },
+    ]
+  }
+
+  function extractBreakpoints(edge: Edge): DiagramPositionDto[] {
+    if (edge.breakpoints?.length) {
+      return serializeBreakpointList(sanitizeOrthogonalCorners(edge.breakpoints))
+    }
+
+    if (typeof edge.breakpointX !== 'number' && typeof edge.breakpointY !== 'number') {
+      return []
+    }
+
+    const connectionPoints = resolveEdgeConnectionPoints(edge)
+    if (!connectionPoints) {
+      return []
+    }
+
+    return serializeBreakpointList(buildLegacyBreakpointCorners(
+      edge,
+      connectionPoints.sourcePoint,
+      connectionPoints.targetPoint,
+    ))
+  }
+
+  function parseBreakpoints(
+    edge: Pick<Edge, 'sourceSide' | 'targetSide' | 'breakpointX' | 'breakpointY'>,
+    breakpoints: unknown,
+    sourcePoint: DiagramPositionDto,
+    targetPoint: DiagramPositionDto,
+  ): DiagramPositionDto[] {
+    const validBreakpoints = findValidBreakpoints(breakpoints)
+    if (!validBreakpoints.length) {
+      return []
+    }
+
+    if (validBreakpoints.length === 1) {
+      return buildLegacyBreakpointCorners(
+        {
+          ...edge,
+          breakpointX: validBreakpoints[0].x,
+          breakpointY: validBreakpoints[0].y,
+        },
+        sourcePoint,
+        targetPoint,
+      )
+    }
+
+    return sanitizeOrthogonalCorners(validBreakpoints)
   }
 
   function serializeBlocks(mode: SerializeMode): DiagramDto['blocks'] {
@@ -292,25 +339,49 @@ export function createDiagramJsonUseCases(
         if (!startId || !endId) return null
 
         const style = connectionStyles[String(connection.id)]
-        const breakpoint = findFirstValidBreakpoint(connection.breakpoints)
         const labelRaw = (connection.label ?? '').trim()
         const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels, getNodeLabel)
         const sourceEndpoint = unpackConnectionSide(connection.startSide)
         const targetEndpoint = unpackConnectionSide(connection.endSide)
+        const sourceSide = normalizeConnectionSideForBorderStyle(
+          sourceEndpoint.side,
+          nodeBorderStyles.get(startId),
+        )
+        const targetSide = normalizeConnectionSideForBorderStyle(
+          targetEndpoint.side,
+          nodeBorderStyles.get(endId),
+        )
+        const sourceNode = normalizedNodes.find(node => node.id === startId)
+        const targetNode = normalizedNodes.find(node => node.id === endId)
+        if (!sourceNode || !targetNode) return null
+
+        const sourcePoint = getNodeConnectionPoint(
+          getAbsoluteNodePosition(normalizedNodes, sourceNode),
+          sourceNode,
+          sourceSide,
+        )
+        const targetPoint = getNodeConnectionPoint(
+          getAbsoluteNodePosition(normalizedNodes, targetNode),
+          targetNode,
+          targetSide,
+        )
+        const breakpoints = parseBreakpoints(
+          {
+            sourceSide,
+            targetSide,
+          },
+          connection.breakpoints,
+          sourcePoint,
+          targetPoint,
+        )
         existingEdgeLabels.push(label)
 
         return {
           id: String(connection.id),
           sourceNodeId: startId,
           targetNodeId: endId,
-          sourceSide: normalizeConnectionSideForBorderStyle(
-            sourceEndpoint.side,
-            nodeBorderStyles.get(startId),
-          ),
-          targetSide: normalizeConnectionSideForBorderStyle(
-            targetEndpoint.side,
-            nodeBorderStyles.get(endId),
-          ),
+          sourceSide,
+          targetSide,
           sourceOrder: sourceEndpoint.order ?? (
             typeof connection.startOrder === 'number' ? connection.startOrder : undefined
           ),
@@ -322,8 +393,9 @@ export function createDiagramJsonUseCases(
           width: style?.width ?? context.defaults.DEFAULT_EDGE_WIDTH,
           lineStyle: normalizeLineStyle(style?.type),
           markerType: 'triangle',
-          breakpointX: breakpoint?.x,
-          breakpointY: breakpoint?.y,
+          breakpoints,
+          breakpointX: undefined,
+          breakpointY: undefined,
           breakpointLocked: false,
           geometry: undefined,
           dataKeys: Array.isArray(connection.dataKeys) ? connection.dataKeys.map(key => String(key)) : [],

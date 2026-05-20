@@ -38,6 +38,8 @@ export function useFlowEditorWorkspace(
     draggingEdgeId,
     potentialParentId,
     isConnectionMode,
+    connectionStartNode,
+    connectionDraftPoints,
     isCommentMode,
     isMarqueeSelecting,
     marqueeRect,
@@ -94,6 +96,8 @@ export function useFlowEditorWorkspace(
     addCommentOnCanvas: commentsApi.addCommentOnCanvas,
     createEdge: actions.createEdge,
     clearSelection: actions.clearSelection,
+    getCanvasPoint,
+    getAbsoluteNodePosition,
   })
 
   const { onNodeMouseDown } = useNodeDrag({
@@ -219,7 +223,8 @@ export function useFlowEditorWorkspace(
 
   function onCanvasMouseDown(event: MouseEvent): void {
     if (isReadOnly.value) return
-    if (isConnectionMode.value || isCommentMode.value) return
+    if (connections.onCanvasMouseDown(event)) return
+    if (isCommentMode.value) return
 
     const target = event.target as Element | null
     if (
@@ -337,6 +342,8 @@ export function useFlowEditorWorkspace(
     isDragging,
     potentialParentId,
     isConnectionMode,
+    connectionStartNode,
+    connectionDraftPoints,
     isCommentMode,
     isDownloadMenuOpen,
     isVersionMenuOpen,
@@ -362,6 +369,7 @@ export function useFlowEditorWorkspace(
     nodeSendableData: diagnostics.nodeSendableData,
     isConnectionSource: connections.isConnectionSource,
     isConnectionTarget: connections.isConnectionTarget,
+    connectionDraftPath: connections.connectionDraftPath,
     getChildrenCount,
     getConnectionPosition,
     getCommentStyle: commentsApi.getCommentStyle,
@@ -403,6 +411,7 @@ export function useFlowEditorWorkspace(
     onNodeMouseDown,
     onNodeClick: connections.onNodeClick,
     onNodeHoverSide: connections.onNodeHoverSide,
+    resetConnectionMode: connections.resetConnectionMode,
     startCommentDrag,
     updateCommentText: commentsApi.updateCommentText,
     submitComment: commentsApi.submitComment,

@@ -6,14 +6,18 @@ import {
   DEFAULT_EDGE_WIDTH,
   DEFAULT_NODE_COLOR,
 } from '@/constants'
-import { findFirstValidBreakpoint, type DiagramDto } from '@/domains/diagram'
+import { findValidBreakpoints, type DiagramDto } from '@/domains/diagram'
 import {
+  buildLegacyBreakpointCorners,
   generateEdgeLabel,
+  getAbsoluteNodePosition,
+  getNodeConnectionPoint,
   normalizeConnectionEndpointOrders,
   normalizeBorderStyle,
   parseInformationPayload,
   normalizeLineStyle,
   normalizeNodeId,
+  sanitizeOrthogonalCorners,
   unpackConnectionSide,
 } from '@/domains/diagram'
 import {
@@ -190,25 +194,54 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
       if (!startId || !endId) return null
 
       const style = connectionStyles[String(connection.id)]
-      const breakpoint = findFirstValidBreakpoint(connection.breakpoints)
       const labelRaw = (connection.label ?? '').trim()
       const label = labelRaw || generateEdgeLabel(startId, endId, existingEdgeLabels, nodeId => nodeLabelMap.get(nodeId) ?? nodeId)
       const sourceEndpoint = unpackConnectionSide(connection.startSide)
       const targetEndpoint = unpackConnectionSide(connection.endSide)
+      const sourceSide = normalizeConnectionSideForBorderStyle(
+        sourceEndpoint.side,
+        nodeBorderStyles.get(startId),
+      )
+      const targetSide = normalizeConnectionSideForBorderStyle(
+        targetEndpoint.side,
+        nodeBorderStyles.get(endId),
+      )
+      const sourceNode = nodes.find(node => node.id === startId)
+      const targetNode = nodes.find(node => node.id === endId)
+      if (!sourceNode || !targetNode) return null
+
+      const sourcePoint = getNodeConnectionPoint(
+        getAbsoluteNodePosition(nodes, sourceNode),
+        sourceNode,
+        sourceSide,
+      )
+      const targetPoint = getNodeConnectionPoint(
+        getAbsoluteNodePosition(nodes, targetNode),
+        targetNode,
+        targetSide,
+      )
+      const validBreakpoints = findValidBreakpoints(connection.breakpoints)
+      const breakpoints = validBreakpoints.length === 1
+        ? buildLegacyBreakpointCorners(
+          {
+            id: String(connection.id),
+            sourceSide,
+            targetSide,
+            breakpointX: validBreakpoints[0].x,
+            breakpointY: validBreakpoints[0].y,
+          },
+          sourcePoint,
+          targetPoint,
+        )
+        : sanitizeOrthogonalCorners(validBreakpoints)
       existingEdgeLabels.push(label)
 
       return {
         id: String(connection.id),
         sourceNodeId: startId,
         targetNodeId: endId,
-        sourceSide: normalizeConnectionSideForBorderStyle(
-          sourceEndpoint.side,
-          nodeBorderStyles.get(startId),
-        ),
-        targetSide: normalizeConnectionSideForBorderStyle(
-          targetEndpoint.side,
-          nodeBorderStyles.get(endId),
-        ),
+        sourceSide,
+        targetSide,
         sourceOrder: sourceEndpoint.order ?? (
           typeof connection.startOrder === 'number' ? connection.startOrder : undefined
         ),
@@ -220,8 +253,9 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
         width: style?.width ?? DEFAULT_EDGE_WIDTH,
         lineStyle: normalizeLineStyle(style?.type),
         markerType: 'triangle',
-        breakpointX: breakpoint?.x,
-        breakpointY: breakpoint?.y,
+        breakpoints,
+        breakpointX: undefined,
+        breakpointY: undefined,
         breakpointLocked: false,
         geometry: undefined,
         dataKeys: Array.isArray(connection.dataKeys) ? connection.dataKeys.map(key => String(key)) : [],

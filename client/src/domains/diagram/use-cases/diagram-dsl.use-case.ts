@@ -65,6 +65,7 @@ type ConnectionEntry = {
     targetSide?: string
     sourceOrder?: number
     targetOrder?: number
+    breakpoints?: Array<{ x: number; y: number }>
     breakpointX?: number
     breakpointY?: number
   }
@@ -244,6 +245,50 @@ function formatConnectionEndpoint(id: string, side?: ConnectionSide): string {
   return `${id}[${side ?? 'right'}]`
 }
 
+function formatBreakpoints(points: Array<{ x: number; y: number }>): string {
+  return points
+    .map(point => `${roundCoord(point.x)}:${roundCoord(point.y)}`)
+    .join(',')
+}
+
+function parseBreakpointsValue(value: string): Array<{ x: number; y: number }> {
+  const items = value
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+
+  if (!items.length) {
+    return []
+  }
+
+  return items.map(item => {
+    const [rawX, rawY] = item.split(':')
+    const x = parseNumber(rawX ?? '')
+    const y = parseNumber(rawY ?? '')
+
+    if (x === null || y === null) {
+      throw new Error(`Некорректная точка маршрута связи: ${item}`)
+    }
+
+    return {
+      x: roundCoord(x),
+      y: roundCoord(y),
+    }
+  })
+}
+
+function serializeDiagramBreakpoints(points: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  if (points.length !== 1) {
+    return points
+  }
+
+  const point = points[0]
+  return [
+    { x: point.x, y: point.y },
+    { x: point.x, y: point.y },
+  ]
+}
+
 export function createDiagramDslUseCases(
   context: DiagramContext,
   dependencies: DiagramDslDependencies,
@@ -377,10 +422,12 @@ export function createDiagramDslUseCases(
     if ((edge.lineStyle ?? 'solid') !== 'solid') {
       props.push(`type=${edge.lineStyle ?? 'solid'}`)
     }
-    if (typeof edge.breakpointX === 'number') {
+    if (edge.breakpoints?.length) {
+      props.push(`breakpoints=${formatBreakpoints(edge.breakpoints)}`)
+    } else if (typeof edge.breakpointX === 'number') {
       props.push(`breakpointX=${edge.breakpointX}`)
     }
-    if (typeof edge.breakpointY === 'number') {
+    if (!edge.breakpoints?.length && typeof edge.breakpointY === 'number') {
       props.push(`breakpointY=${edge.breakpointY}`)
     }
 
@@ -738,6 +785,9 @@ export function createDiagramDslUseCases(
         if (parsed !== null) entry.props.breakpointY = parsed
         return
       }
+      case 'breakpoints':
+        entry.props.breakpoints = parseBreakpointsValue(value)
+        return
       default:
         throw new Error(`Неизвестное свойство связи: ${key}`)
     }
@@ -1131,6 +1181,8 @@ export function createDiagramDslUseCases(
         width: connection.props.width ?? matchedEdge?.width ?? context.defaults.DEFAULT_EDGE_WIDTH,
         lineStyle: normalizeLineStyle(connection.props.type ?? matchedEdge?.lineStyle),
         markerType: matchedEdge?.markerType ?? 'triangle',
+        breakpoints: connection.props.breakpoints?.map(point => ({ ...point }))
+          ?? matchedEdge?.breakpoints?.map(point => ({ ...point })),
         breakpointX: connection.props.breakpointX ?? matchedEdge?.breakpointX,
         breakpointY: connection.props.breakpointY ?? matchedEdge?.breakpointY,
         breakpointLocked: matchedEdge?.breakpointLocked ?? false,
@@ -1187,9 +1239,11 @@ export function createDiagramDslUseCases(
       label: edge.label ?? null,
       dataKeys: edge.dataKeys ?? [],
       through: throughByEdgeId[edge.id] ?? [],
-      breakpoints: typeof edge.breakpointX === 'number' && typeof edge.breakpointY === 'number'
-        ? [{ x: edge.breakpointX, y: edge.breakpointY }]
-        : [],
+      breakpoints: edge.breakpoints?.length
+        ? serializeDiagramBreakpoints(edge.breakpoints.map(point => ({ x: point.x, y: point.y })))
+        : (typeof edge.breakpointX === 'number' && typeof edge.breakpointY === 'number'
+          ? [{ x: edge.breakpointX, y: edge.breakpointY }]
+          : []),
     }))
 
     return {

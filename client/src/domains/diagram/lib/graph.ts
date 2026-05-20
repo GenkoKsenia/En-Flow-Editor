@@ -1,4 +1,5 @@
 import type { ConnectionSide, Edge, Node, Position, Segment } from '@/domains/graph'
+import { roundCoord } from './layout'
 
 export type NodeRect = {
   left: number
@@ -15,6 +16,56 @@ export type PassThroughOffsets = Record<string, {
 }>
 
 const RECT_INTERSECTION_EPSILON = 0.01
+export type SegmentAxis = 'horizontal' | 'vertical'
+
+export function getSideAxis(side: ConnectionSide): SegmentAxis {
+  return side === 'left' || side === 'right' ? 'horizontal' : 'vertical'
+}
+
+export function toggleSegmentAxis(axis: SegmentAxis): SegmentAxis {
+  return axis === 'horizontal' ? 'vertical' : 'horizontal'
+}
+
+function pointsEqual(left: Position, right: Position): boolean {
+  return Math.abs(left.x - right.x) <= RECT_INTERSECTION_EPSILON
+    && Math.abs(left.y - right.y) <= RECT_INTERSECTION_EPSILON
+}
+
+function toSegment(id: string, start: Position, end: Position): Segment | null {
+  if (pointsEqual(start, end)) return null
+
+  return {
+    id,
+    type: 'line',
+    start,
+    end,
+  }
+}
+
+export function projectOrthogonalPoint(
+  origin: Position,
+  target: Position,
+  axis: SegmentAxis,
+): Position {
+  return axis === 'horizontal'
+    ? { x: target.x, y: origin.y }
+    : { x: origin.x, y: target.y }
+}
+
+export function sanitizeOrthogonalCorners(points: Position[]): Position[] {
+  return points.reduce<Position[]>((result, point) => {
+    const normalizedPoint = {
+      x: roundCoord(point.x),
+      y: roundCoord(point.y),
+    }
+
+    if (!result.length || !pointsEqual(result[result.length - 1]!, normalizedPoint)) {
+      result.push(normalizedPoint)
+    }
+
+    return result
+  }, [])
+}
 
 export function getNodeConnectionPoint(
   position: Position,
@@ -66,6 +117,109 @@ export function getOrthogonalDefaultBreakpoint(
   })()
 
   return { x, y }
+}
+
+export function buildLegacyBreakpointCorners(
+  edge: Pick<Edge, 'id' | 'sourceSide' | 'targetSide' | 'breakpointX' | 'breakpointY'>,
+  start: Position,
+  end: Position,
+): Position[] {
+  const fallback = getOrthogonalDefaultBreakpoint(edge, start, end)
+  const breakpointX = edge.breakpointX ?? fallback.x
+  const breakpointY = edge.breakpointY ?? fallback.y
+
+  if (getSideAxis(edge.sourceSide) === 'horizontal') {
+    return [
+      { x: breakpointX, y: start.y },
+      { x: breakpointX, y: end.y },
+    ].filter((point, index, points) => index === 0 || !pointsEqual(point, points[index - 1]!))
+  }
+
+  return [
+    { x: start.x, y: breakpointY },
+    { x: end.x, y: breakpointY },
+  ].filter((point, index, points) => index === 0 || !pointsEqual(point, points[index - 1]!))
+}
+
+export function buildOrthogonalConnectorCorners(
+  start: Position,
+  end: Position,
+  firstAxis: SegmentAxis,
+  lastAxis: SegmentAxis,
+): Position[] {
+  if (firstAxis === lastAxis) {
+    if (firstAxis === 'horizontal' && Math.abs(start.y - end.y) <= RECT_INTERSECTION_EPSILON) {
+      return []
+    }
+
+    if (firstAxis === 'vertical' && Math.abs(start.x - end.x) <= RECT_INTERSECTION_EPSILON) {
+      return []
+    }
+
+    if (firstAxis === 'horizontal') {
+      const midpointX = (start.x + end.x) / 2
+      return [
+        { x: midpointX, y: start.y },
+        { x: midpointX, y: end.y },
+      ]
+    }
+
+    const midpointY = (start.y + end.y) / 2
+    return [
+      { x: start.x, y: midpointY },
+      { x: end.x, y: midpointY },
+    ]
+  }
+
+  if (firstAxis === 'horizontal') {
+    return [{ x: end.x, y: start.y }]
+  }
+
+  return [{ x: start.x, y: end.y }]
+}
+
+export function getOrthogonalRouteCorners(
+  edge: Pick<Edge, 'id' | 'sourceSide' | 'targetSide' | 'breakpoints' | 'breakpointX' | 'breakpointY'>,
+  start: Position,
+  end: Position,
+): Position[] {
+  if (edge.breakpoints?.length) {
+    const corners: Position[] = []
+    let currentPoint = start
+    let currentAxis = getSideAxis(edge.sourceSide)
+
+    sanitizeOrthogonalCorners(edge.breakpoints).forEach(point => {
+      const projectedPoint = projectOrthogonalPoint(currentPoint, point, currentAxis)
+      if (pointsEqual(currentPoint, projectedPoint)) {
+        return
+      }
+
+      corners.push(projectedPoint)
+      currentPoint = projectedPoint
+      currentAxis = toggleSegmentAxis(currentAxis)
+    })
+
+    return sanitizeOrthogonalCorners([
+      ...corners,
+      ...buildOrthogonalConnectorCorners(
+        currentPoint,
+        end,
+        currentAxis,
+        getSideAxis(edge.targetSide),
+      ),
+    ])
+  }
+
+  if (edge.breakpointX !== undefined || edge.breakpointY !== undefined) {
+    return buildLegacyBreakpointCorners(edge, start, end)
+  }
+
+  return buildOrthogonalConnectorCorners(
+    start,
+    end,
+    getSideAxis(edge.sourceSide),
+    getSideAxis(edge.targetSide),
+  )
 }
 
 export function supportsPassThroughEdge(edge: Pick<Edge, 'sourceSide' | 'targetSide'>): boolean {
@@ -213,53 +367,23 @@ export function getPassThroughFraction(
 }
 
 export function buildOrthogonalEdgeSegments(edge: Edge, start: Position, end: Position): Segment[] {
+  const points = getOrthogonalRouteCorners(edge, start, end)
+
   const segments: Segment[] = []
   let currentPoint = start
-  const { sourceSide, targetSide } = edge
 
-  const needsThreeSegments =
-    (sourceSide === 'left' && targetSide === 'right') ||
-    (sourceSide === 'right' && targetSide === 'left') ||
-    (sourceSide === 'top' && targetSide === 'bottom') ||
-    (sourceSide === 'bottom' && targetSide === 'top') ||
-    (sourceSide === 'left' && targetSide === 'left') ||
-    (sourceSide === 'right' && targetSide === 'right') ||
-    (sourceSide === 'top' && targetSide === 'top') ||
-    (sourceSide === 'bottom' && targetSide === 'bottom')
-
-  if (needsThreeSegments || edge.breakpointX !== undefined || edge.breakpointY !== undefined) {
-    const defaultBreakpoint = getOrthogonalDefaultBreakpoint(edge, start, end)
-    const breakpointX = edge.breakpointX ?? defaultBreakpoint.x
-    const breakpointY = edge.breakpointY ?? defaultBreakpoint.y
-
-    if (sourceSide === 'left' || sourceSide === 'right') {
-      const point1 = { x: breakpointX, y: start.y }
-      const point2 = { x: breakpointX, y: end.y }
-      segments.push({ id: `${edge.id}-segment-1`, type: 'line', start: currentPoint, end: point1 })
-      currentPoint = point1
-      segments.push({ id: `${edge.id}-segment-2`, type: 'line', start: currentPoint, end: point2 })
-      currentPoint = point2
-      segments.push({ id: `${edge.id}-segment-3`, type: 'line', start: currentPoint, end })
-      return segments
+  points.forEach((point, index) => {
+    const segment = toSegment(`${edge.id}-segment-${index + 1}`, currentPoint, point)
+    if (segment) {
+      segments.push(segment)
+      currentPoint = point
     }
+  })
 
-    const point1 = { x: start.x, y: breakpointY }
-    const point2 = { x: end.x, y: breakpointY }
-    segments.push({ id: `${edge.id}-segment-1`, type: 'line', start: currentPoint, end: point1 })
-    currentPoint = point1
-    segments.push({ id: `${edge.id}-segment-2`, type: 'line', start: currentPoint, end: point2 })
-    currentPoint = point2
-    segments.push({ id: `${edge.id}-segment-3`, type: 'line', start: currentPoint, end })
-    return segments
+  const finalSegment = toSegment(`${edge.id}-segment-${segments.length + 1}`, currentPoint, end)
+  if (finalSegment) {
+    segments.push(finalSegment)
   }
-
-  const bendPoint =
-    sourceSide === 'left' || sourceSide === 'right'
-      ? { x: end.x, y: start.y }
-      : { x: start.x, y: end.y }
-
-  segments.push({ id: `${edge.id}-segment-1`, type: 'line', start, end: bendPoint })
-  segments.push({ id: `${edge.id}-segment-2`, type: 'line', start: bendPoint, end })
 
   return segments
 }
