@@ -371,29 +371,6 @@ export function useFlowEditorConnections({
     const target = event.target as Element | null
     if (target?.closest('.node')) return false
 
-    if (!connectionStartNode.value || !connectionStartSide.value) {
-      resetConnectionMode()
-      return true
-    }
-
-    const clickPoint = getCanvasPoint(event)
-    const origin = connectionDraftPoints.value[connectionDraftPoints.value.length - 1]
-      ?? getConnectionPointForNode(connectionStartNode.value, connectionStartSide.value)
-    const draftAxis = getDraftAxis()
-
-    if (!clickPoint || !origin || !draftAxis) {
-      return true
-    }
-
-    const projected = projectOrthogonalPoint(origin, clickPoint, draftAxis)
-    uiStore.setConnectionDraftPoints(sanitizeOrthogonalCorners([
-      ...connectionDraftPoints.value,
-      {
-        x: roundCoord(projected.x),
-        y: roundCoord(projected.y),
-      },
-    ]))
-
     event.preventDefault()
     return true
   }
@@ -421,6 +398,28 @@ export function useFlowEditorConnections({
     }
 
     if (isConnectionMode.value && !target?.closest('.node')) {
+      if (!connectionStartNode.value || !connectionStartSide.value) {
+        resetConnectionMode()
+        return
+      }
+
+      const clickPoint = getCanvasPoint(event)
+      const origin = connectionDraftPoints.value[connectionDraftPoints.value.length - 1]
+        ?? getConnectionPointForNode(connectionStartNode.value, connectionStartSide.value)
+      const draftAxis = getDraftAxis()
+
+      if (!clickPoint || !origin || !draftAxis) {
+        return
+      }
+
+      const projected = projectOrthogonalPoint(origin, clickPoint, draftAxis)
+      uiStore.setConnectionDraftPoints(sanitizeOrthogonalCorners([
+        ...connectionDraftPoints.value,
+        {
+          x: roundCoord(projected.x),
+          y: roundCoord(projected.y),
+        },
+      ]))
       return
     }
 

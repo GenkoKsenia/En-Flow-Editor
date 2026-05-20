@@ -198,14 +198,11 @@ export function useFlowEditorWorkspace(
     if (!canvasContent.value) return null
 
     const rect = canvasContent.value.getBoundingClientRect()
-    const styles = window.getComputedStyle(canvasContent.value)
-    const paddingLeft = Number.parseFloat(styles.paddingLeft || '0') || 0
-    const paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0
     const scale = zoom.value || 1
 
     return {
-      x: (event.clientX - rect.left) / scale - paddingLeft,
-      y: (event.clientY - rect.top) / scale - paddingTop,
+      x: (event.clientX - rect.left) / scale,
+      y: (event.clientY - rect.top) / scale,
     }
   }
 
