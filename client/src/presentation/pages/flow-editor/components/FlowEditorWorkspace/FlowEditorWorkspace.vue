@@ -191,6 +191,7 @@
               :locked-by="lockedEdgeOwners[edge.id]"
               @edge-click="onEdgeClick"
               @breakpoint-drag-start="onBreakpointDragStart"
+              @label-drag-start="onLabelDragStart"
               @endpoint-order-drag-start="onEndpointOrderDragStart"
             />
 
@@ -360,6 +361,7 @@ const {
   onCanvasWheel,
   onEdgeClick,
   onBreakpointDragStart,
+  onLabelDragStart,
   onEndpointOrderDragStart,
   onNodeMouseDown,
   onNodeClick,
@@ -815,7 +817,7 @@ const { onDownloadPng } = useFlowEditorPngExport({
   height: 100%;
   pointer-events: none;
   overflow: visible;
-  z-index: 3;
+  z-index: 2001;
 }
 
 .connection-draft__path {

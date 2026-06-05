@@ -299,6 +299,46 @@ export function getNodeChildrenCount(nodes: Node[], nodeId: string): number {
   return nodes.filter(node => node.parentId === nodeId).length
 }
 
+export type NodeBorderStyleMode = 'auto' | 'manual'
+
+function isNodeMetaRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function inferNodeBorderStyleMode(
+  node: Pick<Node, 'text' | 'borderStyle'>,
+  childCount: number,
+): NodeBorderStyleMode {
+  if (node.borderStyle === 'database') return 'manual'
+
+  const isBoundary = node.text?.startsWith('Область ')
+  if (isBoundary) return 'auto'
+
+  if (node.borderStyle === 'dashed' && childCount === 0) {
+    return 'manual'
+  }
+
+  return 'auto'
+}
+
+export function getNodeBorderStyleMode(node: Node, childCount: number): NodeBorderStyleMode {
+  if (isNodeMetaRecord(node.meta)) {
+    const rawMode = node.meta.borderStyleMode
+    if (rawMode === 'auto' || rawMode === 'manual') {
+      return rawMode
+    }
+  }
+
+  return inferNodeBorderStyleMode(node, childCount)
+}
+
+export function setNodeBorderStyleMode(node: Node, mode: NodeBorderStyleMode): void {
+  node.meta = {
+    ...(isNodeMetaRecord(node.meta) ? node.meta : {}),
+    borderStyleMode: mode,
+  }
+}
+
 export function resolveNodeBorderStyle(node: Node, childCount: number): NodeLineStyle {
   if (node.borderStyle === 'database') return 'database'
 

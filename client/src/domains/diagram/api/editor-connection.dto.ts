@@ -11,6 +11,7 @@ export interface EditorConnectionDto {
   startOrder?: number | null
   endOrder?: number | null
   label?: string | null
+  labelPosition?: number | null
   dataKeys?: unknown
   through?: unknown
   breakpoints?: unknown

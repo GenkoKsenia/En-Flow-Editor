@@ -22,6 +22,9 @@ namespace Diplom.Models.Requests
         [JsonPropertyName("label")]
         public string Label { get; set; } = "";
 
+        [JsonPropertyName("labelPosition")]
+        public float? LabelPosition { get; set; }
+
         [JsonPropertyName("dataKeys")]
         public List<string> DataKeys { get; set; } = new();
 

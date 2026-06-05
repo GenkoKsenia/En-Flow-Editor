@@ -7,6 +7,8 @@ import {
   getAbsoluteNodePosition,
   getNodeConnectionPoint,
   getOrthogonalRouteCorners,
+  isAutoOrthogonalRoute,
+  getSideAxis,
   roundCoord,
   sanitizeOrthogonalCorners,
 } from '@/domains/diagram'
@@ -39,6 +41,8 @@ type UseBreakpointDragOptions = {
 function clonePoints(points: Position[]): Position[] {
   return points.map(point => ({ x: point.x, y: point.y }))
 }
+
+const MERGE_SNAP_DISTANCE = 14
 
 export function useBreakpointDrag({
   nodes,
@@ -115,7 +119,7 @@ export function useBreakpointDrag({
     )
     const segment = geometry[segmentIndex]
 
-    if (!segment || segmentIndex <= 0 || segmentIndex >= geometry.length - 1) {
+    if (!segment || !routePoints.length) {
       uiStore.setDraggingBreakpoint(false)
       uiStore.setDraggingEdgeId(null)
       edge.breakpointLocked = false
@@ -123,11 +127,61 @@ export function useBreakpointDrag({
       return
     }
 
+    const isFirstSegment = segmentIndex === 0
+    const isLastSegment = segmentIndex === geometry.length - 1
     const isVertical = Math.abs(segment.start.x - segment.end.x) <= 0.01
-    const startPointIndex = segmentIndex - 1
-    const endPointIndex = segmentIndex
     const basePoints = clonePoints(routePoints)
     const shouldClampLegacyAxis = basePoints.length === 2
+
+    const dragAxis: 'x' | 'y' = isFirstSegment
+      ? (getSideAxis(edge.sourceSide) === 'horizontal' ? 'y' : 'x')
+      : isLastSegment
+        ? (getSideAxis(edge.targetSide) === 'horizontal' ? 'y' : 'x')
+        : (isVertical ? 'x' : 'y')
+
+    const pointIndices = isFirstSegment
+      ? [0]
+      : isLastSegment
+        ? [routePoints.length - 1]
+        : [segmentIndex - 1, segmentIndex]
+
+    function snapMovedPoints(points: Position[]): Position[] {
+      const next = clonePoints(points)
+
+      if (dragAxis === 'x') {
+        if (Math.abs(next[0]!.x - resolvedPoints.start.x) <= MERGE_SNAP_DISTANCE) {
+          next[0]!.x = resolvedPoints.start.x
+        }
+
+        const lastIndex = next.length - 1
+        if (Math.abs(next[lastIndex]!.x - resolvedPoints.end.x) <= MERGE_SNAP_DISTANCE) {
+          next[lastIndex]!.x = resolvedPoints.end.x
+        }
+
+        for (let index = 1; index < next.length; index += 1) {
+          if (Math.abs(next[index - 1]!.x - next[index]!.x) <= MERGE_SNAP_DISTANCE) {
+            next[index]!.x = next[index - 1]!.x
+          }
+        }
+      } else {
+        if (Math.abs(next[0]!.y - resolvedPoints.start.y) <= MERGE_SNAP_DISTANCE) {
+          next[0]!.y = resolvedPoints.start.y
+        }
+
+        const lastIndex = next.length - 1
+        if (Math.abs(next[lastIndex]!.y - resolvedPoints.end.y) <= MERGE_SNAP_DISTANCE) {
+          next[lastIndex]!.y = resolvedPoints.end.y
+        }
+
+        for (let index = 1; index < next.length; index += 1) {
+          if (Math.abs(next[index - 1]!.y - next[index]!.y) <= MERGE_SNAP_DISTANCE) {
+            next[index]!.y = next[index - 1]!.y
+          }
+        }
+      }
+
+      return next
+    }
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingBreakpoint.value || !draggingEdgeId.value || !canvas.value) return
@@ -141,23 +195,28 @@ export function useBreakpointDrag({
       const scrollTop = canvas.value.scrollTop
       const nextPoints = clonePoints(basePoints)
 
-      if (isVertical) {
+      if (dragAxis === 'x') {
         let newX = (moveEvent.clientX - canvasRect.left + scrollLeft) / scale
         if (shouldClampLegacyAxis) {
           newX = clampXValue(activeEdge, newX)
         }
-        nextPoints[startPointIndex].x = roundCoord(newX)
-        nextPoints[endPointIndex].x = roundCoord(newX)
+        pointIndices.forEach(pointIndex => {
+          nextPoints[pointIndex]!.x = roundCoord(newX)
+        })
       } else {
         let newY = (moveEvent.clientY - canvasRect.top + scrollTop) / scale
         if (shouldClampLegacyAxis) {
           newY = clampYValue(activeEdge, newY)
         }
-        nextPoints[startPointIndex].y = roundCoord(newY)
-        nextPoints[endPointIndex].y = roundCoord(newY)
+        pointIndices.forEach(pointIndex => {
+          nextPoints[pointIndex]!.y = roundCoord(newY)
+        })
       }
 
-      activeEdge.breakpoints = nextPoints
+      activeEdge.breakpoints = sanitizeOrthogonalCorners(snapMovedPoints(nextPoints), {
+        start: resolvedPoints.start,
+        end: resolvedPoints.end,
+      })
       activeEdge.breakpointX = undefined
       activeEdge.breakpointY = undefined
     }
@@ -165,7 +224,15 @@ export function useBreakpointDrag({
     const onMouseUp = () => {
       const activeEdge = edges.value.find(item => item.id === edgeId)
       if (activeEdge) {
-        activeEdge.breakpoints = sanitizeOrthogonalCorners(activeEdge.breakpoints ?? [])
+        activeEdge.breakpoints = sanitizeOrthogonalCorners(activeEdge.breakpoints ?? [], {
+          start: resolvedPoints.start,
+          end: resolvedPoints.end,
+        })
+        if (isAutoOrthogonalRoute(activeEdge, resolvedPoints.start, resolvedPoints.end)) {
+          activeEdge.breakpoints = undefined
+          activeEdge.breakpointX = undefined
+          activeEdge.breakpointY = undefined
+        }
         activeEdge.breakpointLocked = false
       }
 

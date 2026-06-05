@@ -249,6 +249,7 @@ export function parseVersionSnapshotGraph(code: unknown): ParsedSnapshotGraph {
           typeof connection.endOrder === 'number' ? connection.endOrder : undefined
         ),
         label,
+        labelPosition: typeof connection.labelPosition === 'number' ? connection.labelPosition : undefined,
         color: style?.color ?? DEFAULT_EDGE_COLOR,
         width: style?.width ?? DEFAULT_EDGE_WIDTH,
         lineStyle: normalizeLineStyle(style?.type),

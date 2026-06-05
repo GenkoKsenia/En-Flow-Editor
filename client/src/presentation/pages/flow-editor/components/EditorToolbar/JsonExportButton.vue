@@ -36,6 +36,7 @@ type ExportConnection = {
   startSide: Edge['sourceSide'] | null
   endSide: Edge['targetSide'] | null
   label: string | null
+  labelPosition: number | null
   dataKeys: string[]
   through: string[]
   breakpoints: Position[]
@@ -191,6 +192,7 @@ function toExportConnection(
     startSide: edge.sourceSide ?? null,
     endSide: edge.targetSide ?? null,
     label: edge.label ?? null,
+    labelPosition: typeof edge.labelPosition === 'number' ? edge.labelPosition : null,
     dataKeys: edge.dataKeys ?? [],
     through: throughByEdgeId[edge.id] ?? [],
     breakpoints: extractBreakpoints(edge, positions, nodes),

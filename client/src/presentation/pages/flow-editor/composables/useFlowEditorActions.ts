@@ -36,6 +36,7 @@ export function useFlowEditorActions() {
   function cloneEdge(edge: Edge): Edge {
     return {
       ...edge,
+      labelPosition: edge.labelPosition,
       dataKeys: [...(edge.dataKeys ?? [])],
       breakpoints: edge.breakpoints?.map(point => ({ x: point.x, y: point.y })),
     }

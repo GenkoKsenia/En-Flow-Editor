@@ -9,6 +9,7 @@ import { useBreakpointDrag } from './useBreakpointDrag'
 import { useCommentDrag } from './useCommentDrag'
 import { useEdgeEndpointOrderDrag } from './useEdgeEndpointOrderDrag'
 import { useEditorDiagnostics } from './useEditorDiagnostics'
+import { useEdgeLabelDrag } from './useEdgeLabelDrag'
 import { useFlowEditorActions } from './useFlowEditorActions'
 import { useFlowEditorComments } from './useFlowEditorComments'
 import { useFlowEditorConnections } from './useFlowEditorConnections'
@@ -182,6 +183,15 @@ export function useFlowEditorWorkspace(
     diagramStore,
     clampXValue,
     clampYValue,
+  })
+
+  const { onLabelDragStart } = useEdgeLabelDrag({
+    nodes,
+    edges,
+    zoom,
+    canvas: computed(() => canvas.value),
+    diagramStore,
+    persistDiagram: () => diagramStore.saveCurrentVersion(),
   })
 
   const { onEndpointOrderDragStart } = useEdgeEndpointOrderDrag({
@@ -404,6 +414,7 @@ export function useFlowEditorWorkspace(
     onCanvasWheel: viewport.onCanvasWheel,
     onEdgeClick: connections.onEdgeClick,
     onBreakpointDragStart,
+    onLabelDragStart,
     onEndpointOrderDragStart,
     onNodeMouseDown,
     onNodeClick: connections.onNodeClick,

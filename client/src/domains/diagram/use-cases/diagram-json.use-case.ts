@@ -38,10 +38,82 @@ type DiagramJsonDependencies = {
 
 type SerializeMode = 'server' | 'editor'
 
+const EDGE_LABEL_POSITION_STORAGE_KEY = 'diagram-edge-label-positions'
+
 export function createDiagramJsonUseCases(
   context: DiagramContext,
   dependencies: DiagramJsonDependencies,
 ) {
+  function canUseStorage(): boolean {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+  }
+
+  function buildLabelPositionCacheKey(edgeId: string): string | null {
+    const schemeId = context.schemeId.value?.trim()
+    if (!schemeId) return null
+    return `${schemeId}:${edgeId}`
+  }
+
+  function readLabelPositionCache(): Record<string, number> {
+    if (!canUseStorage()) return {}
+
+    try {
+      const raw = window.localStorage.getItem(EDGE_LABEL_POSITION_STORAGE_KEY)
+      if (!raw) return {}
+
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      return Object.entries(parsed).reduce<Record<string, number>>((acc, [key, value]) => {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          acc[key] = value
+        }
+        return acc
+      }, {})
+    } catch {
+      return {}
+    }
+  }
+
+  function writeLabelPositionCache(cache: Record<string, number>): void {
+    if (!canUseStorage()) return
+
+    try {
+      window.localStorage.setItem(EDGE_LABEL_POSITION_STORAGE_KEY, JSON.stringify(cache))
+    } catch {
+      // Ignore cache write errors and keep server persistence as the primary source of truth.
+    }
+  }
+
+  function syncLabelPositionCacheFromEdges(edges: Edge[]): void {
+    const schemeId = context.schemeId.value?.trim()
+    if (!schemeId) return
+
+    const cache = readLabelPositionCache()
+    const prefix = `${schemeId}:`
+
+    Object.keys(cache)
+      .filter(key => key.startsWith(prefix))
+      .forEach(key => delete cache[key])
+
+    edges.forEach(edge => {
+      const cacheKey = buildLabelPositionCacheKey(edge.id)
+      if (!cacheKey || typeof edge.labelPosition !== 'number' || !Number.isFinite(edge.labelPosition)) {
+        return
+      }
+
+      cache[cacheKey] = edge.labelPosition
+    })
+
+    writeLabelPositionCache(cache)
+  }
+
+  function getCachedLabelPosition(edgeId: string): number | undefined {
+    const cacheKey = buildLabelPositionCacheKey(edgeId)
+    if (!cacheKey) return undefined
+
+    const cached = readLabelPositionCache()[cacheKey]
+    return typeof cached === 'number' && Number.isFinite(cached) ? cached : undefined
+  }
+
   function readStyleElementId(style: { elementId?: string; element_id?: string } | null | undefined): string | null {
     return style?.elementId ?? style?.element_id ?? null
   }
@@ -190,6 +262,7 @@ export function createDiagramJsonUseCases(
         startSide: packConnectionSide(edge.sourceSide, edge.sourceOrder),
         endSide: packConnectionSide(edge.targetSide, edge.targetOrder),
         label: edge.label ?? null,
+        labelPosition: typeof edge.labelPosition === 'number' ? edge.labelPosition : null,
         dataKeys: edge.dataKeys ?? [],
         through: throughByEdgeId[edge.id] ?? [],
         breakpoints: extractBreakpoints(edge),
@@ -206,6 +279,8 @@ export function createDiagramJsonUseCases(
   }
 
   function syncJsonFromState(): void {
+    syncLabelPositionCacheFromEdges(context.edges.value)
+
     const serialized = JSON.stringify(serializeDiagramForEditor(), null, 2)
     context.lastSerializedJson.value = serialized
 
@@ -376,6 +451,11 @@ export function createDiagramJsonUseCases(
         )
         existingEdgeLabels.push(label)
 
+        const serverLabelPosition = typeof connection.labelPosition === 'number'
+          ? connection.labelPosition
+          : undefined
+        const cachedLabelPosition = getCachedLabelPosition(String(connection.id))
+
         return {
           id: String(connection.id),
           sourceNodeId: startId,
@@ -389,6 +469,7 @@ export function createDiagramJsonUseCases(
             typeof connection.endOrder === 'number' ? connection.endOrder : undefined
           ),
           label,
+          labelPosition: serverLabelPosition ?? cachedLabelPosition,
           color: style?.color ?? context.defaults.DEFAULT_EDGE_COLOR,
           width: style?.width ?? context.defaults.DEFAULT_EDGE_WIDTH,
           lineStyle: normalizeLineStyle(style?.type),
@@ -421,12 +502,15 @@ export function createDiagramJsonUseCases(
     context.nodes.value = normalizedNodes
     context.dataFlows.value = normalizedDataFlows
     normalizeConnectionEndpointOrders(normalizedEdges)
-    context.edges.value = normalizedEdges.map(edge => {
-      const allowed = dependencies.buildNodeSendableData()[edge.sourceNodeId] ?? []
+    context.edges.value = normalizedEdges
+    const allowedDataByNode = dependencies.buildNodeSendableData()
+    context.edges.value = context.edges.value.map(edge => {
+      const allowed = allowedDataByNode[edge.sourceNodeId] ?? []
       const preferred = edge.dataKeys ?? allowed
       const sanitized = Array.from(new Set(preferred.filter(id => allowed.includes(id))))
       return { ...edge, dataKeys: sanitized }
     })
+    syncLabelPositionCacheFromEdges(context.edges.value)
     dependencies.refreshCounters()
     context.lastSerializedJson.value = JSON.stringify(serializeDiagramForEditor(), null, 2)
   }

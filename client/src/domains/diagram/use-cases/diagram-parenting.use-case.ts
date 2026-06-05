@@ -13,8 +13,10 @@ import {
   getRootNodePosition,
   isHorizontalPassThroughEdge,
   isVerticalPassThroughEdge,
+  getNodeBorderStyleMode,
   resolveNodeBorderStyle,
   roundCoord,
+  setNodeBorderStyleMode,
   toAbsoluteNodeRect,
 } from '../lib'
 
@@ -67,7 +69,12 @@ export function createDiagramParentingUseCases(context: DiagramContext) {
   function refreshParentBorders(): void {
     const childCount = getParentChildCountMap(context.nodes.value)
     context.nodes.value.forEach(node => {
+      if (getNodeBorderStyleMode(node, childCount[node.id] || 0) === 'manual') {
+        return
+      }
+
       node.borderStyle = resolveNodeBorderStyle(node, childCount[node.id] || 0)
+      setNodeBorderStyleMode(node, 'auto')
     })
   }
 

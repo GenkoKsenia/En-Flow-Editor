@@ -12,6 +12,7 @@ export interface Edge {
   sourceOrder?: number
   targetOrder?: number
   label?: string
+  labelPosition?: number
   color?: string
   width?: number
   lineStyle?: LineStyle
