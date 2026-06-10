@@ -80,17 +80,36 @@
       <title v-if="edgeTitle">{{ edgeTitle }}</title>
     </path>
 
-    <text
-      v-if="edgeLabel"
-      :x="labelPosition?.x"
-      :y="labelPosition?.y"
-      class="edge-label"
-      text-anchor="middle"
-      dominant-baseline="middle"
-      pointer-events="none"
+    <g
+      v-if="edgeLabel && labelPosition && labelBox"
+      class="edge-label-group"
+      :transform="`translate(${labelPosition.x}, ${labelPosition.y})`"
+      @mousedown="onLabelMouseDown"
     >
-      {{ edgeLabel }}
-    </text>
+      <rect
+        class="edge-label-hitbox"
+        :x="labelBox.x"
+        :y="labelBox.y"
+        :width="labelBox.width"
+        :height="labelBox.height"
+        :rx="6"
+        :ry="6"
+      />
+      <text
+        class="edge-label"
+        text-anchor="middle"
+        dominant-baseline="middle"
+      >
+        <tspan
+          v-for="(line, index) in edgeLabelLines"
+          :key="`${edge.id}-label-line-${index}`"
+          x="0"
+          :dy="index === 0 ? firstLabelLineDy : labelLineHeight"
+        >
+          {{ line || ' ' }}
+        </tspan>
+      </text>
+    </g>
 
     <text
       v-if="lockBadgeLabel && labelPosition"
@@ -112,8 +131,10 @@ import { computed } from 'vue'
 
 import {
   buildOrthogonalEdgeSegments,
+  clampEdgeLabelPosition,
   getAbsoluteNodePosition,
   getConnectionPoint,
+  getPointAtSegmentLength,
 } from '@/domains/diagram'
 import type { ConnectionSide, Edge, EdgeGeometry, Node, Position, Segment } from '@/domains/graph'
 
@@ -153,6 +174,7 @@ const emit = defineEmits<{
   'edge-click': [edgeId: string, event: MouseEvent]
   'breakpoint-drag-start': [edgeId: string, segmentIndex: number, event: MouseEvent]
   'endpoint-order-drag-start': [edgeId: string, endpoint: 'source' | 'target', event: MouseEvent]
+  'label-drag-start': [edgeId: string, event: MouseEvent]
 }>()
 
 const lockState = computed<'self' | 'other' | null>(() => {
@@ -180,6 +202,27 @@ const edgeTitle = computed(() => {
   return props.edge.label?.trim() ?? ''
 })
 const edgeLabel = computed(() => props.edge.label?.trim() ?? '')
+const edgeLabelLines = computed(() => edgeLabel.value.split(/\r?\n/))
+const labelLineHeight = 16
+const firstLabelLineDy = computed(() => (
+  edgeLabelLines.value.length > 1
+    ? -((edgeLabelLines.value.length - 1) * labelLineHeight) / 2
+    : 0
+))
+const labelBox = computed(() => {
+  if (!edgeLabel.value) return null
+
+  const longestLineLength = edgeLabelLines.value.reduce((max, line) => Math.max(max, line.length), 1)
+  const width = Math.max(42, longestLineLength * 7.2 + 16)
+  const height = Math.max(22, edgeLabelLines.value.length * labelLineHeight + 8)
+
+  return {
+    x: -width / 2,
+    y: -height / 2,
+    width,
+    height,
+  }
+})
 
 const markerUrl = computed(() => {
   const markerType = props.edge.markerType ?? 'triangle'
@@ -276,14 +319,21 @@ const draggableSegments = computed(() => {
 
   return edgeGeometry.value.segments
     .map((segment, index) => {
-      const isInterior = index > 0 && index < edgeGeometry.value.segments.length - 1
-      if (!isInterior) return null
-
       const isVertical = Math.abs(segment.start.x - segment.end.x) <= 0.01
+      const isFirst = index === 0
+      const isLast = index === edgeGeometry.value.segments.length - 1
+      const cursor = isFirst
+        ? (props.edge.sourceSide === 'left' || props.edge.sourceSide === 'right' ? 'row-resize' : 'col-resize')
+        : isLast
+          ? (props.edge.targetSide === 'left' || props.edge.targetSide === 'right' ? 'row-resize' : 'col-resize')
+          : (isVertical ? 'col-resize' : 'row-resize')
+
+      if (edgeGeometry.value.segments.length === 1) return null
+
       return {
         index,
         path: `M ${segment.start.x} ${segment.start.y} L ${segment.end.x} ${segment.end.y}`,
-        cursor: isVertical ? 'col-resize' : 'row-resize',
+        cursor,
       }
     })
     .filter((segment): segment is { index: number; path: string; cursor: string } => Boolean(segment))
@@ -293,28 +343,8 @@ const labelPosition = computed<Position | null>(() => {
   const geometry = edgeGeometry.value
   if (!geometry.totalLength || !geometry.segments.length || !edgeLabel.value) return null
 
-  const target = geometry.totalLength / 2
-  let traversed = 0
-
-  for (const segment of geometry.segments) {
-    const dx = segment.end.x - segment.start.x
-    const dy = segment.end.y - segment.start.y
-    const length = Math.sqrt(dx * dx + dy * dy)
-    const next = traversed + length
-
-    if (target <= next) {
-      const ratio = (target - traversed) / length || 0
-      return {
-        x: segment.start.x + dx * ratio,
-        y: segment.start.y + dy * ratio,
-      }
-    }
-
-    traversed = next
-  }
-
-  const last = geometry.segments[geometry.segments.length - 1]
-  return last ? { ...last.end } : null
+  const ratio = clampEdgeLabelPosition(props.edge.labelPosition)
+  return getPointAtSegmentLength(geometry.segments, geometry.totalLength * ratio)
 })
 
 function distance(start: Position, end: Position): number {
@@ -404,6 +434,11 @@ function onTargetHandleMouseDown(event: MouseEvent): void {
   event.stopPropagation()
 }
 
+function onLabelMouseDown(event: MouseEvent): void {
+  emit('label-drag-start', props.edge.id, event)
+  event.stopPropagation()
+}
+
 function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): number {
   const node = nodes.find(item => item.id === nodeId)
   if (!node || !node.parentId) {
@@ -474,6 +509,21 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   pointer-events: none;
 }
 
+.edge-label-group {
+  pointer-events: all;
+  cursor: grab;
+}
+
+.edge-label-hitbox {
+  fill: rgba(255, 255, 255, 0.001);
+  stroke: none;
+}
+
+.edge.selected .edge-label-group,
+.edge-label-group:active {
+  cursor: grabbing;
+}
+
 .edge-label {
   fill: #333;
   font-size: 12px;
@@ -483,6 +533,7 @@ function getNodeDepth(nodeId: string, nodes: Node[] = props.nodes, depth = 0): n
   stroke-width: 2px;
   user-select: none;
   -webkit-user-select: none;
+  pointer-events: none;
 }
 
 .edge-lock-label {

@@ -203,14 +203,14 @@
       <div v-else-if="isEdgePanel" class="edge-properties">
         <div class="property-group">
           <h4>Связь</h4>
-          <div class="property">
+          <div class="property property--stacked">
             <label>Название:</label>
-            <UiInput
+            <textarea
               v-model="edgeLabelValue"
-              @change="applyEdgeLabel"
-              class="property-input"
+              class="property-input multiline"
               placeholder="Название связи"
-            />
+              @change="applyEdgeLabel"
+            ></textarea>
           </div>
           <div class="property">
             <label>Стиль линии:</label>
@@ -923,6 +923,11 @@ function clearSelection(): void {
 .size-inputs {
   display: flex;
   gap: 8px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #6c757d;
 }
 
 .properties-actions {

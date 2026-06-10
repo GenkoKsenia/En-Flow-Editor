@@ -20,7 +20,7 @@ namespace Diplom.Mappers
                     Id = v.Id,
                     IsReadOnly = v.IsReadOnly, 
                     Code = JsonSerializer.Deserialize<CodeRequest>(v.Code),
-                    Date = v.Date,
+                    //Date = v.Date,
                     SchemeID = v.SchemeID
                 }).ToList(),
                 Access_User_Schema_Rights = scheme.Access_User_Schema_Rights.ToList(),

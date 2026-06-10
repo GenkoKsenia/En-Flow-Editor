@@ -16,10 +16,20 @@ export type PassThroughOffsets = Record<string, {
 }>
 
 const RECT_INTERSECTION_EPSILON = 0.01
+const EDGE_LABEL_POSITION_MIN = 0.05
+const EDGE_LABEL_POSITION_MAX = 0.95
 export type SegmentAxis = 'horizontal' | 'vertical'
 
 export function getSideAxis(side: ConnectionSide): SegmentAxis {
   return side === 'left' || side === 'right' ? 'horizontal' : 'vertical'
+}
+
+export function clampEdgeLabelPosition(position?: number): number {
+  if (typeof position !== 'number' || Number.isNaN(position)) {
+    return 0.5
+  }
+
+  return Math.max(EDGE_LABEL_POSITION_MIN, Math.min(EDGE_LABEL_POSITION_MAX, position))
 }
 
 export function toggleSegmentAxis(axis: SegmentAxis): SegmentAxis {
@@ -29,6 +39,11 @@ export function toggleSegmentAxis(axis: SegmentAxis): SegmentAxis {
 function pointsEqual(left: Position, right: Position): boolean {
   return Math.abs(left.x - right.x) <= RECT_INTERSECTION_EPSILON
     && Math.abs(left.y - right.y) <= RECT_INTERSECTION_EPSILON
+}
+
+function pointListsEqual(left: Position[], right: Position[]): boolean {
+  return left.length === right.length
+    && left.every((point, index) => pointsEqual(point, right[index]!))
 }
 
 function toSegment(id: string, start: Position, end: Position): Segment | null {
@@ -52,8 +67,11 @@ export function projectOrthogonalPoint(
     : { x: origin.x, y: target.y }
 }
 
-export function sanitizeOrthogonalCorners(points: Position[]): Position[] {
-  return points.reduce<Position[]>((result, point) => {
+export function sanitizeOrthogonalCorners(
+  points: Position[],
+  anchors?: { start?: Position; end?: Position },
+): Position[] {
+  const normalized = points.reduce<Position[]>((result, point) => {
     const normalizedPoint = {
       x: roundCoord(point.x),
       y: roundCoord(point.y),
@@ -63,8 +81,65 @@ export function sanitizeOrthogonalCorners(points: Position[]): Position[] {
       result.push(normalizedPoint)
     }
 
+    while (result.length >= 3) {
+      const first = result[result.length - 3]!
+      const middle = result[result.length - 2]!
+      const last = result[result.length - 1]!
+
+      const sameX = Math.abs(first.x - middle.x) <= RECT_INTERSECTION_EPSILON
+        && Math.abs(middle.x - last.x) <= RECT_INTERSECTION_EPSILON
+      const sameY = Math.abs(first.y - middle.y) <= RECT_INTERSECTION_EPSILON
+        && Math.abs(middle.y - last.y) <= RECT_INTERSECTION_EPSILON
+
+      if (!sameX && !sameY) {
+        break
+      }
+
+      result.splice(result.length - 2, 1)
+    }
+
     return result
   }, [])
+
+  let changed = true
+  while (changed && normalized.length) {
+    changed = false
+
+    for (let index = 0; index < normalized.length; index += 1) {
+      const current = normalized[index]!
+      const previous = index === 0 ? anchors?.start : normalized[index - 1]
+      const next = index === normalized.length - 1 ? anchors?.end : normalized[index + 1]
+
+      if (previous && pointsEqual(previous, current)) {
+        normalized.splice(index, 1)
+        changed = true
+        break
+      }
+
+      if (next && pointsEqual(current, next)) {
+        normalized.splice(index, 1)
+        changed = true
+        break
+      }
+
+      if (!previous || !next) {
+        continue
+      }
+
+      const sameX = Math.abs(previous.x - current.x) <= RECT_INTERSECTION_EPSILON
+        && Math.abs(current.x - next.x) <= RECT_INTERSECTION_EPSILON
+      const sameY = Math.abs(previous.y - current.y) <= RECT_INTERSECTION_EPSILON
+        && Math.abs(current.y - next.y) <= RECT_INTERSECTION_EPSILON
+
+      if (sameX || sameY) {
+        normalized.splice(index, 1)
+        changed = true
+        break
+      }
+    }
+  }
+
+  return normalized
 }
 
 export function getNodeConnectionPoint(
@@ -178,6 +253,47 @@ export function buildOrthogonalConnectorCorners(
   return [{ x: start.x, y: end.y }]
 }
 
+function buildAutoOrthogonalRouteCorners(
+  edge: Pick<Edge, 'sourceSide' | 'targetSide'>,
+  start: Position,
+  end: Position,
+): Position[] {
+  const isSameSide = edge.sourceSide === edge.targetSide
+
+  if (isSameSide) {
+    return sanitizeOrthogonalCorners(
+      buildLegacyBreakpointCorners(
+        {
+          id: 'auto-route',
+          sourceSide: edge.sourceSide,
+          targetSide: edge.targetSide,
+        },
+        start,
+        end,
+      ),
+      { start, end },
+    )
+  }
+
+  return sanitizeOrthogonalCorners(
+    buildOrthogonalConnectorCorners(
+      start,
+      end,
+      getSideAxis(edge.sourceSide),
+      getSideAxis(edge.targetSide),
+    ),
+    { start, end },
+  )
+}
+
+export function getDefaultOrthogonalRouteCorners(
+  edge: Pick<Edge, 'sourceSide' | 'targetSide'>,
+  start: Position,
+  end: Position,
+): Position[] {
+  return buildAutoOrthogonalRouteCorners(edge, start, end)
+}
+
 export function getOrthogonalRouteCorners(
   edge: Pick<Edge, 'id' | 'sourceSide' | 'targetSide' | 'breakpoints' | 'breakpointX' | 'breakpointY'>,
   start: Position,
@@ -189,14 +305,24 @@ export function getOrthogonalRouteCorners(
     let currentAxis = getSideAxis(edge.sourceSide)
 
     sanitizeOrthogonalCorners(edge.breakpoints).forEach(point => {
-      const projectedPoint = projectOrthogonalPoint(currentPoint, point, currentAxis)
+      let effectiveAxis = currentAxis
+      let projectedPoint = projectOrthogonalPoint(currentPoint, point, effectiveAxis)
+
       if (pointsEqual(currentPoint, projectedPoint)) {
-        return
+        const alternateAxis = toggleSegmentAxis(currentAxis)
+        const alternateProjectedPoint = projectOrthogonalPoint(currentPoint, point, alternateAxis)
+
+        if (pointsEqual(currentPoint, alternateProjectedPoint)) {
+          return
+        }
+
+        effectiveAxis = alternateAxis
+        projectedPoint = alternateProjectedPoint
       }
 
       corners.push(projectedPoint)
       currentPoint = projectedPoint
-      currentAxis = toggleSegmentAxis(currentAxis)
+      currentAxis = toggleSegmentAxis(effectiveAxis)
     })
 
     return sanitizeOrthogonalCorners([
@@ -207,19 +333,24 @@ export function getOrthogonalRouteCorners(
         currentAxis,
         getSideAxis(edge.targetSide),
       ),
-    ])
+    ], { start, end })
   }
 
   if (edge.breakpointX !== undefined || edge.breakpointY !== undefined) {
     return buildLegacyBreakpointCorners(edge, start, end)
   }
 
-  return buildOrthogonalConnectorCorners(
-    start,
-    end,
-    getSideAxis(edge.sourceSide),
-    getSideAxis(edge.targetSide),
-  )
+  return buildAutoOrthogonalRouteCorners(edge, start, end)
+}
+
+export function isAutoOrthogonalRoute(
+  edge: Pick<Edge, 'id' | 'sourceSide' | 'targetSide' | 'breakpoints' | 'breakpointX' | 'breakpointY'>,
+  start: Position,
+  end: Position,
+): boolean {
+  const actual = sanitizeOrthogonalCorners(getOrthogonalRouteCorners(edge, start, end), { start, end })
+  const expected = getDefaultOrthogonalRouteCorners(edge, start, end)
+  return pointListsEqual(actual, expected)
 }
 
 export function supportsPassThroughEdge(edge: Pick<Edge, 'sourceSide' | 'targetSide'>): boolean {
@@ -386,4 +517,37 @@ export function buildOrthogonalEdgeSegments(edge: Edge, start: Position, end: Po
   }
 
   return segments
+}
+
+export function getPointAtSegmentLength(segments: Segment[], targetLength: number): Position | null {
+  if (!segments.length) return null
+
+  const totalLength = segments.reduce((sum, segment) => (
+    sum + Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y)
+  ), 0)
+  if (totalLength <= RECT_INTERSECTION_EPSILON) {
+    return { ...segments[segments.length - 1]!.end }
+  }
+
+  const clampedTarget = Math.max(0, Math.min(totalLength, targetLength))
+  let traversed = 0
+
+  for (const segment of segments) {
+    const dx = segment.end.x - segment.start.x
+    const dy = segment.end.y - segment.start.y
+    const length = Math.hypot(dx, dy)
+    const next = traversed + length
+
+    if (clampedTarget <= next || length <= RECT_INTERSECTION_EPSILON) {
+      const ratio = length <= RECT_INTERSECTION_EPSILON ? 0 : (clampedTarget - traversed) / length
+      return {
+        x: segment.start.x + dx * ratio,
+        y: segment.start.y + dy * ratio,
+      }
+    }
+
+    traversed = next
+  }
+
+  return { ...segments[segments.length - 1]!.end }
 }

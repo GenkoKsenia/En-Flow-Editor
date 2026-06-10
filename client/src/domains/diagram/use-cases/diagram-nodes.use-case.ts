@@ -5,6 +5,7 @@ import {
 import {
   findFreeLeftPlacement,
   normalizeConnectionEndpointOrders,
+  setNodeBorderStyleMode,
 } from '@/domains/diagram/lib'
 
 import type { DiagramContext } from './diagram.context'
@@ -42,6 +43,7 @@ export function createDiagramNodesUseCases(
       borderRadius: context.defaults.DEFAULT_BORDER_RADIUS,
     }
 
+    setNodeBorderStyleMode(node, 'auto')
     context.nodes.value.push(node)
     return node
   }
@@ -49,6 +51,7 @@ export function createDiagramNodesUseCases(
   function addDatabaseNode(): Node {
     const node = addNode()
     node.borderStyle = 'database'
+    setNodeBorderStyleMode(node, 'manual')
     return node
   }
 
@@ -74,6 +77,7 @@ export function createDiagramNodesUseCases(
       borderStyle: 'dashed',
     }
 
+    setNodeBorderStyleMode(node, 'auto')
     context.nodes.value.push(node)
     return node
   }
@@ -124,6 +128,9 @@ export function createDiagramNodesUseCases(
     }
 
     Object.assign(node, updates)
+    if (Object.prototype.hasOwnProperty.call(updates, 'borderStyle')) {
+      setNodeBorderStyleMode(node, 'manual')
+    }
     return normalizeConnectedEdgeSides(nodeId)
   }
 

@@ -1,7 +1,12 @@
 import type { Ref } from 'vue'
 
 import type { Edge, Node } from '@/domains/graph'
-import { getRelativePositionWithinParent, roundCoord } from '@/domains/diagram'
+import {
+  getNodeConnectionPoint,
+  getRelativePositionWithinParent,
+  isAutoOrthogonalRoute,
+  roundCoord,
+} from '@/domains/diagram'
 
 type DiagramDragApi = {
   getAbsoluteNodePosition(node: Node): { x: number; y: number }
@@ -56,6 +61,13 @@ type CommentTargetDescriptor = {
   id: string
 }
 
+type EdgeBreakpointSnapshot = {
+  breakpoints?: Array<{ x: number; y: number }>
+  breakpointX?: number
+  breakpointY?: number
+  isAutoRoute?: boolean
+}
+
 export function useNodeDrag({
   nodes,
   edges,
@@ -96,6 +108,112 @@ export function useNodeDrag({
     })
 
     return Array.from(ids)
+  }
+
+  function getPassThroughEdgeIds(nodeIds: string[]): string[] {
+    return Array.from(new Set(
+      nodeIds.flatMap(nodeId => {
+        const node = nodes.value.find(item => item.id === nodeId)
+        return node?.passThroughEdges ?? []
+      }),
+    ))
+  }
+
+  function getConnectedEdgeIds(nodeIds: string[]): string[] {
+    const nodeIdSet = new Set(nodeIds)
+    return edges.value
+      .filter(edge => nodeIdSet.has(edge.sourceNodeId) || nodeIdSet.has(edge.targetNodeId))
+      .map(edge => edge.id)
+  }
+
+  function getAffectedEdgeIds(nodeIds: string[]): {
+    all: string[]
+    passThrough: string[]
+    translatable: string[]
+  } {
+    const passThrough = getPassThroughEdgeIds(nodeIds)
+    const passThroughSet = new Set(passThrough)
+    const connected = getConnectedEdgeIds(nodeIds)
+    const all = Array.from(new Set([...connected, ...passThrough]))
+
+    return {
+      all,
+      passThrough,
+      translatable: all.filter(edgeId => !passThroughSet.has(edgeId)),
+    }
+  }
+
+  function snapshotEdges(edgeIds: string[]): Map<string, EdgeBreakpointSnapshot> {
+    return new Map(edgeIds.map(edgeId => {
+      const edge = edges.value.find(item => item.id === edgeId)
+      const sourceNode = edge ? nodes.value.find(item => item.id === edge.sourceNodeId) : null
+      const targetNode = edge ? nodes.value.find(item => item.id === edge.targetNodeId) : null
+      const start = edge && sourceNode
+        ? getNodeConnectionPoint(
+            documentStore.getAbsoluteNodePosition(sourceNode),
+            sourceNode,
+            edge.sourceSide,
+          )
+        : null
+      const end = edge && targetNode
+        ? getNodeConnectionPoint(
+            documentStore.getAbsoluteNodePosition(targetNode),
+            targetNode,
+            edge.targetSide,
+          )
+        : null
+      return [
+        edgeId,
+        {
+          breakpoints: edge?.breakpoints?.map(point => ({ x: point.x, y: point.y })),
+          breakpointX: edge?.breakpointX,
+          breakpointY: edge?.breakpointY,
+          isAutoRoute: !!(edge && start && end && isAutoOrthogonalRoute(edge, start, end)),
+        } satisfies EdgeBreakpointSnapshot,
+      ] as const
+    }))
+  }
+
+  function restoreEdgeSnapshots(snapshots: Map<string, EdgeBreakpointSnapshot>): void {
+    snapshots.forEach((snapshot, edgeId) => {
+      const edge = edges.value.find(item => item.id === edgeId)
+      if (!edge) return
+
+      edge.breakpoints = snapshot.breakpoints?.map(point => ({ ...point }))
+      edge.breakpointX = snapshot.breakpointX
+      edge.breakpointY = snapshot.breakpointY
+    })
+  }
+
+  function translateEdgeSnapshots(
+    edgeIds: string[],
+    snapshots: Map<string, EdgeBreakpointSnapshot>,
+    deltaX: number,
+    deltaY: number,
+  ): void {
+    edgeIds.forEach(edgeId => {
+      const edge = edges.value.find(item => item.id === edgeId)
+      const snapshot = snapshots.get(edgeId)
+      if (!edge || !snapshot) return
+
+      if (snapshot.isAutoRoute) {
+        edge.breakpoints = undefined
+        edge.breakpointX = undefined
+        edge.breakpointY = undefined
+        return
+      }
+
+      edge.breakpoints = snapshot.breakpoints?.map(point => ({
+        x: roundCoord(point.x + deltaX),
+        y: roundCoord(point.y + deltaY),
+      }))
+      edge.breakpointX = typeof snapshot.breakpointX === 'number'
+        ? roundCoord(snapshot.breakpointX + deltaX)
+        : snapshot.breakpointX
+      edge.breakpointY = typeof snapshot.breakpointY === 'number'
+        ? roundCoord(snapshot.breakpointY + deltaY)
+        : snapshot.breakpointY
+    })
   }
 
   function setCommentTransforms(targets: CommentTargetDescriptor[], deltaX: number, deltaY: number): void {
@@ -188,6 +306,8 @@ export function useNodeDrag({
     const startMouseY = event.clientY
     const rootNodeIds = getGroupRootNodeIds(currentSelectedNodeIds)
     const visualNodeIds = getVisualGroupNodeIds(rootNodeIds)
+    const affectedEdges = getAffectedEdgeIds(visualNodeIds)
+    const initialEdgeSnapshots = snapshotEdges(affectedEdges.all)
 
     const tempGroup = {
       dx: 0,
@@ -198,14 +318,14 @@ export function useNodeDrag({
       const scale = zoom.value || 1
       tempGroup.dx = (moveEvent.clientX - startMouseX) / scale
       tempGroup.dy = (moveEvent.clientY - startMouseY) / scale
-      setTemporaryTransforms(visualNodeIds, currentSelectedEdgeIds, tempGroup.dx, tempGroup.dy)
+      setTemporaryTransforms(visualNodeIds, affectedEdges.all, tempGroup.dx, tempGroup.dy)
     }
 
     const onMouseUp = () => {
       const deltaX = roundCoord(tempGroup.dx)
       const deltaY = roundCoord(tempGroup.dy)
 
-      clearTemporaryTransforms(visualNodeIds, currentSelectedEdgeIds)
+      clearTemporaryTransforms(visualNodeIds, affectedEdges.all)
       uiStore.setDragging(false)
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
@@ -223,35 +343,13 @@ export function useNodeDrag({
           })
         })
 
-        currentSelectedEdgeIds.forEach(edgeId => {
-          const edge = edges.value.find(item => item.id === edgeId)
-          if (!edge) return
-
-          documentStore.updateEdge(edgeId, {
-            breakpoints: edge.breakpoints?.map(point => ({
-              x: roundCoord(point.x + deltaX),
-              y: roundCoord(point.y + deltaY),
-            })),
-            breakpointX: typeof edge.breakpointX === 'number' ? roundCoord(edge.breakpointX + deltaX) : edge.breakpointX,
-            breakpointY: typeof edge.breakpointY === 'number' ? roundCoord(edge.breakpointY + deltaY) : edge.breakpointY,
-          })
-        })
+        translateEdgeSnapshots(affectedEdges.translatable, initialEdgeSnapshots, deltaX, deltaY)
 
         visualNodeIds.forEach(visualNodeId => {
           documentStore.maintainPassThroughEdges(visualNodeId)
         })
 
-        const affectedEdgeIds = Array.from(
-          new Set([
-            ...currentSelectedEdgeIds,
-            ...visualNodeIds.flatMap(visualNodeId => {
-              const visualNode = nodes.value.find(item => item.id === visualNodeId)
-              return visualNode?.passThroughEdges ?? []
-            }),
-          ]),
-        )
-
-        void documentStore.finishGroupMove(rootNodeIds, affectedEdgeIds)
+        void documentStore.finishGroupMove(rootNodeIds, affectedEdges.all)
         uiStore.suppressSelectionClickOnce()
       }
 
@@ -292,24 +390,8 @@ export function useNodeDrag({
     const children = documentStore.getDescendantNodes(nodeId)
     const initialNodePosition = { ...node.position }
     const draggedNodeIds = [nodeId, ...children.map(child => child.id)]
-    const initialPassThroughBreakpoints = new Map(
-      Array.from(new Set(
-        draggedNodeIds.flatMap(draggedId => {
-          const draggedNode = nodes.value.find(item => item.id === draggedId)
-          return draggedNode?.passThroughEdges ?? []
-        }),
-      )).map(edgeId => {
-        const edge = edges.value.find(item => item.id === edgeId)
-        return [
-          edgeId,
-          {
-            breakpoints: edge?.breakpoints?.map(point => ({ x: point.x, y: point.y })),
-            breakpointX: edge?.breakpointX,
-            breakpointY: edge?.breakpointY,
-          },
-        ] as const
-      }),
-    )
+    const affectedEdges = getAffectedEdgeIds(draggedNodeIds)
+    const initialEdgeSnapshots = snapshotEdges(affectedEdges.all)
 
     const tempNode = {
       dx: 0,
@@ -341,6 +423,13 @@ export function useNodeDrag({
         }
       }
 
+      translateEdgeSnapshots(
+        affectedEdges.translatable,
+        initialEdgeSnapshots,
+        absoluteX - startNodeX,
+        absoluteY - startNodeY,
+      )
+
       draggedNodeIds.forEach(draggedId => {
         documentStore.maintainPassThroughEdges(draggedId)
       })
@@ -348,14 +437,7 @@ export function useNodeDrag({
 
     const restorePreviewState = () => {
       node.position = initialNodePosition
-
-      initialPassThroughBreakpoints.forEach((breakpoint, edgeId) => {
-        const edge = edges.value.find(item => item.id === edgeId)
-        if (!edge) return
-        edge.breakpoints = breakpoint.breakpoints?.map(point => ({ ...point }))
-        edge.breakpointX = breakpoint.breakpointX
-        edge.breakpointY = breakpoint.breakpointY
-      })
+      restoreEdgeSnapshots(initialEdgeSnapshots)
     }
 
     const onMouseMove = (moveEvent: MouseEvent) => {
@@ -390,7 +472,7 @@ export function useNodeDrag({
       if (didMove) {
         documentStore.finalizeNodeDrag(nodeId, potentialParentId, newAbsoluteX, newAbsoluteY, containerPadding)
         void documentStore.finishNodeUpdate(nodeId, {
-          affectedEdgeIds: Array.from(initialPassThroughBreakpoints.keys()),
+          affectedEdgeIds: affectedEdges.all,
         })
       } else {
         restorePreviewState()

@@ -213,6 +213,9 @@ const isDbTableColumn = computed(() => {
     )
   )
 })
+const isContainerLikeNode = computed(() => (
+  hasChildren.value
+))
 const nodeBorderClass = computed(() => `border-style-${props.node.borderStyle ?? 'solid'}`)
 const isDatabaseBorder = computed(() => isDatabaseBorderStyle(props.node.borderStyle))
 const allowedConnectionSides = computed(() => getAllowedConnectionSidesForBorderStyle(props.node.borderStyle))
@@ -364,8 +367,9 @@ function getClosestSide(
   height: number,
   sides: readonly ConnectionSide[],
 ): ConnectionSide | null {
-  // Делаем зону попадания по грани шире, но не дальше середины короткой стороны
-  const threshold = Math.min(28, Math.min(width, height) / 2)
+  const threshold = isContainerLikeNode.value
+    ? Math.min(12, Math.min(width, height) / 4)
+    : Math.min(28, Math.min(width, height) / 2)
 
   const distances = sides.map(side => ({
     side,

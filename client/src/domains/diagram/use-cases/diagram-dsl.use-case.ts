@@ -75,6 +75,8 @@ type FlowEntry = {
   id: string
   order: number
   name?: string
+  startBlock?: string
+  startBlockDefined?: boolean
   finishBlocks?: string[]
   finishBlocksDefined?: boolean
 }
@@ -387,6 +389,7 @@ export function createDiagramDslUseCases(
           const entry = parsed.flows.get(flowId)
           return [flowId, {
             ...entry,
+            startBlock: entry?.startBlock ? (idMap.get(entry.startBlock) ?? entry.startBlock) : entry?.startBlock,
             finishBlocks: entry?.finishBlocks?.map(id => idMap.get(id) ?? id),
           } satisfies FlowEntry]
         }),
@@ -397,18 +400,18 @@ export function createDiagramDslUseCases(
   function serializeConnection(edge: Edge, through: string[], maps: DslNodeIdMaps): string {
     const source = formatConnectionEndpoint(toDslNodeId(edge.sourceNodeId, maps), edge.sourceSide)
     const target = formatConnectionEndpoint(toDslNodeId(edge.targetNodeId, maps), edge.targetSide)
+    const supportsInlineLabel = Boolean(edge.label) && !edge.label.includes('\n')
     const base = edge.dataKeys?.length
       ? `${source} =>[${edge.dataKeys.join(', ')}] ${target}`
-      : edge.label
+      : supportsInlineLabel
         ? `${source} -[${edge.label}]-> ${target}`
         : `${source} -> ${target}`
 
     const props: string[] = []
 
-    if (edge.dataKeys?.length && edge.label) {
+    if (edge.label && (edge.dataKeys?.length || !supportsInlineLabel)) {
       props.push(`label=${quoteDsl(edge.label)}`)
     }
-
     if (through.length) {
       props.push(`through=${through.map(id => toDslNodeId(id, maps)).join(',')}`)
     }
@@ -483,10 +486,13 @@ export function createDiagramDslUseCases(
       lines.push('')
       lines.push('# Потоки данных')
       context.dataFlows.value.forEach(flow => {
+        const startBlock = flow.startBlock
+          ? ` start=${toDslNodeId(flow.startBlock, dslIdMaps)}`
+          : ''
         const finishBlocks = (flow.finishBlocks ?? [])
           .map(blockId => toDslNodeId(blockId, dslIdMaps))
           .join(',')
-        lines.push(`flow ${flow.dataKey} ${quoteDsl(flow.dataName || flow.dataKey)} finish=${finishBlocks}`)
+        lines.push(`flow ${flow.dataKey} ${quoteDsl(flow.dataName || flow.dataKey)}${startBlock} finish=${finishBlocks}`)
       })
     }
 
@@ -622,6 +628,12 @@ export function createDiagramDslUseCases(
     const value = parsePropertyValue(rawValue)
 
     switch (key) {
+      case 'start':
+      case 'source':
+      case 'startBlock':
+        entry.startBlock = value.trim()
+        entry.startBlockDefined = true
+        return
       case 'finish':
       case 'finishes':
       case 'finishBlocks':
@@ -1101,7 +1113,9 @@ export function createDiagramDslUseCases(
       declaredFlowMap.set(flowId, {
         dataKey: flowId,
         dataName: entry?.name ?? existing?.dataName ?? flowId,
-        startBlock: existing?.startBlock,
+        startBlock: entry?.startBlockDefined
+          ? entry.startBlock
+          : existing?.startBlock,
         finishBlocks: entry?.finishBlocksDefined
           ? [...(entry.finishBlocks ?? [])]
           : [...(existing?.finishBlocks ?? [])],
@@ -1142,7 +1156,7 @@ export function createDiagramDslUseCases(
 
         if (!nextFlow.startBlock) {
           nextFlow.startBlock = connection.sourceId
-        } else if (nextFlow.startBlock !== connection.sourceId) {
+        } else if (!declaredEntry?.startBlockDefined && nextFlow.startBlock !== connection.sourceId) {
           throw new Error(`Поток ${dataKey} не может начинаться в нескольких блоках`)
         }
 
@@ -1177,6 +1191,7 @@ export function createDiagramDslUseCases(
         sourceOrder: connection.props.sourceOrder ?? matchedEdge?.sourceOrder,
         targetOrder: connection.props.targetOrder ?? matchedEdge?.targetOrder,
         label: edgeLabel,
+        labelPosition: matchedEdge?.labelPosition,
         color: connection.props.color ?? matchedEdge?.color ?? context.defaults.DEFAULT_EDGE_COLOR,
         width: connection.props.width ?? matchedEdge?.width ?? context.defaults.DEFAULT_EDGE_WIDTH,
         lineStyle: normalizeLineStyle(connection.props.type ?? matchedEdge?.lineStyle),
@@ -1237,6 +1252,7 @@ export function createDiagramDslUseCases(
       startOrder: edge.sourceOrder ?? null,
       endOrder: edge.targetOrder ?? null,
       label: edge.label ?? null,
+      labelPosition: typeof edge.labelPosition === 'number' ? edge.labelPosition : null,
       dataKeys: edge.dataKeys ?? [],
       through: throughByEdgeId[edge.id] ?? [],
       breakpoints: edge.breakpoints?.length

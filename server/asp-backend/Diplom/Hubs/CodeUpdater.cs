@@ -136,6 +136,7 @@ namespace Diplom.Hubs
                                 connectionToUpdate.EndSide = requestConnection.Connection.EndSide;
 
                                 connectionToUpdate.Label = requestConnection.Connection.Label;
+                                connectionToUpdate.LabelPosition = requestConnection.Connection.LabelPosition;
                                 connectionToUpdate.DataKeys = requestConnection.Connection.DataKeys;
                                 connectionToUpdate.Through = requestConnection.Connection.Through;
                                 connectionToUpdate.Breakpoints = requestConnection.Connection.Breakpoints;

@@ -73,6 +73,7 @@ const DSL_KEYWORDS = [
   'breakpoints',
   'breakpointX',
   'breakpointY',
+  'start',
   'finish',
   'left',
   'right',
@@ -97,6 +98,7 @@ const KEYWORDS_WITH_EQUALS = new Set<string>([
   'breakpoints',
   'breakpointX',
   'breakpointY',
+  'start',
   'finish',
 ])
 
