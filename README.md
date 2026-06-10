@@ -1,23 +1,30 @@
 # en+flow
 
-This template should help get you started developing with Vue 3 in Vite.
+## Figma 
 
-## Recommended IDE Setup
+[Дизайн проекта](https://www.figma.com/design/cmB3bJgVKbfQPrTNwucrsg/En-Flow?node-id=0-1&p=f&t=HNAuzwRlZKBX5FVt-0)
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## Docker
 
-## Recommended Browser Setup
+Docker Compose теперь лежит в корне проекта: `./docker-compose.yml`.
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd) 
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+Docker-файлы вынесены в:
+- `./docker/asp-backend`
+- `./docker/fastapi-backend`
+- `./docker/vue-frontend`
 
-## Customize configuration
+Запуск из корня проекта:
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+```sh
+docker compose up -d --build
+```
+
+Сервисы:
+- Vue Frontend (Vite dev): `http://localhost:5173`
+- ASP.NET Backend: `http://localhost:5000/swagger`
+- FastAPI Backend: `http://localhost:8000/docs`
+- MS SQL Server: `localhost:1433`
+- PostgreSQL: `localhost:5432`
 
 ## Project Setup
 
@@ -36,6 +43,3 @@ npm run dev
 ```sh
 npm run build
 ```
-## Figma: 
-
-[Дизайн проекта](https://www.figma.com/design/cmB3bJgVKbfQPrTNwucrsg/En-Flow?node-id=0-1&p=f&t=HNAuzwRlZKBX5FVt-0)

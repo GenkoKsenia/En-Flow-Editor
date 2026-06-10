@@ -3,10 +3,7 @@
         {
             "id": "A",
             "name": "Блок 1",
-            "information": [
-                "Доп информация 1",
-                "Доп информация 2"
-            ],
+            "information": [],
             "position": {
                 "x": 10,
                 "y": 50
@@ -19,7 +16,7 @@
             "id": "B",
             "name": "Блок 2",
             "information": [
-                "Доп информация"
+                "123456"
             ],
             "position": {
                 "x": 10,
@@ -44,9 +41,7 @@
         {
             "id": "D",
             "name": "Блок 3",
-            "information": [
-                "Доп информация"
-            ],
+            "information": [],
             "position": {
                 "x": 10,
                 "y": 50
@@ -58,9 +53,7 @@
         {
             "id": "E",
             "name": "Блок 4",
-            "information": [
-                "Доп информация"
-            ],
+            "information": [],
             "position": {
                 "x": 10,
                 "y": 50
@@ -72,9 +65,7 @@
         {
             "id": "F",
             "name": "Блок 5",
-            "information": [
-                "Доп информация"
-            ],
+            "information": [],
             "position": {
                 "x": 10,
                 "y": 50
@@ -86,7 +77,7 @@
     ],
     "dataFlows": [
         {
-            "dataKey": "mainInfo",
+            "dataKey": "123456",
             "dataName": "info",
             "startBlock": "B",
             "finishBlocks": [
@@ -103,7 +94,7 @@
             "endSide": "top",
             "label": "Стрелка 1",
             "dataKeys": [
-                "mainInfo"
+                "123456"
             ],
             "through": [
                 "C"
@@ -137,7 +128,7 @@
             "endSide": "top",
             "label": "Стрелка 3",
             "dataKeys": [
-                "mainInfo"
+                "123456"
             ],
             "through": [],
             "breakpoints": [
